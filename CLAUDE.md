@@ -231,6 +231,23 @@ GitHub OAuth setup:
 - **Formatting**: ESLint + Prettier (auto-format on save)
 - **Never commit**: `.env.local`, `node_modules`, build artifacts
 
+## Commit Rules (CRITICAL)
+
+**NEVER commit code if:**
+- `npm run build` fails (TypeScript or build errors)
+- `npm run lint` shows errors (warnings may be acceptable with justification)
+- Development server crashes on startup
+- There are type checking errors: `npx tsc --noEmit`
+
+**Pre-commit verification process:**
+1. Run `npm run build` - must succeed
+2. Run `npm run lint` - must pass (zero errors)
+3. Review changes with `git diff`
+4. Write conventional commit message
+5. Only then commit and push
+
+See `.claude/rules.md` for complete commit requirements and best practices.
+
 ## Planning Documentation
 
 Comprehensive planning docs in `.claude/`:
