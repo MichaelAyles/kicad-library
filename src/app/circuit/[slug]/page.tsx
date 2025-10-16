@@ -1,96 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Copy, Heart, Download, ArrowLeft, Check } from "lucide-react";
 import { addAttribution } from "@/lib/parser";
-
-// Mock data - will be replaced with real database query
-const mockCircuit = {
-  id: "1",
-  slug: "lm358-opamp-amplifier",
-  title: "LM358 Non-Inverting Amplifier",
-  description: "Dual op-amp based amplifier circuit with gain of 10. Input impedance ~1MΩ. Suitable for audio and sensor signal conditioning. Includes input/output capacitors for AC coupling.",
-  user: {
-    username: "johndoe",
-    avatarUrl: null,
-  },
-  copyCount: 47,
-  favoriteCount: 12,
-  viewCount: 234,
-  tags: ["opamp", "amplifier", "analog", "audio"],
-  category: "Amplifier",
-  license: "CERN-OHL-S-2.0",
-  createdAt: new Date("2024-01-15"),
-  sexprRaw: `(kicad_sch (version 20230121) (generator eeschema)
-  (uuid "abc-123-def")
-  (paper "A4")
-
-  (lib_symbols
-    (symbol "Device:R"
-      (property "Reference" "R")
-      (property "Value" "R")
-      (pin "1" (uuid "pin1"))
-      (pin "2" (uuid "pin2"))
-    )
-    (symbol "Amplifier_Operational:LM358"
-      (property "Reference" "U")
-      (property "Value" "LM358")
-      (pin "1" (uuid "pin1"))
-      (pin "2" (uuid "pin2"))
-    )
-  )
-
-  (symbol (lib_id "Amplifier_Operational:LM358") (at 127 95.25 0)
-    (uuid "comp1")
-    (property "Reference" "U1" (at 129 93 0))
-    (property "Value" "LM358" (at 129 97 0))
-    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
-  )
-
-  (symbol (lib_id "Device:R") (at 110 95.25 0)
-    (uuid "comp2")
-    (property "Reference" "R1" (at 112 93 0))
-    (property "Value" "1k" (at 112 97 0))
-    (property "Footprint" "Resistor_SMD:R_0805_2012Metric")
-  )
-
-  (symbol (lib_id "Device:R") (at 135 85.25 0)
-    (uuid "comp3")
-    (property "Reference" "R2" (at 137 83 0))
-    (property "Value" "10k" (at 137 87 0))
-    (property "Footprint" "Resistor_SMD:R_0805_2012Metric")
-  )
-)`,
-  metadata: {
-    components: [
-      { reference: "U1", value: "LM358", footprint: "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", lib_id: "Amplifier_Operational:LM358" },
-      { reference: "R1", value: "1k", footprint: "Resistor_SMD:R_0805_2012Metric", lib_id: "Device:R" },
-      { reference: "R2", value: "10k", footprint: "Resistor_SMD:R_0805_2012Metric", lib_id: "Device:R" },
-    ],
-    stats: {
-      componentCount: 3,
-      wireCount: 5,
-      netCount: 4,
-    },
-    footprints: {
-      assigned: 3,
-      unassigned: 0,
-    },
-  },
-};
+import { knockSensorCircuit, loadKnockSensorSexpr } from "@/lib/knock-sensor-data";
+import { SchematicViewer } from "@/components/SchematicViewer";
 
 export default function CircuitDetailPage() {
   const [copied, setCopied] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [sexprRaw, setSexprRaw] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
+
+  const circuit = knockSensorCircuit;
+
+  // Load the S-expression data
+  useEffect(() => {
+    loadKnockSensorSexpr()
+      .then((data) => {
+        setSexprRaw(data);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load S-expression:", err);
+        setIsLoading(false);
+      });
+  }, []);
 
   const handleCopy = async () => {
+    if (!sexprRaw) {
+      alert("Circuit data is still loading");
+      return;
+    }
+
     // Add attribution to S-expression
-    const attributed = addAttribution(mockCircuit.sexprRaw, {
-      title: mockCircuit.title,
-      author: `@${mockCircuit.user.username}`,
-      url: `https://circuitsnips.mikeayles.com/circuit/${mockCircuit.slug}`,
-      license: mockCircuit.license,
+    const attributed = addAttribution(sexprRaw, {
+      title: circuit.title,
+      author: `@${circuit.user.username}`,
+      url: `https://circuitsnips.mikeayles.com/circuit/${circuit.slug}`,
+      license: circuit.license,
     });
 
     try {
@@ -156,22 +105,22 @@ export default function CircuitDetailPage() {
 
           {/* Title and Metadata */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4">{mockCircuit.title}</h1>
+            <h1 className="text-4xl font-bold mb-4">{circuit.title}</h1>
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
               <span>
                 by{" "}
-                <Link href={`/user/${mockCircuit.user.username}`} className="text-primary hover:underline">
-                  @{mockCircuit.user.username}
+                <Link href={`/user/${circuit.user.username}`} className="text-primary hover:underline">
+                  @{circuit.user.username}
                 </Link>
               </span>
               <span>•</span>
-              <span>Uploaded {mockCircuit.createdAt.toLocaleDateString()}</span>
+              <span>Uploaded {circuit.createdAt.toLocaleDateString()}</span>
               <span>•</span>
-              <span>{mockCircuit.viewCount} views</span>
+              <span>{circuit.viewCount} views</span>
             </div>
 
-            <p className="text-lg text-muted-foreground max-w-3xl">{mockCircuit.description}</p>
+            <p className="text-lg text-muted-foreground max-w-3xl">{circuit.description}</p>
           </div>
 
           {/* Actions */}
@@ -200,7 +149,7 @@ export default function CircuitDetailPage() {
               }`}
             >
               <Heart className={`w-5 h-5 ${isFavorited ? "fill-current" : ""}`} />
-              {isFavorited ? "Favorited" : "Favorite"} ({mockCircuit.favoriteCount})
+              {isFavorited ? "Favorited" : "Favorite"} ({circuit.favoriteCount})
             </button>
 
             <button className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2">
@@ -209,27 +158,38 @@ export default function CircuitDetailPage() {
             </button>
           </div>
 
-          {/* Viewer Placeholder */}
-          <div className="bg-card border rounded-lg p-8 mb-8">
-            <div className="aspect-video bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground">
-              <p className="text-lg font-medium mb-2">Interactive Viewer Coming Soon</p>
-              <p className="text-sm">KiCanvas WebGL viewer will be integrated here</p>
+          {/* Schematic Viewer */}
+          {isLoading ? (
+            <div className="bg-card border rounded-lg p-8 mb-8">
+              <div className="aspect-video bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground">
+                <p className="text-lg font-medium mb-2">Loading circuit...</p>
+              </div>
             </div>
-          </div>
+          ) : sexprRaw ? (
+            <div className="mb-8">
+              <SchematicViewer sexpr={sexprRaw} title={circuit.title} />
+            </div>
+          ) : (
+            <div className="bg-card border rounded-lg p-8 mb-8">
+              <div className="aspect-video bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground">
+                <p className="text-lg font-medium mb-2">Failed to load circuit</p>
+              </div>
+            </div>
+          )}
 
           {/* Details Grid */}
           <div className="grid md:grid-cols-2 gap-8 mb-8">
             {/* Components */}
             <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Components ({mockCircuit.metadata.stats.componentCount})</h2>
+              <h2 className="text-xl font-semibold mb-4">Components ({circuit.metadata.stats.componentCount})</h2>
               <div className="space-y-3">
-                {mockCircuit.metadata.components.map((comp, index) => (
+                {circuit.metadata.components.map((comp, index) => (
                   <div key={index} className="flex items-start justify-between text-sm">
                     <div>
                       <span className="font-mono font-medium">{comp.reference}</span>
                       <span className="text-muted-foreground ml-2">{comp.value}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{comp.footprint.split(":")[1]}</span>
+                    <span className="text-xs text-muted-foreground">{comp.footprint.split(":")[1] || comp.footprint}</span>
                   </div>
                 ))}
               </div>
@@ -241,29 +201,29 @@ export default function CircuitDetailPage() {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Components:</span>
-                  <span className="font-medium">{mockCircuit.metadata.stats.componentCount}</span>
+                  <span className="font-medium">{circuit.metadata.stats.componentCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Wires:</span>
-                  <span className="font-medium">{mockCircuit.metadata.stats.wireCount}</span>
+                  <span className="font-medium">{circuit.metadata.stats.wireCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Nets:</span>
-                  <span className="font-medium">{mockCircuit.metadata.stats.netCount}</span>
+                  <span className="font-medium">{circuit.metadata.stats.netCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Footprints Assigned:</span>
                   <span className="font-medium">
-                    {mockCircuit.metadata.footprints.assigned}/{mockCircuit.metadata.stats.componentCount}
+                    {circuit.metadata.footprints.assigned}/{circuit.metadata.stats.componentCount}
                   </span>
                 </div>
                 <div className="flex justify-between pt-3 border-t">
                   <span className="text-muted-foreground">Copies:</span>
-                  <span className="font-medium">{mockCircuit.copyCount}</span>
+                  <span className="font-medium">{circuit.copyCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Favorites:</span>
-                  <span className="font-medium">{mockCircuit.favoriteCount}</span>
+                  <span className="font-medium">{circuit.favoriteCount}</span>
                 </div>
               </div>
             </div>
@@ -273,7 +233,7 @@ export default function CircuitDetailPage() {
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Tags</h2>
             <div className="flex flex-wrap gap-2">
-              {mockCircuit.tags.map((tag) => (
+              {circuit.tags.map((tag) => (
                 <Link
                   key={tag}
                   href={`/search?tag=${tag}`}
@@ -290,7 +250,7 @@ export default function CircuitDetailPage() {
             <h2 className="text-xl font-semibold mb-4">License</h2>
             <div className="flex items-center gap-4">
               <span className="px-4 py-2 bg-primary/10 text-primary rounded-md font-medium">
-                {mockCircuit.license}
+                {circuit.license}
               </span>
               <p className="text-sm text-muted-foreground">
                 This design is open source hardware. You can use, modify, and distribute it under the terms of this license.
@@ -305,10 +265,10 @@ export default function CircuitDetailPage() {
               When using this circuit, please include this attribution:
             </p>
             <div className="bg-card border rounded-md p-4 font-mono text-sm">
-              <div>&quot;{mockCircuit.title}&quot;</div>
-              <div>by @{mockCircuit.user.username}</div>
-              <div>https://circuitsnips.mikeayles.com/circuit/{mockCircuit.slug}</div>
-              <div>Licensed under {mockCircuit.license}</div>
+              <div>&quot;{circuit.title}&quot;</div>
+              <div>by @{circuit.user.username}</div>
+              <div>https://circuitsnips.mikeayles.com/circuit/{circuit.slug}</div>
+              <div>Licensed under {circuit.license}</div>
             </div>
           </div>
         </div>

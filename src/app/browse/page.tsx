@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { Search, Filter } from "lucide-react";
+import { knockSensorCircuit } from "@/lib/knock-sensor-data";
 
 // This will be replaced with real data from database
 const mockSubcircuits = [
+  // Real circuit: Knock sensor
   {
-    id: "1",
+    ...knockSensorCircuit,
+    description: knockSensorCircuit.description.substring(0, 120) + "...",
+  },
+  {
+    id: "2",
     slug: "lm358-opamp-amplifier",
     title: "LM358 Non-Inverting Amplifier",
     description: "Dual op-amp based amplifier circuit with gain of 10. Includes input/output capacitors.",
@@ -17,7 +23,7 @@ const mockSubcircuits = [
     createdAt: new Date("2024-01-15"),
   },
   {
-    id: "2",
+    id: "3",
     slug: "lm7805-voltage-regulator",
     title: "LM7805 5V Linear Regulator",
     description: "Classic 7805 voltage regulator with input/output capacitors. Handles up to 1.5A.",
@@ -30,7 +36,7 @@ const mockSubcircuits = [
     createdAt: new Date("2024-01-10"),
   },
   {
-    id: "3",
+    id: "4",
     slug: "esp32-programming-header",
     title: "ESP32 Programming Header",
     description: "Standard 6-pin programming header for ESP32 modules with auto-reset circuit.",
@@ -43,7 +49,7 @@ const mockSubcircuits = [
     createdAt: new Date("2024-01-08"),
   },
   {
-    id: "4",
+    id: "5",
     slug: "usb-c-power-delivery",
     title: "USB-C Power Delivery Circuit",
     description: "USB-C connector with power delivery negotiation. Supports 5V, 9V, and 12V.",
@@ -56,7 +62,7 @@ const mockSubcircuits = [
     createdAt: new Date("2024-01-05"),
   },
   {
-    id: "5",
+    id: "6",
     slug: "crystal-oscillator-32khz",
     title: "32.768 kHz Crystal Oscillator",
     description: "RTC crystal oscillator circuit with load capacitors. For microcontroller timekeeping.",

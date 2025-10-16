@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Search, Upload, Copy, Zap } from "lucide-react";
+import { knockSensorCircuit } from "@/lib/knock-sensor-data";
 
 export default function HomePage() {
   return (
@@ -106,19 +107,40 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Placeholder cards - will be replaced with real data */}
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="bg-card border rounded-lg p-6 hover:shadow-lg transition-shadow">
-                <div className="aspect-video bg-muted rounded-md mb-4 flex items-center justify-center text-muted-foreground">
-                  Preview Coming Soon
+            {/* Featured Circuit */}
+            <Link
+              href={`/circuit/${knockSensorCircuit.slug}`}
+              className="bg-card border rounded-lg p-6 hover:shadow-lg transition-shadow"
+            >
+              <div className="aspect-video bg-gradient-to-br from-blue-50 to-purple-50 rounded-md mb-4 flex items-center justify-center text-primary border-2 border-dashed border-muted">
+                <div className="text-center">
+                  <p className="text-sm font-medium">{knockSensorCircuit.metadata.stats.componentCount} Components</p>
+                  <p className="text-xs text-muted-foreground">Click to view</p>
                 </div>
-                <h3 className="font-semibold mb-2">Sample Circuit #{i}</h3>
+              </div>
+              <h3 className="font-semibold mb-2 line-clamp-1">{knockSensorCircuit.title}</h3>
+              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                {knockSensorCircuit.description}
+              </p>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>by @{knockSensorCircuit.user.username}</span>
+                <span>{knockSensorCircuit.copyCount} copies</span>
+              </div>
+            </Link>
+
+            {/* Placeholder cards for future circuits */}
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-card border rounded-lg p-6 opacity-50">
+                <div className="aspect-video bg-muted rounded-md mb-4 flex items-center justify-center text-muted-foreground text-xs">
+                  More circuits coming soon
+                </div>
+                <h3 className="font-semibold mb-2">Circuit #{i + 1}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  This is a placeholder for circuit descriptions. Real circuits coming soon!
+                  Help us grow the library by uploading your circuits!
                 </p>
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>👤 by user</span>
-                  <span>📋 {Math.floor(Math.random() * 100)} copies</span>
+                  <span>by community</span>
+                  <span>-</span>
                 </div>
               </div>
             ))}
