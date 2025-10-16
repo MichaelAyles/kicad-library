@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -18,12 +17,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* KiCanvas library for interactive schematic viewing - must be loaded as a module */}
+        <script type="module" src="https://kicanvas.org/kicanvas/kicanvas.js" async />
+      </head>
       <body className={inter.className}>
-        {/* KiCanvas library for interactive schematic viewing */}
-        <Script
-          src="https://kicanvas.org/kicanvas/kicanvas.js"
-          strategy="beforeInteractive"
-        />
         <div className="min-h-screen flex flex-col">
           {children}
         </div>

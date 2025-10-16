@@ -20,7 +20,7 @@ export const knockSensorCircuit = {
   license: "CERN-OHL-S-2.0",
   createdAt: new Date("2024-01-20"),
   // The full S-expression will be loaded from the public file
-  sexprPath: "/example-Knock-Sensor.txt",
+  sexprPath: "/knock-sensor-complete.kicad_sch",
   metadata: {
     components: [
       { reference: "IC19", value: "TPIC8101DWRG4", footprint: "SOIC127P1030X265-20N", lib_id: "SamacSys_Parts:TPIC8101DWRG4" },
@@ -43,10 +43,10 @@ export const knockSensorCircuit = {
 
 /**
  * Load the full S-expression for the knock sensor circuit
- * This fetches the raw S-expression data from the public folder
+ * This fetches the complete KiCad schematic file from the public folder
  */
 export async function loadKnockSensorSexpr(): Promise<string> {
-  const response = await fetch('/example-Knock-Sensor.txt');
+  const response = await fetch('/knock-sensor-complete.kicad_sch');
   if (!response.ok) {
     throw new Error('Failed to load knock sensor S-expression');
   }
