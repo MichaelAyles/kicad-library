@@ -305,7 +305,7 @@ export default function CircuitDetailPage() {
               When using this circuit, please include this attribution:
             </p>
             <div className="bg-card border rounded-md p-4 font-mono text-sm">
-              <div>"{mockCircuit.title}"</div>
+              <div>&quot;{mockCircuit.title}&quot;</div>
               <div>by @{mockCircuit.user.username}</div>
               <div>https://circuitsnips.mikeayles.com/circuit/{mockCircuit.slug}</div>
               <div>Licensed under {mockCircuit.license}</div>

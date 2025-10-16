@@ -112,9 +112,9 @@ export default function SearchPage() {
           <div className="mt-12 p-6 bg-muted/30 rounded-lg">
             <h3 className="font-semibold mb-2">Search Tips</h3>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Search by component name (e.g., "LM358", "ESP32")</li>
-              <li>• Search by function (e.g., "voltage regulator", "amplifier")</li>
-              <li>• Use tags to filter results (e.g., "power", "usb")</li>
+              <li>• Search by component name (e.g., &quot;LM358&quot;, &quot;ESP32&quot;)</li>
+              <li>• Search by function (e.g., &quot;voltage regulator&quot;, &quot;amplifier&quot;)</li>
+              <li>• Use tags to filter results (e.g., &quot;power&quot;, &quot;usb&quot;)</li>
               <li>• Click categories for common circuit types</li>
             </ul>
           </div>
