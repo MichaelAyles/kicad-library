@@ -29,9 +29,7 @@ declare global {
 export function SchematicViewer({ sexpr, title }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [componentCount, setComponentCount] = useState(0);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [viewerError, setViewerError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [schematicUrl, setSchematicUrl] = useState<string>('/knock-sensor-complete.kicad_sch');
   const viewerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,40 +37,9 @@ export function SchematicViewer({ sexpr, title }: SchematicViewerProps) {
     const symbolMatches = sexpr.match(/\(symbol \(lib_id/g);
     setComponentCount(symbolMatches ? symbolMatches.length : 0);
 
-    // Create a blob URL for the S-expression so KiCanvas can load it
-    try {
-      const blob = new Blob([sexpr], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      setBlobUrl(url);
-      console.log('Created blob URL for KiCanvas:', url);
-      console.log('S-expression starts with:', sexpr.substring(0, 100));
-
-      // Cleanup blob URL on unmount
-      return () => {
-        URL.revokeObjectURL(url);
-      };
-    } catch (error) {
-      console.error('Failed to create blob URL:', error);
-      setViewerError(true);
-      setErrorMessage(error instanceof Error ? error.message : 'Unknown error');
-    }
-  }, [sexpr]);
-
-  // Add error listener for the kicanvas-embed element
-  useEffect(() => {
-    if (viewerRef.current) {
-      const embedElement = viewerRef.current.querySelector('kicanvas-embed');
-      if (embedElement) {
-        const handleError = (e: Event) => {
-          console.error('KiCanvas error:', e);
-          setViewerError(true);
-          setErrorMessage('Failed to load schematic in viewer');
-        };
-        embedElement.addEventListener('error', handleError);
-        return () => embedElement.removeEventListener('error', handleError);
-      }
-    }
-  }, [blobUrl]);
+    console.log('Loading KiCanvas with file:', schematicUrl);
+    console.log('S-expression preview:', sexpr.substring(0, 100));
+  }, [sexpr, schematicUrl]);
 
   return (
     <div className="bg-card border rounded-lg overflow-hidden">
@@ -96,61 +63,14 @@ export function SchematicViewer({ sexpr, title }: SchematicViewerProps) {
 
       {/* Main Viewer Area */}
       <div className="p-8" ref={viewerRef}>
-        {blobUrl && !viewerError ? (
-          <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
-            <kicanvas-embed
-              src={blobUrl}
-              controls="full"
-              theme="kicad"
-              style={{ width: '100%', height: '500px', display: 'block' }}
-            />
-          </div>
-        ) : viewerError ? (
-          <div className="aspect-video bg-red-50 rounded-md flex flex-col items-center justify-center text-red-600 border-2 border-dashed border-red-200">
-            <div className="text-center max-w-md">
-              <svg
-                className="w-24 h-24 mx-auto mb-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              <p className="text-lg font-medium mb-2">Viewer Error</p>
-              <p className="text-sm">
-                {errorMessage || "Failed to load schematic viewer"}
-              </p>
-              <p className="text-xs mt-2">Try expanding the S-expression view below</p>
-            </div>
-          </div>
-        ) : (
-          <div className="aspect-video bg-gradient-to-br from-blue-50 to-purple-50 rounded-md flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-muted">
-            <div className="text-center max-w-md">
-              <svg
-                className="w-24 h-24 mx-auto mb-4 text-primary/30 animate-pulse"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
-                />
-              </svg>
-              <p className="text-lg font-medium mb-2">Loading Interactive Viewer...</p>
-              <p className="text-sm">
-                {title || "Circuit schematic"} with {componentCount} components
-              </p>
-            </div>
-          </div>
-        )}
+        <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
+          <kicanvas-embed
+            src={schematicUrl}
+            controls="full"
+            theme="kicad"
+            style={{ width: '100%', height: '500px', display: 'block' }}
+          />
+        </div>
       </div>
 
       {/* Expandable S-Expression View */}
