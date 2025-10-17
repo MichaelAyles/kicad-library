@@ -1,83 +1,39 @@
-import Link from "next/link";
-import { Search, Filter } from "lucide-react";
-import { Header } from "@/components/Header";
-import { knockSensorCircuit } from "@/lib/knock-sensor-data";
+'use client';
 
-// This will be replaced with real data from database
-const mockSubcircuits = [
-  // Real circuit: Knock sensor
-  {
-    ...knockSensorCircuit,
-    description: knockSensorCircuit.description.substring(0, 120) + "...",
-  },
-  {
-    id: "2",
-    slug: "lm358-opamp-amplifier",
-    title: "LM358 Non-Inverting Amplifier",
-    description: "Dual op-amp based amplifier circuit with gain of 10. Includes input/output capacitors.",
-    user: { username: "johndoe", avatarUrl: null },
-    copyCount: 47,
-    favoriteCount: 12,
-    tags: ["opamp", "amplifier", "analog"],
-    category: "Amplifier",
-    license: "CERN-OHL-S-2.0",
-    createdAt: new Date("2024-01-15"),
-  },
-  {
-    id: "3",
-    slug: "lm7805-voltage-regulator",
-    title: "LM7805 5V Linear Regulator",
-    description: "Classic 7805 voltage regulator with input/output capacitors. Handles up to 1.5A.",
-    user: { username: "pradeep", avatarUrl: null },
-    copyCount: 89,
-    favoriteCount: 24,
-    tags: ["power", "regulator", "linear"],
-    category: "Power Supply",
-    license: "MIT",
-    createdAt: new Date("2024-01-10"),
-  },
-  {
-    id: "4",
-    slug: "esp32-programming-header",
-    title: "ESP32 Programming Header",
-    description: "Standard 6-pin programming header for ESP32 modules with auto-reset circuit.",
-    user: { username: "sarah", avatarUrl: null },
-    copyCount: 156,
-    favoriteCount: 45,
-    tags: ["esp32", "programming", "microcontroller"],
-    category: "Interface",
-    license: "CC-BY-4.0",
-    createdAt: new Date("2024-01-08"),
-  },
-  {
-    id: "5",
-    slug: "usb-c-power-delivery",
-    title: "USB-C Power Delivery Circuit",
-    description: "USB-C connector with power delivery negotiation. Supports 5V, 9V, and 12V.",
-    user: { username: "emily", avatarUrl: null },
-    copyCount: 203,
-    favoriteCount: 67,
-    tags: ["usb-c", "power", "pd"],
-    category: "Power Supply",
-    license: "CERN-OHL-S-2.0",
-    createdAt: new Date("2024-01-05"),
-  },
-  {
-    id: "6",
-    slug: "crystal-oscillator-32khz",
-    title: "32.768 kHz Crystal Oscillator",
-    description: "RTC crystal oscillator circuit with load capacitors. For microcontroller timekeeping.",
-    user: { username: "alex", avatarUrl: null },
-    copyCount: 78,
-    favoriteCount: 18,
-    tags: ["crystal", "oscillator", "rtc"],
-    category: "Clock",
-    license: "MIT",
-    createdAt: new Date("2024-01-12"),
-  },
-];
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Search, Filter, Loader } from 'lucide-react';
+import { Header } from '@/components/Header';
+import { getCircuits, type Circuit } from '@/lib/circuits';
 
 export default function BrowsePage() {
+  const [circuits, setCircuits] = useState<Circuit[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites'>('copies');
+
+  useEffect(() => {
+    const loadCircuits = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const { circuits: data } = await getCircuits(12, 0, sortBy);
+        setCircuits(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load circuits');
+        console.error('Error loading circuits:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadCircuits();
+  }, [sortBy]);
+
+  const handleSortChange = (newSort: 'copies' | 'recent' | 'favorites') => {
+    setSortBy(newSort);
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
@@ -100,7 +56,7 @@ export default function BrowsePage() {
               <input
                 type="text"
                 placeholder="Search circuits..."
-                className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
               />
             </div>
             <button className="px-4 py-2 border rounded-md hover:bg-muted/50 transition-colors flex items-center gap-2">
@@ -112,69 +68,117 @@ export default function BrowsePage() {
           {/* Sort Options */}
           <div className="flex items-center gap-4 mb-6 text-sm">
             <span className="text-muted-foreground">Sort by:</span>
-            <button className="text-primary font-medium">Most Copied</button>
-            <button className="text-muted-foreground hover:text-primary">Recent</button>
-            <button className="text-muted-foreground hover:text-primary">Favorites</button>
-          </div>
-
-          {/* Subcircuit Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {mockSubcircuits.map((circuit) => (
-              <Link
-                key={circuit.id}
-                href={`/circuit/${circuit.slug}`}
-                className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
-              >
-                {/* Preview Placeholder */}
-                <div className="aspect-video bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-muted/80 transition-colors">
-                  <span className="text-sm">Preview Coming Soon</span>
-                </div>
-
-                {/* Content */}
-                <div className="p-4">
-                  <h3 className="font-semibold mb-2 group-hover:text-primary transition-colors">
-                    {circuit.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                    {circuit.description}
-                  </p>
-
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {circuit.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-2 py-1 text-xs bg-primary/10 text-primary rounded"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>by @{circuit.user.username}</span>
-                    <div className="flex items-center gap-3">
-                      <span>📋 {circuit.copyCount}</span>
-                      <span>⭐ {circuit.favoriteCount}</span>
-                    </div>
-                  </div>
-
-                  {/* License Badge */}
-                  <div className="mt-3 pt-3 border-t">
-                    <span className="text-xs text-muted-foreground">{circuit.license}</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Load More */}
-          <div className="mt-12 text-center">
-            <button className="px-6 py-3 border rounded-md hover:bg-muted/50 transition-colors">
-              Load More Circuits
+            <button
+              onClick={() => handleSortChange('copies')}
+              className={sortBy === 'copies' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-primary'}
+            >
+              Most Copied
+            </button>
+            <button
+              onClick={() => handleSortChange('recent')}
+              className={sortBy === 'recent' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-primary'}
+            >
+              Recent
+            </button>
+            <button
+              onClick={() => handleSortChange('favorites')}
+              className={sortBy === 'favorites' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-primary'}
+            >
+              Favorites
             </button>
           </div>
+
+          {/* Error State */}
+          {error && (
+            <div className="mb-8 p-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+              Failed to load circuits: {error}
+            </div>
+          )}
+
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && circuits.length === 0 && !error && (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground mb-4">No circuits found yet.</p>
+              <Link href="/upload" className="text-primary hover:underline font-medium">
+                Be the first to share a circuit!
+              </Link>
+            </div>
+          )}
+
+          {/* Subcircuit Grid */}
+          {!isLoading && circuits.length > 0 && (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {circuits.map((circuit) => (
+                <Link
+                  key={circuit.id}
+                  href={`/circuit/${circuit.slug}`}
+                  className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
+                >
+                  {/* Preview Placeholder */}
+                  <div className="aspect-video bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-muted/80 transition-colors">
+                    <span className="text-sm">{circuit.copy_count} copies</span>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4">
+                    <h3 className="font-semibold mb-2 group-hover:text-primary transition-colors line-clamp-1">
+                      {circuit.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                      {circuit.description}
+                    </p>
+
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {circuit.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-1 text-xs bg-primary/10 text-primary rounded"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {circuit.tags.length > 3 && (
+                        <span className="px-2 py-1 text-xs text-muted-foreground">
+                          +{circuit.tags.length - 3}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>by @{circuit.user?.username || 'unknown'}</span>
+                      <div className="flex items-center gap-3">
+                        <span>📋 {circuit.copy_count}</span>
+                        <span>⭐ {circuit.favorite_count}</span>
+                      </div>
+                    </div>
+
+                    {/* License Badge */}
+                    <div className="mt-3 pt-3 border-t">
+                      <span className="text-xs text-muted-foreground">{circuit.license}</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {/* Load More */}
+          {!isLoading && circuits.length > 0 && (
+            <div className="mt-12 text-center">
+              <button className="px-6 py-3 border rounded-md hover:bg-muted/50 transition-colors">
+                Load More Circuits
+              </button>
+            </div>
+          )}
         </div>
       </main>
 
