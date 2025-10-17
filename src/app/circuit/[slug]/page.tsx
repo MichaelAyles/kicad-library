@@ -39,16 +39,10 @@ export default function CircuitDetailPage() {
       return;
     }
 
-    // Add attribution to the raw clipboard data (for pasting into KiCad)
-    const attributed = addAttribution(clipboardData, {
-      title: circuit.title,
-      author: `@${circuit.user.username}`,
-      url: `https://circuitsnips.mikeayles.com/circuit/${circuit.slug}`,
-      license: circuit.license,
-    });
-
+    // Copy raw clipboard data without modification
+    // (Users can paste this directly into KiCad - attribution would break the format)
     try {
-      await navigator.clipboard.writeText(attributed);
+      await navigator.clipboard.writeText(clipboardData);
       setCopied(true);
 
       // TODO: Track copy event in database
@@ -299,7 +293,7 @@ export default function CircuitDetailPage() {
           <div className="mt-8 bg-muted/30 border border-muted rounded-lg p-6">
             <h2 className="text-lg font-semibold mb-3">Attribution</h2>
             <p className="text-sm text-muted-foreground mb-3">
-              When using this circuit, please include this attribution:
+              When using this circuit, please include this attribution in your documentation:
             </p>
             <div className="bg-card border rounded-md p-4 font-mono text-sm">
               <div>&quot;{circuit.title}&quot;</div>
@@ -307,6 +301,10 @@ export default function CircuitDetailPage() {
               <div>https://circuitsnips.mikeayles.com/circuit/{circuit.slug}</div>
               <div>Licensed under {circuit.license}</div>
             </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Note: The &quot;Copy to Clipboard&quot; button copies raw data for easy pasting.
+              The downloaded .kicad_sch file includes attribution in the schematic metadata.
+            </p>
           </div>
         </div>
       </main>
