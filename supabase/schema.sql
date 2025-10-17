@@ -83,15 +83,27 @@ CREATE INDEX circuits_created_at_idx ON public.circuits(created_at DESC);
 CREATE INDEX circuits_tags_idx ON public.circuits USING GIN(tags);
 CREATE INDEX circuits_category_idx ON public.circuits(category);
 
--- Full-text search index
-ALTER TABLE public.circuits ADD COLUMN search_vector tsvector
-  GENERATED ALWAYS AS (
-    setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
-    setweight(to_tsvector('english', coalesce(array_to_string(tags, ' '), '')), 'C')
-  ) STORED;
+-- Full-text search column and index
+ALTER TABLE public.circuits ADD COLUMN search_vector tsvector;
 
 CREATE INDEX circuits_search_idx ON public.circuits USING GIN(search_vector);
+
+-- Function to update search vector
+CREATE OR REPLACE FUNCTION update_circuit_search_vector()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.search_vector :=
+    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(NEW.description, '')), 'B') ||
+    setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'C');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to automatically update search_vector on insert/update
+CREATE TRIGGER update_circuit_search_trigger
+  BEFORE INSERT OR UPDATE ON public.circuits
+  FOR EACH ROW EXECUTE FUNCTION update_circuit_search_vector();
 
 -- ============================================================================
 -- CIRCUIT COMPONENTS
