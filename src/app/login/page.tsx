@@ -1,15 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Mail, Lock, Github, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Github, ArrowRight, Loader } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { user, isLoading: authLoading, signInWithEmail, signInWithGitHub } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      router.push('/');
+    }
+  }, [user, authLoading, router]);
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,9 +28,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // TODO: Implement Supabase email sign-in
-      console.log('Sign in with email:', { email, password });
-      alert('Email sign-in not yet implemented. Use GitHub OAuth below.');
+      await signInWithEmail(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
@@ -32,11 +41,9 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // TODO: Implement Supabase GitHub OAuth
-      console.log('Sign in with GitHub');
-      alert('GitHub OAuth not yet implemented');
+      await signInWithGitHub();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed');
+      setError(err instanceof Error ? err.message : 'GitHub sign in failed');
     } finally {
       setIsLoading(false);
     }
@@ -133,11 +140,12 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Demo Info */}
-          <div className="mt-8 p-4 bg-muted/30 border rounded-lg text-sm text-muted-foreground">
-            <p className="font-medium mb-2">Demo Mode</p>
-            <p>Authentication is not yet implemented. The app currently uses demo data.</p>
-          </div>
+          {authLoading && (
+            <div className="mt-8 p-4 bg-muted/30 border rounded-lg text-sm text-muted-foreground flex items-center gap-2">
+              <Loader className="w-4 h-4 animate-spin" />
+              Checking authentication...
+            </div>
+          )}
         </div>
       </main>
     </div>

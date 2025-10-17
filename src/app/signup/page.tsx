@@ -1,21 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Mail, Lock, User, Github, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, Github, ArrowRight, Loader } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function SignupPage() {
+  const router = useRouter();
+  const { user, isLoading: authLoading, signUpWithEmail, signInWithGitHub } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      router.push('/');
+    }
+  }, [user, authLoading, router]);
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -30,9 +43,12 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      // TODO: Implement Supabase email sign-up
-      console.log('Sign up with email:', { username, email, password });
-      alert('Email sign-up not yet implemented. Use GitHub OAuth below.');
+      await signUpWithEmail(email, password, username);
+      setSuccessMessage('Account created! Check your email to verify.');
+      setUsername('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
@@ -45,11 +61,9 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      // TODO: Implement Supabase GitHub OAuth
-      console.log('Sign up with GitHub');
-      alert('GitHub OAuth not yet implemented');
+      await signInWithGitHub();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign up failed');
+      setError(err instanceof Error ? err.message : 'GitHub sign up failed');
     } finally {
       setIsLoading(false);
     }
@@ -68,6 +82,12 @@ export default function SignupPage() {
             {error && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
                 {error}
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md text-sm text-green-700">
+                {successMessage}
               </div>
             )}
 
@@ -190,11 +210,12 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {/* Demo Info */}
-          <div className="mt-8 p-4 bg-muted/30 border rounded-lg text-sm text-muted-foreground">
-            <p className="font-medium mb-2">Demo Mode</p>
-            <p>Authentication is not yet implemented. The app currently uses demo data.</p>
-          </div>
+          {authLoading && (
+            <div className="mt-8 p-4 bg-muted/30 border rounded-lg text-sm text-muted-foreground flex items-center gap-2">
+              <Loader className="w-4 h-4 animate-spin" />
+              Checking authentication...
+            </div>
+          )}
         </div>
       </main>
     </div>
