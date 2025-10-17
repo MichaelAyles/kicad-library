@@ -6,6 +6,7 @@ import { Copy, Heart, Download, ArrowLeft, Check, FileDown } from "lucide-react"
 import { addAttribution } from "@/lib/parser";
 import { knockSensorCircuit, loadKnockSensorClipboardData, loadKnockSensorSchematicFile } from "@/lib/knock-sensor-data";
 import { SchematicViewer } from "@/components/SchematicViewer";
+import { formatDate } from "@/lib/utils";
 
 export default function CircuitDetailPage() {
   const [copied, setCopied] = useState(false);
@@ -143,7 +144,7 @@ export default function CircuitDetailPage() {
                 </Link>
               </span>
               <span>•</span>
-              <span>Uploaded {circuit.createdAt.toLocaleDateString()}</span>
+              <span>Uploaded {formatDate(circuit.createdAt)}</span>
               <span>•</span>
               <span>{circuit.viewCount} views</span>
             </div>

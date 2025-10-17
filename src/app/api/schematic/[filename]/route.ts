@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { knockSensorCircuit, loadKnockSensorClipboardData } from '@/lib/knock-sensor-data';
+import { knockSensorCircuit } from '@/lib/knock-sensor-data';
 import { wrapWithKiCadHeaders } from '@/lib/parser';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 
 export async function GET(
   request: NextRequest,
@@ -18,8 +20,9 @@ export async function GET(
       );
     }
 
-    // Load raw data
-    const rawData = await loadKnockSensorClipboardData();
+    // Load raw data from filesystem (server-side)
+    const filePath = join(process.cwd(), 'public', 'example-Knock-Sensor.txt');
+    const rawData = await readFile(filePath, 'utf-8');
 
     // Wrap with KiCad headers
     const schematicFile = wrapWithKiCadHeaders(rawData, {
