@@ -341,7 +341,30 @@ export function extractMetadata(sexpr: string): SubcircuitMetadata {
 }
 
 /**
- * Add attribution comments to S-expression
+ * Wrap raw clipboard data with KiCad schematic headers
+ * Converts raw S-expression (starting with lib_symbols) into a complete .kicad_sch file
+ */
+export function wrapWithKiCadHeaders(rawData: string, options: {
+  title: string
+  uuid?: string
+}): string {
+  const uuid = options.uuid || `subcircuit-${Date.now()}`
+
+  return `(kicad_sch (version 20231120) (generator "circuitsnips")
+  (uuid "${uuid}")
+  (paper "A4")
+
+  (title_block
+    (title "${options.title}")
+  )
+
+${rawData}
+)`
+}
+
+/**
+ * Add attribution comments to a complete KiCad schematic
+ * (Only works on files with kicad_sch headers, not raw clipboard data)
  */
 export function addAttribution(sexpr: string, options: {
   title: string
@@ -362,7 +385,6 @@ export function addAttribution(sexpr: string, options: {
   }
 
   const attribution = [
-    `  (title "${options.title}")`,
     `  (comment 1 "Author: ${options.author}")`,
     `  (comment 2 "Source: ${options.url}")`,
     `  (comment 3 "License: ${options.license}")`,

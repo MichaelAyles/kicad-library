@@ -19,10 +19,9 @@ export const knockSensorCircuit = {
   category: "Sensor Interface",
   license: "CERN-OHL-S-2.0",
   createdAt: new Date("2024-01-20"),
-  // Path to the complete .kicad_sch file for viewing and download
-  schematicFilePath: "/knock-sensor-complete.kicad_sch",
-  // Path to the raw clipboard data for copy/paste
-  clipboardDataPath: "/example-Knock-Sensor.txt",
+  uuid: "knock-sensor-example-001",
+  // Path to the raw S-expression data (single source of truth)
+  dataPath: "/example-Knock-Sensor.txt",
   metadata: {
     components: [
       { reference: "IC19", value: "TPIC8101DWRG4", footprint: "SOIC127P1030X265-20N", lib_id: "SamacSys_Parts:TPIC8101DWRG4" },
@@ -43,27 +42,46 @@ export const knockSensorCircuit = {
   },
 };
 
+import { wrapWithKiCadHeaders } from './parser';
+
+// Cache for the loaded data to avoid repeated fetches
+let cachedRawData: string | null = null;
+
 /**
- * Load the raw clipboard data for the knock sensor circuit
- * This is the data that should be copied to clipboard for pasting into KiCad
- * (without file headers, just the raw symbols and wires)
+ * Load the raw S-expression data (single source of truth)
+ * This is the base data that everything else is derived from
  */
-export async function loadKnockSensorClipboardData(): Promise<string> {
-  const response = await fetch('/example-Knock-Sensor.txt');
-  if (!response.ok) {
-    throw new Error('Failed to load knock sensor clipboard data');
+async function loadRawData(): Promise<string> {
+  if (cachedRawData) {
+    return cachedRawData;
   }
-  return await response.text();
+
+  const response = await fetch(knockSensorCircuit.dataPath);
+  if (!response.ok) {
+    throw new Error('Failed to load knock sensor data');
+  }
+
+  cachedRawData = await response.text();
+  return cachedRawData;
 }
 
 /**
- * Load the complete KiCad schematic file for the knock sensor circuit
- * This is used for the interactive viewer (KiCanvas) and for file downloads
+ * Load the raw clipboard data for copy/paste into KiCad
+ * Returns the data exactly as it should be pasted (no headers, no modifications)
+ */
+export async function loadKnockSensorClipboardData(): Promise<string> {
+  return await loadRawData();
+}
+
+/**
+ * Load the complete KiCad schematic file for viewer and downloads
+ * Dynamically wraps the raw data with proper KiCad headers
  */
 export async function loadKnockSensorSchematicFile(): Promise<string> {
-  const response = await fetch('/knock-sensor-complete.kicad_sch');
-  if (!response.ok) {
-    throw new Error('Failed to load knock sensor schematic file');
-  }
-  return await response.text();
+  const rawData = await loadRawData();
+
+  return wrapWithKiCadHeaders(rawData, {
+    title: knockSensorCircuit.title,
+    uuid: knockSensorCircuit.uuid,
+  });
 }

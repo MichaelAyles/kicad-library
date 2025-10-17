@@ -198,7 +198,7 @@ export default function CircuitDetailPage() {
             </div>
           ) : schematicFile ? (
             <div className="mb-8">
-              <SchematicViewer sexpr={schematicFile} title={circuit.title} />
+              <SchematicViewer sexpr={schematicFile} title={circuit.title} slug={circuit.slug} />
             </div>
           ) : (
             <div className="bg-card border rounded-lg p-8 mb-8">

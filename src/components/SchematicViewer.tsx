@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 interface SchematicViewerProps {
   sexpr: string;
   title?: string;
+  slug: string;
 }
 
 // Declare the kicanvas-embed custom element for TypeScript
@@ -26,10 +27,11 @@ declare global {
  * Uses KiCanvas from https://kicanvas.org for interactive viewing
  * Falls back to expandable S-expression view if needed
  */
-export function SchematicViewer({ sexpr, title }: SchematicViewerProps) {
+export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [componentCount, setComponentCount] = useState(0);
-  const [schematicUrl, setSchematicUrl] = useState<string>('/knock-sensor-complete.kicad_sch');
+  // Generate API URL from slug - dynamically serves wrapped schematic
+  const schematicUrl = `/api/schematic/${slug}.kicad_sch`;
   const viewerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
