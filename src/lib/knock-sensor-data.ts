@@ -19,8 +19,10 @@ export const knockSensorCircuit = {
   category: "Sensor Interface",
   license: "CERN-OHL-S-2.0",
   createdAt: new Date("2024-01-20"),
-  // The full S-expression will be loaded from the public file
-  sexprPath: "/knock-sensor-complete.kicad_sch",
+  // Path to the complete .kicad_sch file for viewing and download
+  schematicFilePath: "/knock-sensor-complete.kicad_sch",
+  // Path to the raw clipboard data for copy/paste
+  clipboardDataPath: "/example-Knock-Sensor.txt",
   metadata: {
     components: [
       { reference: "IC19", value: "TPIC8101DWRG4", footprint: "SOIC127P1030X265-20N", lib_id: "SamacSys_Parts:TPIC8101DWRG4" },
@@ -42,13 +44,26 @@ export const knockSensorCircuit = {
 };
 
 /**
- * Load the full S-expression for the knock sensor circuit
- * This fetches the complete KiCad schematic file from the public folder
+ * Load the raw clipboard data for the knock sensor circuit
+ * This is the data that should be copied to clipboard for pasting into KiCad
+ * (without file headers, just the raw symbols and wires)
  */
-export async function loadKnockSensorSexpr(): Promise<string> {
+export async function loadKnockSensorClipboardData(): Promise<string> {
+  const response = await fetch('/example-Knock-Sensor.txt');
+  if (!response.ok) {
+    throw new Error('Failed to load knock sensor clipboard data');
+  }
+  return await response.text();
+}
+
+/**
+ * Load the complete KiCad schematic file for the knock sensor circuit
+ * This is used for the interactive viewer (KiCanvas) and for file downloads
+ */
+export async function loadKnockSensorSchematicFile(): Promise<string> {
   const response = await fetch('/knock-sensor-complete.kicad_sch');
   if (!response.ok) {
-    throw new Error('Failed to load knock sensor S-expression');
+    throw new Error('Failed to load knock sensor schematic file');
   }
   return await response.text();
 }

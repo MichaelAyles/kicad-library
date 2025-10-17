@@ -2,40 +2,45 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Copy, Heart, Download, ArrowLeft, Check } from "lucide-react";
+import { Copy, Heart, Download, ArrowLeft, Check, FileDown } from "lucide-react";
 import { addAttribution } from "@/lib/parser";
-import { knockSensorCircuit, loadKnockSensorSexpr } from "@/lib/knock-sensor-data";
+import { knockSensorCircuit, loadKnockSensorClipboardData, loadKnockSensorSchematicFile } from "@/lib/knock-sensor-data";
 import { SchematicViewer } from "@/components/SchematicViewer";
 
 export default function CircuitDetailPage() {
   const [copied, setCopied] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
-  const [sexprRaw, setSexprRaw] = useState<string>("");
+  const [clipboardData, setClipboardData] = useState<string>("");
+  const [schematicFile, setSchematicFile] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
 
   const circuit = knockSensorCircuit;
 
-  // Load the S-expression data
+  // Load both clipboard data (for copy) and complete file (for viewer/download)
   useEffect(() => {
-    loadKnockSensorSexpr()
-      .then((data) => {
-        setSexprRaw(data);
+    Promise.all([
+      loadKnockSensorClipboardData(),
+      loadKnockSensorSchematicFile()
+    ])
+      .then(([clipboard, schematic]) => {
+        setClipboardData(clipboard);
+        setSchematicFile(schematic);
         setIsLoading(false);
       })
       .catch((err) => {
-        console.error("Failed to load S-expression:", err);
+        console.error("Failed to load circuit data:", err);
         setIsLoading(false);
       });
   }, []);
 
   const handleCopy = async () => {
-    if (!sexprRaw) {
+    if (!clipboardData) {
       alert("Circuit data is still loading");
       return;
     }
 
-    // Add attribution to S-expression
-    const attributed = addAttribution(sexprRaw, {
+    // Add attribution to the raw clipboard data (for pasting into KiCad)
+    const attributed = addAttribution(clipboardData, {
       title: circuit.title,
       author: `@${circuit.user.username}`,
       url: `https://circuitsnips.mikeayles.com/circuit/${circuit.slug}`,
@@ -54,6 +59,35 @@ export default function CircuitDetailPage() {
       console.error("Failed to copy:", err);
       alert("Failed to copy to clipboard");
     }
+  };
+
+  const handleDownload = () => {
+    if (!schematicFile) {
+      alert("Schematic file is still loading");
+      return;
+    }
+
+    // Add attribution to the complete schematic file
+    const attributed = addAttribution(schematicFile, {
+      title: circuit.title,
+      author: `@${circuit.user.username}`,
+      url: `https://circuitsnips.mikeayles.com/circuit/${circuit.slug}`,
+      license: circuit.license,
+    });
+
+    // Create a blob and download link
+    const blob = new Blob([attributed], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${circuit.slug}.kicad_sch`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // TODO: Track download event in database
+    console.log("Download event tracked");
   };
 
   const handleFavorite = () => {
@@ -152,9 +186,12 @@ export default function CircuitDetailPage() {
               {isFavorited ? "Favorited" : "Favorite"} ({circuit.favoriteCount})
             </button>
 
-            <button className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2">
-              <Download className="w-5 h-5" />
-              Download SVG
+            <button
+              onClick={handleDownload}
+              className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2"
+            >
+              <FileDown className="w-5 h-5" />
+              Download .kicad_sch
             </button>
           </div>
 
@@ -165,9 +202,9 @@ export default function CircuitDetailPage() {
                 <p className="text-lg font-medium mb-2">Loading circuit...</p>
               </div>
             </div>
-          ) : sexprRaw ? (
+          ) : schematicFile ? (
             <div className="mb-8">
-              <SchematicViewer sexpr={sexprRaw} title={circuit.title} />
+              <SchematicViewer sexpr={schematicFile} title={circuit.title} />
             </div>
           ) : (
             <div className="bg-card border rounded-lg p-8 mb-8">
