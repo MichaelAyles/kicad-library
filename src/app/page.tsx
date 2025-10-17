@@ -1,37 +1,12 @@
 import Link from "next/link";
 import { Search, Upload, Copy, Zap } from "lucide-react";
+import { Header } from "@/components/Header";
 import { knockSensorCircuit } from "@/lib/knock-sensor-data";
 
 export default function HomePage() {
   return (
     <div className="flex flex-col">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold text-primary">
-            CircuitSnips
-          </Link>
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="/browse" className="text-sm font-medium hover:text-primary transition-colors">
-              Browse
-            </Link>
-            <Link href="/search" className="text-sm font-medium hover:text-primary transition-colors">
-              Search
-            </Link>
-            <Link href="/upload" className="text-sm font-medium hover:text-primary transition-colors">
-              Upload
-            </Link>
-          </nav>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/api/auth/signin"
-              className="px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 rounded-md transition-colors"
-            >
-              Sign In
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="py-20 px-4 text-center bg-gradient-to-b from-primary/5 to-background">
