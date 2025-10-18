@@ -41,10 +41,20 @@ export function Header() {
             <div className="flex items-center gap-3">
               <Link
                 href="/profile"
-                className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors"
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                title="View profile"
               >
-                <User className="w-4 h-4" />
-                {user.email?.split('@')[0] || 'Profile'}
+                {user.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt={user.user_metadata?.full_name || 'Profile'}
+                    className="w-8 h-8 rounded-full border border-border"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                    <User className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                )}
               </Link>
               <button
                 onClick={handleSignOut}
