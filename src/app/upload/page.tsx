@@ -19,19 +19,6 @@ import {
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 
-// Declare the kicanvas-embed custom element for TypeScript
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string;
-        controls?: 'none' | 'basic' | 'full';
-        theme?: 'kicad' | 'witchhazel';
-      }, HTMLElement>;
-    }
-  }
-}
-
 type UploadStep = 'paste' | 'preview' | 'metadata' | 'thumbnails' | 'uploading' | 'success';
 
 export default function UploadPage() {
@@ -46,16 +33,6 @@ export default function UploadPage() {
       router.push('/login');
     }
   }, [user, authLoading, router]);
-
-  // Load KiCanvas library for preview
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !document.querySelector('script[src*="kicanvas"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/kicanvas@0.7.4/dist/kicanvas.min.js';
-      script.type = 'module';
-      document.head.appendChild(script);
-    }
-  }, []);
 
   // Form state
   const [currentStep, setCurrentStep] = useState<UploadStep>('paste');
@@ -78,9 +55,6 @@ export default function UploadPage() {
   const [darkThumbnail, setDarkThumbnail] = useState<string>("");
   const [isCapturing, setIsCapturing] = useState(false);
 
-  // Preview blob URL
-  const [previewBlobUrl, setPreviewBlobUrl] = useState<string>("");
-
   // Loading states
   const [isParsing, setIsParsing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -95,25 +69,6 @@ export default function UploadPage() {
       setSlug(generateSlug(title));
     }
   }, [title]);
-
-  // Create blob URL for preview when fullFileSexpr changes
-  useEffect(() => {
-    if (fullFileSexpr) {
-      // Create a File object with .kicad_sch extension (KiCanvas needs this for type detection)
-      const file = new File([fullFileSexpr], 'preview.kicad_sch', {
-        type: 'application/x-kicad-schematic'
-      });
-      const url = URL.createObjectURL(file);
-      setPreviewBlobUrl(url);
-
-      // Cleanup old blob URL
-      return () => {
-        if (url) {
-          URL.revokeObjectURL(url);
-        }
-      };
-    }
-  }, [fullFileSexpr]);
 
   // Step 1: Parse and validate
   const handleParse = () => {
@@ -437,21 +392,17 @@ export default function UploadPage() {
                 Review your circuit schematic and details before adding metadata.
               </p>
 
-              {/* KiCanvas Preview */}
-              {previewBlobUrl && (
-                <div className="mb-6 bg-muted/20 rounded-lg p-4 border">
-                  <h3 className="font-semibold mb-3">Interactive Preview:</h3>
-                  <div className="bg-background rounded-md overflow-hidden border" style={{ height: '400px' }}>
-                    <kicanvas-embed
-                      src={previewBlobUrl}
-                      controls="basic"
-                      theme={theme === 'dark' ? 'kicad' : 'kicad'}
-                      style={{ width: '100%', height: '100%' }}
-                    />
+              {/* Circuit Preview - Simplified view */}
+              {fullFileSexpr && (
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-3">Circuit Preview:</h3>
+                  <div className="bg-muted/10 rounded-lg p-6 border">
+                    <div className="text-center text-muted-foreground">
+                      <Eye className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p className="font-medium mb-1">Interactive preview will be available after publishing</p>
+                      <p className="text-sm">Review the component summary below to verify your circuit</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Use mouse wheel to zoom, drag to pan
-                  </p>
                 </div>
               )}
 
