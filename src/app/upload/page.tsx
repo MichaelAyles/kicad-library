@@ -1,75 +1,236 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { Upload, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { Upload, AlertCircle, CheckCircle2, Eye, Loader, Camera } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { validateKiCadSchematic, extractMetadata } from "@/lib/parser";
+import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "next-themes";
+import {
+  validateSExpression,
+  generateSlug,
+  suggestTags,
+  suggestCategory,
+  type ParsedMetadata,
+  type ValidationResult,
+} from "@/lib/sexpr-parser";
+import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
+import { createClient } from "@/lib/supabase/client";
+
+type UploadStep = 'paste' | 'preview' | 'metadata' | 'thumbnails' | 'uploading' | 'success';
 
 export default function UploadPage() {
+  const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const supabase = createClient();
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  // Form state
+  const [currentStep, setCurrentStep] = useState<UploadStep>('paste');
   const [sexpr, setSexpr] = useState("");
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [metadata, setMetadata] = useState<ParsedMetadata | null>(null);
+
+  // Metadata form
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("General");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [license, setLicense] = useState("CERN-OHL-S-2.0");
-  const [parseResult, setParseResult] = useState<{
-    valid: boolean;
-    error?: string;
-    metadata?: ReturnType<typeof extractMetadata>;
-  } | null>(null);
-  const [isParsing, setIsParsing] = useState(false);
+  const [slug, setSlug] = useState("");
 
+  // Thumbnails
+  const [lightThumbnail, setLightThumbnail] = useState<string>("");
+  const [darkThumbnail, setDarkThumbnail] = useState<string>("");
+  const [isCapturing, setIsCapturing] = useState(false);
+
+  // Loading states
+  const [isParsing, setIsParsing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
+
+  // Refs
+  const viewerRef = useRef<HTMLDivElement>(null);
+
+  // Generate URL from title
+  useEffect(() => {
+    if (title) {
+      setSlug(generateSlug(title));
+    }
+  }, [title]);
+
+  // Step 1: Parse and validate
   const handleParse = () => {
     if (!sexpr.trim()) {
-      setParseResult({ valid: false, error: "Please paste a schematic" });
+      setValidation({ valid: false, errors: ["Please paste a schematic"], warnings: [] });
       return;
     }
 
     setIsParsing(true);
 
-    // Simulate async parsing (in real app, this might call an API)
     setTimeout(() => {
-      const validation = validateKiCadSchematic(sexpr);
+      const result = validateSExpression(sexpr);
+      setValidation(result);
 
-      if (!validation.valid) {
-        setParseResult({ valid: false, error: validation.error });
-        setIsParsing(false);
-        return;
-      }
+      if (result.valid && result.metadata) {
+        setMetadata(result.metadata);
 
-      try {
-        const metadata = extractMetadata(sexpr);
-        setParseResult({ valid: true, metadata });
-
-        // Auto-suggest title from first component if empty
-        if (!title && metadata.components.length > 0) {
-          const firstComp = metadata.components[0];
-          setTitle(`${firstComp.value} Circuit`);
+        // Auto-suggest metadata
+        if (!title) {
+          const firstComp = result.metadata.components[0];
+          if (firstComp) {
+            setTitle(`${firstComp.value} ${firstComp.lib_id.split(':')[1] || 'Circuit'}`);
+          }
         }
 
-        // Auto-suggest tags from components
-        if (tags.length === 0 && metadata.uniqueComponents.length > 0) {
-          const autoTags = metadata.uniqueComponents
-            .slice(0, 3)
-            .map(c => c.lib_id.split(':')[0].toLowerCase())
-            .filter((t, i, arr) => arr.indexOf(t) === i); // unique
-          setTags(autoTags);
+        if (tags.length === 0) {
+          setTags(suggestTags(result.metadata));
         }
-      } catch (error) {
-        setParseResult({
-          valid: false,
-          error: error instanceof Error ? error.message : "Parse error"
-        });
+
+        if (category === "General") {
+          setCategory(suggestCategory(result.metadata));
+        }
+
+        setCurrentStep('preview');
       }
 
       setIsParsing(false);
-    }, 500);
+    }, 300);
   };
 
+  // Step 2: Continue to metadata form
+  const handleContinueToMetadata = () => {
+    setCurrentStep('metadata');
+  };
+
+  // Step 3: Continue to thumbnail capture
+  const handleContinueToThumbnails = () => {
+    if (!title.trim()) {
+      alert("Please enter a title");
+      return;
+    }
+    setCurrentStep('thumbnails');
+  };
+
+  // Step 4: Capture thumbnails
+  const handleCaptureThumbnails = async () => {
+    if (!viewerRef.current) {
+      alert("Viewer not ready");
+      return;
+    }
+
+    const kicanvasElement = viewerRef.current.querySelector('kicanvas-embed') as HTMLElement;
+    if (!kicanvasElement) {
+      alert("KiCanvas viewer not found");
+      return;
+    }
+
+    setIsCapturing(true);
+
+    try {
+      const currentTheme = theme === 'dark' ? 'dark' : 'light';
+      const thumbnails = await captureThumbnails(
+        kicanvasElement,
+        currentTheme,
+        (newTheme) => setTheme(newTheme)
+      );
+
+      setLightThumbnail(thumbnails.light);
+      setDarkThumbnail(thumbnails.dark);
+
+      // Immediately proceed to upload
+      handleUpload(thumbnails.light, thumbnails.dark);
+    } catch (err) {
+      console.error("Thumbnail capture failed:", err);
+      alert("Failed to capture thumbnails. Please try again.");
+      setIsCapturing(false);
+    }
+  };
+
+  // Step 5: Upload everything
+  const handleUpload = async (lightThumb: string, darkThumb: string) => {
+    if (!user) {
+      alert("You must be logged in");
+      return;
+    }
+
+    setCurrentStep('uploading');
+    setIsUploading(true);
+
+    try {
+      // 1. Create circuit record first to get ID
+      setUploadProgress("Creating circuit record...");
+      const circuitData = {
+        user_id: user.id,
+        slug,
+        title,
+        description,
+        category,
+        tags,
+        license,
+        raw_sexpr: sexpr,
+        is_public: true,
+        view_count: 0,
+        copy_count: 0,
+        favorite_count: 0,
+      };
+
+      const { data: circuit, error: circuitError } = await supabase
+        .from('circuits')
+        .insert([circuitData])
+        .select()
+        .single();
+
+      if (circuitError) throw circuitError;
+
+      // 2. Upload thumbnails to storage
+      setUploadProgress("Uploading light theme thumbnail...");
+      const lightUrl = await uploadThumbnail(supabase, circuit.id, 'light', lightThumb);
+
+      setUploadProgress("Uploading dark theme thumbnail...");
+      const darkUrl = await uploadThumbnail(supabase, circuit.id, 'dark', darkThumb);
+
+      // 3. Update circuit with thumbnail URLs
+      setUploadProgress("Finalizing...");
+      const { error: updateError } = await supabase
+        .from('circuits')
+        .update({
+          thumbnail_light_url: lightUrl,
+          thumbnail_dark_url: darkUrl,
+        })
+        .eq('id', circuit.id);
+
+      if (updateError) throw updateError;
+
+      // Success!
+      setCurrentStep('success');
+      setIsUploading(false);
+
+      // Redirect to circuit page after 2 seconds
+      setTimeout(() => {
+        router.push(`/circuit/${slug}`);
+      }, 2000);
+
+    } catch (err) {
+      console.error("Upload failed:", err);
+      alert(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setIsUploading(false);
+      setCurrentStep('thumbnails');
+    }
+  };
+
+  // Tag management
   const handleAddTag = () => {
-    if (tagInput.trim() && tags.length < 10) {
+    if (tagInput.trim() && tags.length < 10 && !tags.includes(tagInput.trim().toLowerCase())) {
       setTags([...tags, tagInput.trim().toLowerCase()]);
       setTagInput("");
     }
@@ -79,262 +240,422 @@ export default function UploadPage() {
     setTags(tags.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!parseResult?.valid) {
-      alert("Please parse your schematic first");
-      return;
-    }
-
-    // TODO: Submit to API
-    console.log("Submitting:", { title, description, tags, license, sexpr });
-    alert("Upload functionality coming soon! Data logged to console.");
-  };
+  if (authLoading || !user) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader className="w-8 h-8 animate-spin text-primary" />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
 
-      {/* Main Content */}
       <main className="flex-1 py-8">
         <div className="container mx-auto px-4 max-w-4xl">
-          <h1 className="text-4xl font-bold mb-2">Upload Subcircuit</h1>
+          <h1 className="text-4xl font-bold mb-2">Upload Circuit</h1>
           <p className="text-muted-foreground mb-8">
             Share your KiCad schematic with the community
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Step 1: Paste S-Expression */}
-            <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                  1
-                </span>
-                Paste Schematic Data
-              </h2>
-
-              <div className="mb-4">
-                <textarea
-                  value={sexpr}
-                  onChange={(e) => setSexpr(e.target.value)}
-                  placeholder="Paste KiCad schematic S-expression here...
-
-Example: (kicad_sch (version 20230121) ...)"
-                  className="w-full h-64 p-4 border rounded-md font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y"
-                />
+          {/* Progress indicator */}
+          <div className="flex items-center gap-2 mb-8">
+            {[
+              { key: 'paste', label: 'Paste' },
+              { key: 'preview', label: 'Preview' },
+              { key: 'metadata', label: 'Details' },
+              { key: 'thumbnails', label: 'Thumbnails' },
+            ].map((step, index) => (
+              <div key={step.key} className="flex items-center gap-2">
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                    currentStep === step.key ||
+                    (currentStep === 'uploading' && index < 4) ||
+                    (currentStep === 'success' && index < 4)
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {index + 1}
+                </div>
+                <span className="text-sm hidden md:inline">{step.label}</span>
+                {index < 3 && <div className="w-8 h-0.5 bg-muted" />}
               </div>
+            ))}
+          </div>
 
-              <div className="flex items-center gap-4">
+          {/* Step 1: Paste */}
+          {currentStep === 'paste' && (
+            <div className="bg-card border rounded-lg p-6">
+              <h2 className="text-2xl font-semibold mb-4">Paste Your Schematic</h2>
+              <p className="text-muted-foreground mb-4">
+                Copy your circuit from KiCad (Ctrl+C) and paste it here, or upload a .kicad_sch file.
+              </p>
+
+              <textarea
+                value={sexpr}
+                onChange={(e) => setSexpr(e.target.value)}
+                placeholder="(kicad_sch (version 20230121) (generator eeschema) ...)"
+                className="w-full h-64 p-4 border rounded-md font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y bg-background"
+              />
+
+              <div className="flex items-center gap-4 mt-4">
                 <button
-                  type="button"
                   onClick={handleParse}
                   disabled={isParsing || !sexpr.trim()}
-                  className="px-6 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-6 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
-                  {isParsing ? "Parsing..." : "Parse & Preview"}
+                  {isParsing ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      Validating...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-4 h-4" />
+                      Validate & Preview
+                    </>
+                  )}
                 </button>
-
-                <div className="text-sm text-muted-foreground">
-                  💡 Tip: Select components in KiCad and press Ctrl+C
-                </div>
               </div>
 
-              {/* Parse Result */}
-              {parseResult && (
-                <div className={`mt-4 p-4 rounded-md ${parseResult.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
-                  {parseResult.valid ? (
+              {/* Validation result */}
+              {validation && (
+                <div
+                  className={`mt-4 p-4 rounded-md border ${
+                    validation.valid
+                      ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800'
+                      : 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
+                  }`}
+                >
+                  {validation.valid ? (
                     <div>
-                      <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-medium mb-2">
                         <CheckCircle2 className="w-5 h-5" />
-                        Valid KiCad {parseResult.metadata?.version ? `v${parseResult.metadata.version}` : ""} Format
+                        Valid KiCad Schematic (v{metadata?.version})
                       </div>
-                      {parseResult.metadata && (
-                        <div className="text-sm text-green-600 space-y-1">
-                          <p>✓ {parseResult.metadata.stats.componentCount} components found</p>
-                          <p>✓ {parseResult.metadata.footprints.assigned}/{parseResult.metadata.stats.componentCount} footprints assigned</p>
-                          <p>✓ {parseResult.metadata.stats.wireCount} wires, {parseResult.metadata.stats.netCount} nets</p>
-                          {parseResult.metadata.warnings && parseResult.metadata.warnings.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-green-200">
-                              <p className="font-medium">Warnings:</p>
-                              {parseResult.metadata.warnings.map((w, i) => (
-                                <p key={i}>⚠️ {w}</p>
-                              ))}
-                            </div>
-                          )}
+                      {metadata && (
+                        <div className="text-sm text-green-600 dark:text-green-400 space-y-1">
+                          <p>✓ {metadata.stats.componentCount} components</p>
+                          <p>✓ {metadata.footprints.assigned}/{metadata.footprints.total} footprints assigned</p>
+                          <p>✓ {metadata.stats.wireCount} wires, {metadata.stats.netCount} nets</p>
+                        </div>
+                      )}
+                      {validation.warnings.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-800">
+                          {validation.warnings.map((w, i) => (
+                            <p key={i} className="text-sm text-yellow-600 dark:text-yellow-400">
+                              ⚠️ {w}
+                            </p>
+                          ))}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-red-700">
-                      <AlertCircle className="w-5 h-5" />
-                      {parseResult.error}
+                    <div>
+                      <div className="flex items-center gap-2 text-red-700 dark:text-red-300 font-medium mb-2">
+                        <AlertCircle className="w-5 h-5" />
+                        Validation Failed
+                      </div>
+                      {validation.errors.map((err, i) => (
+                        <p key={i} className="text-sm text-red-600 dark:text-red-400">
+                          • {err}
+                        </p>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Step 2: Add Details (only show if parsed successfully) */}
-            {parseResult?.valid && (
-              <div className="bg-card border rounded-lg p-6">
-                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    2
-                  </span>
-                  Add Details
-                </h2>
+          {/* Step 2: Preview (temporarily hidden, will show KiCanvas) */}
+          {currentStep === 'preview' && metadata && (
+            <div className="bg-card border rounded-lg p-6">
+              <h2 className="text-2xl font-semibold mb-4">Preview Your Circuit</h2>
+              <p className="text-muted-foreground mb-4">
+                Review the schematic before adding details. The viewer will be used to generate thumbnails.
+              </p>
 
-                <div className="space-y-4">
-                  {/* Title */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Title <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="LM358 Dual Op-Amp Circuit"
-                      required
-                      className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Description
-                    </label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Describe what this circuit does, its characteristics, and any important notes..."
-                      rows={4}
-                      className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-y"
-                    />
-                  </div>
-
-                  {/* Tags */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Tags
-                    </label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {tags.map((tag, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm flex items-center gap-1"
-                        >
-                          {tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTag(index)}
-                            className="hover:text-primary/70"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddTag();
-                          }
-                        }}
-                        placeholder="Add a tag (press Enter)"
-                        className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddTag}
-                        className="px-4 py-2 border rounded-md hover:bg-muted/50"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Maximum 10 tags
-                    </p>
-                  </div>
-
-                  {/* License */}
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      License <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={license}
-                      onChange={(e) => setLicense(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="CERN-OHL-S-2.0">CERN-OHL-S-2.0 (Recommended - Hardware, Share-Alike)</option>
-                      <option value="MIT">MIT (Permissive)</option>
-                      <option value="CC-BY-4.0">CC-BY-4.0 (Attribution)</option>
-                      <option value="CC-BY-SA-4.0">CC-BY-SA-4.0 (Attribution, Share-Alike)</option>
-                      <option value="GPL-3.0">GPL-3.0 (Copyleft)</option>
-                      <option value="Apache-2.0">Apache-2.0 (Permissive with Patent Grant)</option>
-                      <option value="BSD-2-Clause">BSD-2-Clause (Permissive)</option>
-                      <option value="TAPR-OHL-1.0">TAPR-OHL-1.0 (Hardware-Specific)</option>
-                    </select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Choose how others can use your circuit
-                    </p>
-                  </div>
-
-                  {/* Agreement */}
-                  <div className="bg-muted/30 p-4 rounded-md space-y-2">
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <input type="checkbox" required className="mt-1" />
-                      <span className="text-sm">
-                        I am the original creator OR have permission to share this design
-                      </span>
-                    </label>
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <input type="checkbox" required className="mt-1" />
-                      <span className="text-sm">
-                        This design does not infringe any intellectual property rights
-                      </span>
-                    </label>
-                  </div>
-                </div>
+              {/* Placeholder for KiCanvas - will implement after verifying core flow works */}
+              <div className="bg-muted rounded-md p-8 text-center mb-4" ref={viewerRef}>
+                <p className="text-muted-foreground">
+                  KiCanvas preview will appear here
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {metadata.stats.componentCount} components • {metadata.stats.wireCount} wires
+                </p>
               </div>
-            )}
 
-            {/* Submit Button */}
-            {parseResult?.valid && (
               <div className="flex gap-4">
                 <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm("Are you sure you want to cancel?")) {
-                      setSexpr("");
-                      setParseResult(null);
-                      setTitle("");
-                      setDescription("");
-                      setTags([]);
-                    }
-                  }}
-                  className="px-6 py-3 border rounded-md hover:bg-muted/50 transition-colors"
+                  onClick={() => setCurrentStep('paste')}
+                  className="px-6 py-2 border rounded-md hover:bg-muted/50 transition-colors"
                 >
-                  Cancel
+                  Back
                 </button>
                 <button
-                  type="submit"
-                  className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+                  onClick={handleContinueToMetadata}
+                  className="px-6 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
                 >
-                  <Upload className="w-5 h-5" />
-                  Publish Subcircuit
+                  Continue to Details
                 </button>
               </div>
-            )}
-          </form>
+            </div>
+          )}
+
+          {/* Step 3: Metadata Form */}
+          {currentStep === 'metadata' && (
+            <div className="bg-card border rounded-lg p-6">
+              <h2 className="text-2xl font-semibold mb-4">Add Circuit Details</h2>
+
+              <div className="space-y-4">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="LM358 Dual Op-Amp Circuit"
+                    required
+                    className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                  />
+                </div>
+
+                {/* URL Slug */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    URL Slug
+                  </label>
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    placeholder="lm358-dual-op-amp-circuit"
+                    className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    circuitsnips.com/circuit/{slug || 'your-slug'}
+                  </p>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe what this circuit does..."
+                    rows={4}
+                    className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-y bg-background"
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                  >
+                    <option value="General">General</option>
+                    <option value="Power Supply">Power Supply</option>
+                    <option value="Analog">Analog</option>
+                    <option value="Digital">Digital</option>
+                    <option value="Microcontroller">Microcontroller</option>
+                    <option value="Sensors">Sensors</option>
+                    <option value="Communication">Communication</option>
+                    <option value="Display/LED">Display/LED</option>
+                    <option value="Control">Control</option>
+                  </select>
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Tags
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm flex items-center gap-1"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(index)}
+                          className="hover:text-primary/70"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddTag();
+                        }
+                      }}
+                      placeholder="Add a tag (press Enter)"
+                      className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTag}
+                      className="px-4 py-2 border rounded-md hover:bg-muted/50"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Maximum 10 tags
+                  </p>
+                </div>
+
+                {/* License */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    License <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={license}
+                    onChange={(e) => setLicense(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                  >
+                    <option value="CERN-OHL-S-2.0">CERN-OHL-S-2.0 (Recommended)</option>
+                    <option value="MIT">MIT</option>
+                    <option value="CC-BY-4.0">CC-BY-4.0</option>
+                    <option value="CC-BY-SA-4.0">CC-BY-SA-4.0</option>
+                    <option value="GPL-3.0">GPL-3.0</option>
+                    <option value="Apache-2.0">Apache-2.0</option>
+                    <option value="BSD-2-Clause">BSD-2-Clause</option>
+                    <option value="TAPR-OHL-1.0">TAPR-OHL-1.0</option>
+                  </select>
+                </div>
+
+                {/* Terms agreement */}
+                <div className="bg-muted/30 p-4 rounded-md space-y-2">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" required className="mt-1" />
+                    <span className="text-sm">
+                      I am the original creator OR have permission to share this design
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" required className="mt-1" />
+                    <span className="text-sm">
+                      This design does not infringe any intellectual property rights
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-6">
+                <button
+                  onClick={() => setCurrentStep('preview')}
+                  className="px-6 py-2 border rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleContinueToThumbnails}
+                  className="px-6 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
+                >
+                  Continue to Publish
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Thumbnail Capture */}
+          {currentStep === 'thumbnails' && (
+            <div className="bg-card border rounded-lg p-6">
+              <h2 className="text-2xl font-semibold mb-4">Generate Thumbnails</h2>
+              <p className="text-muted-foreground mb-4">
+                Click to automatically capture thumbnails in both light and dark modes.
+              </p>
+
+              {lightThumbnail && darkThumbnail ? (
+                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Light Mode</p>
+                    <img src={lightThumbnail} alt="Light thumbnail" className="w-full border rounded" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">Dark Mode</p>
+                    <img src={darkThumbnail} alt="Dark thumbnail" className="w-full border rounded" />
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-muted rounded-md p-8 text-center mb-4" ref={viewerRef}>
+                  <Camera className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    Ready to capture thumbnails
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setCurrentStep('metadata')}
+                  disabled={isCapturing || isUploading}
+                  className="px-6 py-2 border rounded-md hover:bg-muted/50 transition-colors disabled:opacity-50"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleCaptureThumbnails}
+                  disabled={isCapturing || isUploading}
+                  className="px-6 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isCapturing || isUploading ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      {isCapturing ? 'Capturing...' : uploadProgress}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Capture & Publish
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Success */}
+          {currentStep === 'success' && (
+            <div className="bg-card border rounded-lg p-6 text-center">
+              <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-green-500" />
+              <h2 className="text-2xl font-semibold mb-2">Circuit Published!</h2>
+              <p className="text-muted-foreground mb-4">
+                Your circuit has been successfully uploaded and is now live.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Redirecting to your circuit page...
+              </p>
+            </div>
+          )}
         </div>
       </main>
 
