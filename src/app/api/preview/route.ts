@@ -92,9 +92,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Return the schematic as a .kicad_sch file
+    // IMPORTANT: Use text/plain (not application/x-kicad-schematic) - this is what KiCanvas expects
     return new NextResponse(cached.sexpr, {
       headers: {
-        'Content-Type': 'application/x-kicad-schematic',
+        'Content-Type': 'text/plain; charset=utf-8',
         'Content-Disposition': 'inline; filename="preview.kicad_sch"',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
