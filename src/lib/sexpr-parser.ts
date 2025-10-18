@@ -65,13 +65,19 @@ export function isClipboardData(sexpr: string): boolean {
  * This allows KiCanvas to render it and enables proper validation
  */
 export function wrapClipboardData(clipboardSexpr: string): string {
-  // Create a minimal KiCad schematic wrapper
-  // KiCanvas needs this structure to render properly
+  // Create a complete KiCad schematic wrapper that KiCanvas can parse
+  // Using version 20231120 which is KiCad 8.0 format
+  const uuid = `clipboard-${Date.now()}`;
+
   const wrapped = `(kicad_sch
-  (version 20230121)
+  (version 20231120)
   (generator "CircuitSnips")
-  (uuid "00000000-0000-0000-0000-000000000000")
+  (uuid "${uuid}")
   (paper "A4")
+
+  (title_block
+    (title "Clipboard Circuit")
+  )
 
   ${clipboardSexpr}
 )`;
