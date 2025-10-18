@@ -18,6 +18,19 @@ import {
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 
+// Declare the kicanvas-embed custom element for TypeScript
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
+        src?: string;
+        controls?: 'none' | 'basic' | 'full';
+        theme?: 'kicad' | 'witchhazel';
+      }, HTMLElement>;
+    }
+  }
+}
+
 type UploadStep = 'paste' | 'preview' | 'metadata' | 'thumbnails' | 'uploading' | 'success';
 
 export default function UploadPage() {
@@ -62,12 +75,32 @@ export default function UploadPage() {
   // Refs
   const viewerRef = useRef<HTMLDivElement>(null);
 
+  // KiCanvas blob URL for preview
+  const [schematicBlobUrl, setSchematicBlobUrl] = useState<string>("");
+
   // Generate URL from title
   useEffect(() => {
     if (title) {
       setSlug(generateSlug(title));
     }
   }, [title]);
+
+  // Create blob URL for KiCanvas preview
+  useEffect(() => {
+    if (currentStep === 'preview' && wrappedSexpr) {
+      // Create a blob from the wrapped S-expression
+      const blob = new Blob([wrappedSexpr], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      setSchematicBlobUrl(url);
+
+      // Cleanup function to revoke the blob URL
+      return () => {
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
+      };
+    }
+  }, [currentStep, wrappedSexpr]);
 
   // Step 1: Parse and validate
   const handleParse = () => {
@@ -382,7 +415,7 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Step 2: Preview (temporarily hidden, will show KiCanvas) */}
+          {/* Step 2: Preview with KiCanvas */}
           {currentStep === 'preview' && metadata && (
             <div className="bg-card border rounded-lg p-6">
               <h2 className="text-2xl font-semibold mb-4">Preview Your Circuit</h2>
@@ -390,14 +423,25 @@ export default function UploadPage() {
                 Review the schematic before adding details. The viewer will be used to generate thumbnails.
               </p>
 
-              {/* Placeholder for KiCanvas - will implement after verifying core flow works */}
-              <div className="bg-muted rounded-md p-8 text-center mb-4" ref={viewerRef}>
-                <p className="text-muted-foreground">
-                  KiCanvas preview will appear here
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {metadata.stats.componentCount} components • {metadata.stats.wireCount} wires
-                </p>
+              {/* KiCanvas Interactive Viewer */}
+              <div className="mb-4" ref={viewerRef}>
+                <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
+                  {schematicBlobUrl ? (
+                    <kicanvas-embed
+                      src={schematicBlobUrl}
+                      controls="full"
+                      theme={theme === 'dark' ? 'witchhazel' : 'kicad'}
+                      style={{ width: '100%', height: '500px', display: 'block' }}
+                    />
+                  ) : (
+                    <div className="w-full h-[500px] bg-muted animate-pulse flex items-center justify-center">
+                      <Loader className="w-8 h-8 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 text-sm text-muted-foreground text-center">
+                  {metadata.stats.componentCount} components • {metadata.stats.wireCount} wires • {metadata.stats.netCount} nets
+                </div>
               </div>
 
               <div className="flex gap-4">
