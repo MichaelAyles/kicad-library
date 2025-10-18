@@ -88,9 +88,9 @@ export default function UploadPage() {
   // Create blob URL for KiCanvas preview
   useEffect(() => {
     if (currentStep === 'preview' && wrappedSexpr) {
-      // Create a blob from the wrapped S-expression
-      const blob = new Blob([wrappedSexpr], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
+      // Create a File object with .kicad_sch extension so KiCanvas recognizes it
+      const file = new File([wrappedSexpr], 'preview.kicad_sch', { type: 'text/plain' });
+      const url = URL.createObjectURL(file);
       setSchematicBlobUrl(url);
 
       // Cleanup function to revoke the blob URL
