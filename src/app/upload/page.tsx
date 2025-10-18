@@ -253,9 +253,7 @@ export default function UploadPage() {
         license,
         raw_sexpr: sexpr, // Store original format (snippet or full file as entered)
         is_public: true,
-        view_count: 0,
-        copy_count: 0,
-        favorite_count: 0,
+        // view_count, copy_count, favorite_count default to 0 in schema
       };
 
       const { data: circuit, error: circuitError } = await supabase
