@@ -99,9 +99,11 @@ export default function UploadPage() {
   // Create blob URL for preview when fullFileSexpr changes
   useEffect(() => {
     if (fullFileSexpr) {
-      // Create a blob from the schematic data
-      const blob = new Blob([fullFileSexpr], { type: 'application/x-kicad-schematic' });
-      const url = URL.createObjectURL(blob);
+      // Create a File object with .kicad_sch extension (KiCanvas needs this for type detection)
+      const file = new File([fullFileSexpr], 'preview.kicad_sch', {
+        type: 'application/x-kicad-schematic'
+      });
+      const url = URL.createObjectURL(file);
       setPreviewBlobUrl(url);
 
       // Cleanup old blob URL
