@@ -114,6 +114,8 @@ export function isClipboardSnippet(sexpr: string): boolean {
 /**
  * Wrap a clipboard snippet into a complete .kicad_sch file structure
  * This is needed for KiCanvas viewer and for downloads
+ *
+ * Based on KiCad 6+ schematic file format specification
  */
 export function wrapSnippetToFullFile(snippet: string, options?: {
   title?: string;
@@ -122,14 +124,22 @@ export function wrapSnippetToFullFile(snippet: string, options?: {
   const uuid = options?.uuid || `circuit-${Date.now()}`;
   const title = options?.title || 'Circuit Snippet';
 
+  // Create a complete KiCad schematic file structure
+  // Version 20231120 is KiCad 8.0 format
   return `(kicad_sch
   (version 20231120)
   (generator "CircuitSnips")
+  (generator_version "1.0")
+
   (uuid "${uuid}")
+
   (paper "A4")
 
   (title_block
     (title "${title}")
+    (date "${new Date().toISOString().split('T')[0]}")
+    (rev "1")
+    (company "CircuitSnips")
   )
 
 ${snippet}

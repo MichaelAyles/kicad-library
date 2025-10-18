@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isClipboardSnippet, wrapSnippetToFullFile } from '@/lib/kicad-parser';
 
 /**
  * In-memory cache for preview schematics
@@ -31,12 +32,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Ensure we have a full KiCad file (not just a snippet)
+    // KiCanvas requires a complete .kicad_sch file structure
+    let fullFile = sexpr;
+    if (isClipboardSnippet(sexpr)) {
+      console.log('Preview API: Wrapping clipboard snippet into full file');
+      fullFile = wrapSnippetToFullFile(sexpr, {
+        title: 'Circuit Preview',
+        uuid: `preview-${Date.now()}`
+      });
+    } else {
+      console.log('Preview API: Already a full file, using as-is');
+    }
+
     // Generate unique preview ID
     const previewId = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // Store in cache
+    // Store in cache (store the full file format)
     previewCache.set(previewId, {
-      sexpr,
+      sexpr: fullFile,
       timestamp: Date.now(),
     });
 
