@@ -78,6 +78,9 @@ export default function UploadPage() {
   const [darkThumbnail, setDarkThumbnail] = useState<string>("");
   const [isCapturing, setIsCapturing] = useState(false);
 
+  // Preview blob URL
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string>("");
+
   // Loading states
   const [isParsing, setIsParsing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -92,6 +95,23 @@ export default function UploadPage() {
       setSlug(generateSlug(title));
     }
   }, [title]);
+
+  // Create blob URL for preview when fullFileSexpr changes
+  useEffect(() => {
+    if (fullFileSexpr) {
+      // Create a blob from the schematic data
+      const blob = new Blob([fullFileSexpr], { type: 'application/x-kicad-schematic' });
+      const url = URL.createObjectURL(blob);
+      setPreviewBlobUrl(url);
+
+      // Cleanup old blob URL
+      return () => {
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
+      };
+    }
+  }, [fullFileSexpr]);
 
   // Step 1: Parse and validate
   const handleParse = () => {
@@ -416,12 +436,12 @@ export default function UploadPage() {
               </p>
 
               {/* KiCanvas Preview */}
-              {fullFileSexpr && (
+              {previewBlobUrl && (
                 <div className="mb-6 bg-muted/20 rounded-lg p-4 border">
                   <h3 className="font-semibold mb-3">Interactive Preview:</h3>
                   <div className="bg-background rounded-md overflow-hidden border" style={{ height: '400px' }}>
                     <kicanvas-embed
-                      src={`data:application/x-kicad-schematic;base64,${btoa(fullFileSexpr)}`}
+                      src={previewBlobUrl}
                       controls="basic"
                       theme={theme === 'dark' ? 'kicad' : 'kicad'}
                       style={{ width: '100%', height: '100%' }}
