@@ -119,7 +119,9 @@ export default function UploadPage() {
         }
 
         const { previewId } = await response.json();
-        setPreviewUrl(`/api/preview?id=${previewId}`);
+        // CRITICAL: KiCanvas needs .kicad_sch extension in the URL path to detect file type
+        // We use the filename in the path, and pass the ID as a query parameter
+        setPreviewUrl(`/api/preview/preview.kicad_sch?id=${previewId}`);
       } catch (error) {
         console.error('Preview creation failed:', error);
         setPreviewUrl("");

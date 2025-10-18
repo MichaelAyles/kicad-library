@@ -1,22 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isClipboardSnippet, wrapSnippetToFullFile } from '@/lib/kicad-parser';
-
-/**
- * In-memory cache for preview schematics
- * Maps preview ID to schematic content
- * This is temporary storage for upload previews
- */
-const previewCache = new Map<string, { sexpr: string; timestamp: number }>();
-
-// Clean up old previews (older than 1 hour)
-function cleanupOldPreviews() {
-  const oneHourAgo = Date.now() - (60 * 60 * 1000);
-  for (const [id, data] of previewCache.entries()) {
-    if (data.timestamp < oneHourAgo) {
-      previewCache.delete(id);
-    }
-  }
-}
+import { previewCache, cleanupOldPreviews } from '@/lib/preview-cache';
 
 /**
  * POST: Store a preview schematic and return its ID
