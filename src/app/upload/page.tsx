@@ -47,6 +47,16 @@ export default function UploadPage() {
     }
   }, [user, authLoading, router]);
 
+  // Load KiCanvas library for preview
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !document.querySelector('script[src*="kicanvas"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/kicanvas@0.7.4/dist/kicanvas.min.js';
+      script.type = 'module';
+      document.head.appendChild(script);
+    }
+  }, []);
+
   // Form state
   const [currentStep, setCurrentStep] = useState<UploadStep>('paste');
   const [sexpr, setSexpr] = useState(""); // Original input (snippet or full file)
@@ -397,13 +407,31 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Step 2: Circuit Summary */}
+          {/* Step 2: Preview & Circuit Summary */}
           {currentStep === 'preview' && metadata && (
             <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Circuit Summary</h2>
+              <h2 className="text-2xl font-semibold mb-4">Preview & Circuit Summary</h2>
               <p className="text-muted-foreground mb-6">
-                Review your circuit details before adding metadata. Interactive preview will be available after publishing.
+                Review your circuit schematic and details before adding metadata.
               </p>
+
+              {/* KiCanvas Preview */}
+              {fullFileSexpr && (
+                <div className="mb-6 bg-muted/20 rounded-lg p-4 border">
+                  <h3 className="font-semibold mb-3">Interactive Preview:</h3>
+                  <div className="bg-background rounded-md overflow-hidden border" style={{ height: '400px' }}>
+                    <kicanvas-embed
+                      src={`data:application/x-kicad-schematic;base64,${btoa(fullFileSexpr)}`}
+                      controls="basic"
+                      theme={theme === 'dark' ? 'kicad' : 'kicad'}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Use mouse wheel to zoom, drag to pan
+                  </p>
+                </div>
+              )}
 
               {/* Circuit Stats Cards */}
               <div className="grid md:grid-cols-3 gap-4 mb-6">
