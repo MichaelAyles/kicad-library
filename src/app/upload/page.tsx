@@ -38,6 +38,7 @@ export default function UploadPage() {
   const [sexpr, setSexpr] = useState("");
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [metadata, setMetadata] = useState<ParsedMetadata | null>(null);
+  const [wrappedSexpr, setWrappedSexpr] = useState<string>(""); // For clipboard data
 
   // Metadata form
   const [title, setTitle] = useState("");
@@ -83,6 +84,13 @@ export default function UploadPage() {
 
       if (result.valid && result.metadata) {
         setMetadata(result.metadata);
+
+        // Store wrapped S-expression if this was clipboard data
+        if (result.wrappedSexpr) {
+          setWrappedSexpr(result.wrappedSexpr);
+        } else {
+          setWrappedSexpr(sexpr); // Use original if not clipboard
+        }
 
         // Auto-suggest metadata
         if (!title) {
@@ -169,6 +177,7 @@ export default function UploadPage() {
     try {
       // 1. Create circuit record first to get ID
       setUploadProgress("Creating circuit record...");
+
       const circuitData = {
         user_id: user.id,
         slug,
@@ -177,7 +186,7 @@ export default function UploadPage() {
         category,
         tags,
         license,
-        raw_sexpr: sexpr,
+        raw_sexpr: wrappedSexpr, // Always use wrappedSexpr (which equals sexpr if not clipboard)
         is_public: true,
         view_count: 0,
         copy_count: 0,

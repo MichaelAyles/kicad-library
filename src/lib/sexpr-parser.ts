@@ -49,10 +49,39 @@ export interface ValidationResult {
   errors: string[];
   warnings: string[];
   metadata?: ParsedMetadata;
+  wrappedSexpr?: string; // For clipboard data - the full kicad_sch wrapped version
+}
+
+/**
+ * Detect if this is clipboard data (partial) or a full schematic file
+ */
+export function isClipboardData(sexpr: string): boolean {
+  const trimmed = sexpr.trim();
+  return trimmed.startsWith('(lib_symbols') && !trimmed.includes('(kicad_sch');
+}
+
+/**
+ * Wrap clipboard data in a minimal kicad_sch structure
+ * This allows KiCanvas to render it and enables proper validation
+ */
+export function wrapClipboardData(clipboardSexpr: string): string {
+  // Create a minimal KiCad schematic wrapper
+  // KiCanvas needs this structure to render properly
+  const wrapped = `(kicad_sch
+  (version 20230121)
+  (generator "CircuitSnips")
+  (uuid "00000000-0000-0000-0000-000000000000")
+  (paper "A4")
+
+  ${clipboardSexpr}
+)`;
+
+  return wrapped;
 }
 
 /**
  * Validate KiCad S-expression format
+ * Handles both full files and clipboard data
  */
 export function validateSExpression(sexpr: string): ValidationResult {
   const errors: string[] = [];
@@ -79,14 +108,20 @@ export function validateSExpression(sexpr: string): ValidationResult {
     return { valid: false, errors, warnings };
   }
 
-  // Check if it's a KiCad schematic
-  if (!sexpr.includes('kicad_sch')) {
-    errors.push('Not a valid KiCad schematic - missing "kicad_sch" identifier');
+  // Check if it's clipboard data or full schematic
+  let workingSexpr = sexpr;
+  let isClipboard = false;
+  if (isClipboardData(sexpr)) {
+    warnings.push('Clipboard data detected - will be wrapped for storage');
+    workingSexpr = wrapClipboardData(sexpr);
+    isClipboard = true;
+  } else if (!sexpr.includes('kicad_sch')) {
+    errors.push('Not a valid KiCad schematic - missing "kicad_sch" or "lib_symbols" identifier');
     return { valid: false, errors, warnings };
   }
 
   // Check version (support KiCad 6+)
-  const versionMatch = sexpr.match(/\(version\s+(\d+)\)/);
+  const versionMatch = workingSexpr.match(/\(version\s+(\d+)\)/);
   if (!versionMatch) {
     errors.push('Cannot determine KiCad version');
     return { valid: false, errors, warnings };
@@ -98,15 +133,15 @@ export function validateSExpression(sexpr: string): ValidationResult {
     return { valid: false, errors, warnings };
   }
 
-  // Check for generator (indicates it's from KiCad)
-  const generatorMatch = sexpr.match(/\(generator\s+"?([^")\s]+)"?\)/);
+  // Check for generator (indicates it's from KiCad or CircuitSnips)
+  const generatorMatch = workingSexpr.match(/\(generator\s+"?([^")\s]+)"?\)/);
   if (!generatorMatch) {
     warnings.push('No generator information found - this may not be from KiCad');
   }
 
-  // Extract metadata
+  // Extract metadata from the working S-expression
   try {
-    const metadata = extractMetadata(sexpr);
+    const metadata = extractMetadata(workingSexpr);
 
     // Add warnings based on metadata
     if (metadata.components.length === 0) {
@@ -123,7 +158,13 @@ export function validateSExpression(sexpr: string): ValidationResult {
       warnings.push('No wires found - components may not be connected');
     }
 
-    return { valid: true, errors, warnings, metadata };
+    return {
+      valid: true,
+      errors,
+      warnings,
+      metadata,
+      wrappedSexpr: isClipboard ? workingSexpr : undefined
+    };
   } catch (err) {
     errors.push(`Failed to parse schematic: ${err instanceof Error ? err.message : 'Unknown error'}`);
     return { valid: false, errors, warnings };
