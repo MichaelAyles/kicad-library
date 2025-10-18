@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/Header';
+import { Footer } from '@/components/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -214,12 +215,7 @@ export default function ProfilePage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-8 px-4 border-t mt-auto bg-muted/20">
-        <div className="container mx-auto max-w-6xl text-center text-sm text-muted-foreground">
-          <p>CircuitSnips - Share and discover KiCad circuits</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

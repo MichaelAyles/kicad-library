@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { validateKiCadSchematic, extractMetadata } from "@/lib/parser";
 
 export default function UploadPage() {
@@ -337,12 +338,7 @@ Example: (kicad_sch (version 20230121) ...)"
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-8 px-4 border-t mt-auto bg-muted/20">
-        <div className="container mx-auto max-w-6xl text-center text-sm text-muted-foreground">
-          <p>Built with ❤️ by the open source hardware community</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

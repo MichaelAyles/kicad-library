@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Copy, Heart, Download, ArrowLeft, Check, FileDown } from "lucide-react";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { addAttribution } from "@/lib/parser";
 import { knockSensorCircuit, loadKnockSensorClipboardData, loadKnockSensorSchematicFile } from "@/lib/knock-sensor-data";
 import { SchematicViewer } from "@/components/SchematicViewer";
@@ -285,12 +286,7 @@ export default function CircuitDetailPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-8 px-4 border-t mt-auto bg-muted/20">
-        <div className="container mx-auto max-w-6xl text-center text-sm text-muted-foreground">
-          <p>Built with ❤️ by the open source hardware community</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
