@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const cookieStore = cookies();
+    const response = NextResponse.redirect(new URL('/', origin));
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -17,20 +19,40 @@ export async function GET(request: NextRequest) {
           get(name: string) {
             return cookieStore.get(name)?.value;
           },
-          set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
+          set(name: string, value: string, options: any) {
+            // Set cookies on the response object
+            response.cookies.set({
+              name,
+              value,
+              ...options,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+            });
           },
-          remove(name: string, options: CookieOptions) {
-            cookieStore.delete(name);
+          remove(name: string, options: any) {
+            response.cookies.set({
+              name,
+              value: '',
+              ...options,
+              maxAge: 0,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+            });
           },
         },
       }
     );
 
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      console.error('Error exchanging code for session:', error);
+      return NextResponse.redirect(new URL('/login?error=auth_failed', origin));
+    }
+
+    return response;
   }
 
-  // URL to redirect to after sign in process completes
-  // Use the origin from the request to handle both local and production
-  return NextResponse.redirect(new URL('/', origin));
+  // If no code, redirect to login
+  return NextResponse.redirect(new URL('/login', origin));
 }
