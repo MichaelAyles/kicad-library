@@ -47,13 +47,14 @@ All in under 10 seconds!
 
 ## 🏗️ Tech Stack
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS + shadcn/ui
 - **Rendering**: [KiCanvas](https://github.com/theacodes/kicanvas) (MIT licensed WebGL viewer)
-- **Backend**: Node.js with Express, TypeScript
-- **Database**: PostgreSQL 15+ with JSONB for S-expression storage
+- **Backend**: Next.js API Routes (serverless)
+- **Database**: Supabase (PostgreSQL 15+ with JSONB)
 - **Search**: PostgreSQL full-text search with GIN indexes
-- **Authentication**: GitHub OAuth via NextAuth.js
-- **Hosting**: Vercel (frontend) + Neon/Railway (PostgreSQL)
+- **Authentication**: GitHub OAuth via Supabase Auth
+- **Storage**: Supabase Storage for S-expressions
+- **Hosting**: Vercel (frontend + API)
 - **Domain**: circuitsnips.mikeayles.com (MVP), circuitsnips.io (production)
 
 ## 🚀 Getting Started
@@ -77,14 +78,7 @@ npm install
 
 # Set up environment variables
 cp .env.example .env.local
-# Edit .env.local with your database credentials and GitHub OAuth keys
-
-# Set up database
-npx prisma migrate dev
-npx prisma generate
-
-# Seed with sample circuits (optional)
-npm run seed
+# Edit .env.local with your Supabase credentials and GitHub OAuth keys
 
 # Run development server
 npm run dev
@@ -97,18 +91,23 @@ Visit http://localhost:3000
 Create `.env.local`:
 
 ```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/circuitsnips"
+# Supabase (create account at https://supabase.com)
+NEXT_PUBLIC_SUPABASE_URL="your_supabase_project_url"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your_supabase_anon_key"
 
 # GitHub OAuth (create at https://github.com/settings/developers)
+# Configured in Supabase Authentication → Providers → GitHub
 GITHUB_ID="your_github_client_id"
 GITHUB_SECRET="your_github_client_secret"
+```
 
-# NextAuth
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="generate_with_openssl_rand_base64_32"
+### Database Setup
 
-# Optional: Analytics, CDN, etc.
+The database schema is already initialized in Supabase. Run the migration:
+
+```bash
+# Run schema from supabase/schema.sql in your Supabase SQL Editor
+# Or use Supabase CLI: supabase db push
 ```
 
 ## 📖 Documentation
@@ -151,21 +150,31 @@ We welcome contributions! Whether you're:
 
 ## 📋 Project Status
 
-**Current Phase**: MVP Development (Month 1/3)
+**Current Phase**: MVP Development (Early Stage)
 
+### Completed ✅
 - [x] Planning and research complete
 - [x] Project setup and documentation
-- [ ] Database schema implementation (Prisma)
+- [x] Database schema implementation (Supabase)
+- [x] GitHub OAuth integration
+- [x] Dark mode support
+- [x] Browse page with real database queries
+- [x] Authentication pages (login/signup)
+
+### In Progress 🔄
 - [ ] S-expression parser
-- [ ] GitHub OAuth integration
 - [ ] Upload flow
-- [ ] Search implementation
-- [ ] KiCanvas integration
+- [ ] Circuit detail page with KiCanvas viewer
 - [ ] Copy to clipboard functionality
+
+### Planned 📋
+- [ ] Search implementation (full-text search)
 - [ ] User profiles
+- [ ] Favorites and copy tracking
+- [ ] User settings
 - [ ] Deployment to circuitsnips.mikeayles.com
 
-See [GitHub Projects](https://github.com/yourusername/circuitsnips/projects) for detailed roadmap.
+See [GitHub Projects](https://github.com/MichaelAyles/kicad-library/projects) for detailed roadmap.
 
 ## 🎓 Learning Resources
 
