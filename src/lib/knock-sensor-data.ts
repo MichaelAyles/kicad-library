@@ -42,7 +42,7 @@ export const knockSensorCircuit = {
   },
 };
 
-import { wrapWithKiCadHeaders } from './parser';
+import { wrapSnippetToFullFile } from './kicad-parser';
 
 // Cache for the loaded data to avoid repeated fetches
 let cachedRawData: string | null = null;
@@ -80,7 +80,7 @@ export async function loadKnockSensorClipboardData(): Promise<string> {
 export async function loadKnockSensorSchematicFile(): Promise<string> {
   const rawData = await loadRawData();
 
-  return wrapWithKiCadHeaders(rawData, {
+  return wrapSnippetToFullFile(rawData, {
     title: knockSensorCircuit.title,
     uuid: knockSensorCircuit.uuid,
   });

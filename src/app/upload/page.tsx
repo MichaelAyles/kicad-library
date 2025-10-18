@@ -12,9 +12,10 @@ import {
   generateSlug,
   suggestTags,
   suggestCategory,
+  wrapSnippetToFullFile,
   type ParsedMetadata,
   type ValidationResult,
-} from "@/lib/sexpr-parser";
+} from "@/lib/kicad-parser";
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 
@@ -48,10 +49,10 @@ export default function UploadPage() {
 
   // Form state
   const [currentStep, setCurrentStep] = useState<UploadStep>('paste');
-  const [sexpr, setSexpr] = useState("");
+  const [sexpr, setSexpr] = useState(""); // Original input (snippet or full file)
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [metadata, setMetadata] = useState<ParsedMetadata | null>(null);
-  const [wrappedSexpr, setWrappedSexpr] = useState<string>(""); // For clipboard data
+  const [fullFileSexpr, setFullFileSexpr] = useState<string>(""); // Always full file format for preview/storage
 
   // Metadata form
   const [title, setTitle] = useState("");
@@ -85,7 +86,7 @@ export default function UploadPage() {
   // Step 1: Parse and validate
   const handleParse = () => {
     if (!sexpr.trim()) {
-      setValidation({ valid: false, errors: ["Please paste a schematic"], warnings: [] });
+      setValidation({ valid: false, errors: ["Please paste a schematic"], warnings: [], isSnippet: false, originalFormat: 'full' });
       return;
     }
 
@@ -98,11 +99,12 @@ export default function UploadPage() {
       if (result.valid && result.metadata) {
         setMetadata(result.metadata);
 
-        // Store wrapped S-expression if this was clipboard data
-        if (result.wrappedSexpr) {
-          setWrappedSexpr(result.wrappedSexpr);
+        // If it's a snippet, wrap it. Otherwise use as-is
+        if (result.isSnippet) {
+          const wrapped = wrapSnippetToFullFile(sexpr, { title: title || 'Circuit' });
+          setFullFileSexpr(wrapped);
         } else {
-          setWrappedSexpr(sexpr); // Use original if not clipboard
+          setFullFileSexpr(sexpr);
         }
 
         // Auto-suggest metadata
@@ -199,7 +201,7 @@ export default function UploadPage() {
         category,
         tags,
         license,
-        raw_sexpr: wrappedSexpr, // Always use wrappedSexpr (which equals sexpr if not clipboard)
+        raw_sexpr: sexpr, // Store original format (snippet or full file as entered)
         is_public: true,
         view_count: 0,
         copy_count: 0,
@@ -363,7 +365,7 @@ export default function UploadPage() {
                       {metadata && (
                         <div className="text-sm text-green-600 dark:text-green-400 space-y-1">
                           <p>✓ {metadata.stats.componentCount} components</p>
-                          <p>✓ {metadata.footprints.assigned}/{metadata.footprints.total} footprints assigned</p>
+                          <p>✓ {metadata.footprints.assigned}/{metadata.footprints.assigned + metadata.footprints.unassigned} footprints assigned</p>
                           <p>✓ {metadata.stats.wireCount} wires, {metadata.stats.netCount} nets</p>
                         </div>
                       )}
@@ -442,18 +444,18 @@ export default function UploadPage() {
               {/* Footprint Assignment Status */}
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
                 <div className="flex items-center gap-2 mb-2">
-                  {metadata.footprints.assigned === metadata.footprints.total ? (
+                  {metadata.footprints.unassigned === 0 ? (
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
                   ) : (
                     <AlertCircle className="w-5 h-5 text-yellow-600" />
                   )}
                   <span className="font-medium text-blue-900 dark:text-blue-100">
-                    Footprint Assignment: {metadata.footprints.assigned}/{metadata.footprints.total}
+                    Footprint Assignment: {metadata.footprints.assigned}/{metadata.footprints.assigned + metadata.footprints.unassigned}
                   </span>
                 </div>
-                {metadata.footprints.assigned < metadata.footprints.total && (
+                {metadata.footprints.unassigned > 0 && (
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {metadata.footprints.total - metadata.footprints.assigned} component(s) are missing footprint assignments.
+                    {metadata.footprints.unassigned} component(s) are missing footprint assignments.
                     This is normal for reusable subcircuits.
                   </p>
                 )}

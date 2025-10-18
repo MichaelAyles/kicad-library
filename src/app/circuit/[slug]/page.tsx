@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Copy, Heart, Download, ArrowLeft, Check, FileDown } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { addAttribution } from "@/lib/parser";
+import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnippetFromFullFile } from "@/lib/kicad-parser";
 import { knockSensorCircuit, loadKnockSensorClipboardData, loadKnockSensorSchematicFile } from "@/lib/knock-sensor-data";
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { formatDate } from "@/lib/utils";
@@ -13,21 +13,30 @@ import { formatDate } from "@/lib/utils";
 export default function CircuitDetailPage() {
   const [copied, setCopied] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
-  const [clipboardData, setClipboardData] = useState<string>("");
-  const [schematicFile, setSchematicFile] = useState<string>("");
+  const [snippetData, setSnippetData] = useState<string>(""); // For copy button - always snippet
+  const [fullFileData, setFullFileData] = useState<string>(""); // For preview/download - always full file
   const [isLoading, setIsLoading] = useState(true);
 
   const circuit = knockSensorCircuit;
 
-  // Load both clipboard data (for copy) and complete file (for viewer/download)
+  // Load circuit data and prepare both formats
   useEffect(() => {
+    // TODO: Replace with actual database fetch
+    // For now, using demo data
     Promise.all([
       loadKnockSensorClipboardData(),
       loadKnockSensorSchematicFile()
     ])
       .then(([clipboard, schematic]) => {
-        setClipboardData(clipboard);
-        setSchematicFile(schematic);
+        // The database stores raw_sexpr which could be either format
+        // For demo, we're loading both separately, but in production:
+        // 1. Load raw_sexpr from database
+        // 2. Detect if it's a snippet or full file
+        // 3. Generate both formats as needed
+
+        // For now, assuming clipboard is snippet and schematic is full file
+        setSnippetData(clipboard);
+        setFullFileData(schematic);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -36,16 +45,29 @@ export default function CircuitDetailPage() {
       });
   }, []);
 
+  // Helper function to prepare data from database (for future use)
+  const prepareCircuitData = (rawSexpr: string, title: string) => {
+    if (isClipboardSnippet(rawSexpr)) {
+      // It's a snippet - use as-is for copy, wrap for preview/download
+      setSnippetData(rawSexpr);
+      setFullFileData(wrapSnippetToFullFile(rawSexpr, { title }));
+    } else {
+      // It's a full file - extract snippet for copy, use as-is for preview/download
+      setSnippetData(extractSnippetFromFullFile(rawSexpr));
+      setFullFileData(rawSexpr);
+    }
+  };
+
   const handleCopy = async () => {
-    if (!clipboardData) {
+    if (!snippetData) {
       alert("Circuit data is still loading");
       return;
     }
 
-    // Copy raw clipboard data without modification
-    // (Users can paste this directly into KiCad - attribution would break the format)
+    // Copy snippet data only (no kicad_sch wrapper)
+    // Users can paste this directly into KiCad
     try {
-      await navigator.clipboard.writeText(clipboardData);
+      await navigator.clipboard.writeText(snippetData);
       setCopied(true);
 
       // TODO: Track copy event in database
@@ -59,14 +81,13 @@ export default function CircuitDetailPage() {
   };
 
   const handleDownload = () => {
-    if (!schematicFile) {
+    if (!fullFileData) {
       alert("Schematic file is still loading");
       return;
     }
 
     // Add attribution to the complete schematic file
-    const attributed = addAttribution(schematicFile, {
-      title: circuit.title,
+    const attributed = addAttribution(fullFileData, {
       author: `@${circuit.user.username}`,
       url: `https://circuitsnips.mikeayles.com/circuit/${circuit.slug}`,
       license: circuit.license,
@@ -173,9 +194,9 @@ export default function CircuitDetailPage() {
                 <p className="text-lg font-medium mb-2">Loading circuit...</p>
               </div>
             </div>
-          ) : schematicFile ? (
+          ) : fullFileData ? (
             <div className="mb-8">
-              <SchematicViewer sexpr={schematicFile} title={circuit.title} slug={circuit.slug} />
+              <SchematicViewer sexpr={fullFileData} title={circuit.title} slug={circuit.slug} />
             </div>
           ) : (
             <div className="bg-card border rounded-lg p-8 mb-8">

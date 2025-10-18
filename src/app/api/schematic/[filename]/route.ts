@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { knockSensorCircuit } from '@/lib/knock-sensor-data';
-import { wrapWithKiCadHeaders } from '@/lib/parser';
+import { isClipboardSnippet, wrapSnippetToFullFile } from '@/lib/kicad-parser';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 
@@ -21,14 +21,22 @@ export async function GET(
     }
 
     // Load raw data from filesystem (server-side)
+    // TODO: In production, load from database: raw_sexpr field
     const filePath = join(process.cwd(), 'public', 'example-Knock-Sensor.txt');
     const rawData = await readFile(filePath, 'utf-8');
 
-    // Wrap with KiCad headers
-    const schematicFile = wrapWithKiCadHeaders(rawData, {
-      title: knockSensorCircuit.title,
-      uuid: knockSensorCircuit.uuid,
-    });
+    // Check if raw data is a snippet or full file, and prepare accordingly
+    let schematicFile: string;
+    if (isClipboardSnippet(rawData)) {
+      // It's a snippet - wrap it for serving as .kicad_sch file
+      schematicFile = wrapSnippetToFullFile(rawData, {
+        title: knockSensorCircuit.title,
+        uuid: knockSensorCircuit.uuid,
+      });
+    } else {
+      // It's already a full file - use as-is
+      schematicFile = rawData;
+    }
 
     // Return with proper content type
     return new NextResponse(schematicFile, {
