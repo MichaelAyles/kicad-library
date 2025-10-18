@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  const origin = requestUrl.origin;
 
   if (code) {
     const cookieStore = cookies();
@@ -30,5 +31,6 @@ export async function GET(request: NextRequest) {
   }
 
   // URL to redirect to after sign in process completes
-  return NextResponse.redirect(new URL('/', 'https://circuitsnips.mikeayles.com'));
+  // Use the origin from the request to handle both local and production
+  return NextResponse.redirect(new URL('/', origin));
 }

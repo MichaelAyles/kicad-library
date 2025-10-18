@@ -42,10 +42,13 @@ export function useAuth() {
   const signInWithGitHub = async () => {
     setError(null);
     try {
+      // Use window.location.origin to handle both local and production environments
+      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.mikeayles.com'}/auth/callback`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: 'https://circuitsnips.mikeayles.com/auth/callback',
+          redirectTo: redirectUrl,
         },
       });
       if (error) throw error;
