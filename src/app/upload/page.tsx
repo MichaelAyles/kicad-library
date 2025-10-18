@@ -19,6 +19,19 @@ import {
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 
+// Declare the kicanvas-embed custom element for TypeScript
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
+        src?: string;
+        controls?: 'none' | 'basic' | 'full';
+        theme?: 'kicad' | 'witchhazel';
+      }, HTMLElement>;
+    }
+  }
+}
+
 type UploadStep = 'paste' | 'preview' | 'metadata' | 'thumbnails' | 'uploading' | 'success';
 
 export default function UploadPage() {
@@ -33,6 +46,16 @@ export default function UploadPage() {
       router.push('/login');
     }
   }, [user, authLoading, router]);
+
+  // Load KiCanvas library for preview
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !document.querySelector('script[src*="kicanvas"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/kicanvas@0.7.4/dist/kicanvas.min.js';
+      script.type = 'module';
+      document.head.appendChild(script);
+    }
+  }, []);
 
   // Form state
   const [currentStep, setCurrentStep] = useState<UploadStep>('paste');
@@ -55,6 +78,10 @@ export default function UploadPage() {
   const [darkThumbnail, setDarkThumbnail] = useState<string>("");
   const [isCapturing, setIsCapturing] = useState(false);
 
+  // Preview
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
   // Loading states
   const [isParsing, setIsParsing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -69,6 +96,40 @@ export default function UploadPage() {
       setSlug(generateSlug(title));
     }
   }, [title]);
+
+  // Create preview URL when fullFileSexpr changes
+  useEffect(() => {
+    async function createPreview() {
+      if (!fullFileSexpr) {
+        setPreviewUrl("");
+        return;
+      }
+
+      setIsLoadingPreview(true);
+      try {
+        // Send schematic to preview API
+        const response = await fetch('/api/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sexpr: fullFileSexpr }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create preview');
+        }
+
+        const { previewId } = await response.json();
+        setPreviewUrl(`/api/preview?id=${previewId}`);
+      } catch (error) {
+        console.error('Preview creation failed:', error);
+        setPreviewUrl("");
+      } finally {
+        setIsLoadingPreview(false);
+      }
+    }
+
+    createPreview();
+  }, [fullFileSexpr]);
 
   // Step 1: Parse and validate
   const handleParse = () => {
@@ -392,19 +453,37 @@ export default function UploadPage() {
                 Review your circuit schematic and details before adding metadata.
               </p>
 
-              {/* Circuit Preview - Simplified view */}
-              {fullFileSexpr && (
-                <div className="mb-6">
-                  <h3 className="font-semibold mb-3">Circuit Preview:</h3>
-                  <div className="bg-muted/10 rounded-lg p-6 border">
-                    <div className="text-center text-muted-foreground">
-                      <Eye className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p className="font-medium mb-1">Interactive preview will be available after publishing</p>
-                      <p className="text-sm">Review the component summary below to verify your circuit</p>
+              {/* KiCanvas Preview */}
+              <div className="mb-6">
+                <h3 className="font-semibold mb-3">Interactive Preview:</h3>
+                <div className="bg-background rounded-md overflow-hidden border" style={{ height: '450px' }} ref={viewerRef}>
+                  {isLoadingPreview ? (
+                    <div className="w-full h-full flex items-center justify-center bg-muted/20">
+                      <div className="text-center">
+                        <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Loading preview...</p>
+                      </div>
                     </div>
-                  </div>
+                  ) : previewUrl ? (
+                    <kicanvas-embed
+                      src={previewUrl}
+                      controls="basic"
+                      theme={theme === 'dark' ? 'kicad' : 'kicad'}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted/20">
+                      <div className="text-center text-muted-foreground">
+                        <Eye className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p className="text-sm">Preview will load after validation</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Use mouse wheel to zoom, drag to pan. This preview is used to generate thumbnails.
+                </p>
+              </div>
 
               {/* Circuit Stats Cards */}
               <div className="grid md:grid-cols-3 gap-4 mb-6">
