@@ -75,32 +75,12 @@ export default function UploadPage() {
   // Refs
   const viewerRef = useRef<HTMLDivElement>(null);
 
-  // KiCanvas blob URL for preview
-  const [schematicBlobUrl, setSchematicBlobUrl] = useState<string>("");
-
   // Generate URL from title
   useEffect(() => {
     if (title) {
       setSlug(generateSlug(title));
     }
   }, [title]);
-
-  // Create blob URL for KiCanvas preview
-  useEffect(() => {
-    if (currentStep === 'preview' && wrappedSexpr) {
-      // Create a File object with .kicad_sch extension so KiCanvas recognizes it
-      const file = new File([wrappedSexpr], 'preview.kicad_sch', { type: 'text/plain' });
-      const url = URL.createObjectURL(file);
-      setSchematicBlobUrl(url);
-
-      // Cleanup function to revoke the blob URL
-      return () => {
-        if (url) {
-          URL.revokeObjectURL(url);
-        }
-      };
-    }
-  }, [currentStep, wrappedSexpr]);
 
   // Step 1: Parse and validate
   const handleParse = () => {
@@ -415,33 +395,68 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Step 2: Preview with KiCanvas */}
+          {/* Step 2: Circuit Summary */}
           {currentStep === 'preview' && metadata && (
             <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Preview Your Circuit</h2>
-              <p className="text-muted-foreground mb-4">
-                Review the schematic before adding details. The viewer will be used to generate thumbnails.
+              <h2 className="text-2xl font-semibold mb-4">Circuit Summary</h2>
+              <p className="text-muted-foreground mb-6">
+                Review your circuit details before adding metadata. Interactive preview will be available after publishing.
               </p>
 
-              {/* KiCanvas Interactive Viewer */}
-              <div className="mb-4" ref={viewerRef}>
-                <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
-                  {schematicBlobUrl ? (
-                    <kicanvas-embed
-                      src={schematicBlobUrl}
-                      controls="full"
-                      theme={theme === 'dark' ? 'witchhazel' : 'kicad'}
-                      style={{ width: '100%', height: '500px', display: 'block' }}
-                    />
+              {/* Circuit Stats Cards */}
+              <div className="grid md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-muted/30 rounded-lg p-4 border">
+                  <div className="text-3xl font-bold text-primary mb-1">{metadata.stats.componentCount}</div>
+                  <div className="text-sm text-muted-foreground">Components</div>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-4 border">
+                  <div className="text-3xl font-bold text-primary mb-1">{metadata.stats.wireCount}</div>
+                  <div className="text-sm text-muted-foreground">Wires</div>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-4 border">
+                  <div className="text-3xl font-bold text-primary mb-1">{metadata.stats.netCount}</div>
+                  <div className="text-sm text-muted-foreground">Nets</div>
+                </div>
+              </div>
+
+              {/* Component List */}
+              {metadata.components.length > 0 && (
+                <div className="bg-muted/20 rounded-lg p-4 border mb-6">
+                  <h3 className="font-semibold mb-3">Components Detected:</h3>
+                  <div className="grid md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                    {metadata.components.map((comp, index) => (
+                      <div key={index} className="text-sm flex items-start gap-2 p-2 bg-background rounded">
+                        <span className="font-mono font-medium text-primary">{comp.reference}</span>
+                        <span className="text-muted-foreground">{comp.value}</span>
+                        {comp.footprint && (
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {comp.footprint.split(':')[1] || comp.footprint}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footprint Assignment Status */}
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  {metadata.footprints.assigned === metadata.footprints.total ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
                   ) : (
-                    <div className="w-full h-[500px] bg-muted animate-pulse flex items-center justify-center">
-                      <Loader className="w-8 h-8 animate-spin text-muted-foreground" />
-                    </div>
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
                   )}
+                  <span className="font-medium text-blue-900 dark:text-blue-100">
+                    Footprint Assignment: {metadata.footprints.assigned}/{metadata.footprints.total}
+                  </span>
                 </div>
-                <div className="mt-2 text-sm text-muted-foreground text-center">
-                  {metadata.stats.componentCount} components • {metadata.stats.wireCount} wires • {metadata.stats.netCount} nets
-                </div>
+                {metadata.footprints.assigned < metadata.footprints.total && (
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    {metadata.footprints.total - metadata.footprints.assigned} component(s) are missing footprint assignments.
+                    This is normal for reusable subcircuits.
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-4">
