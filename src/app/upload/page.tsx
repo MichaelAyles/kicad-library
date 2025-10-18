@@ -756,11 +756,32 @@ export default function UploadPage() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-muted rounded-md p-8 text-center mb-4" ref={viewerRef}>
-                  <Camera className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">
-                    Ready to capture thumbnails
-                  </p>
+                <div className="mb-4">
+                  <p className="text-sm font-medium mb-2">Preview (thumbnails will be captured from this):</p>
+                  <div className="bg-background rounded-md overflow-hidden border" style={{ height: '450px' }} ref={viewerRef}>
+                    {isLoadingPreview ? (
+                      <div className="w-full h-full flex items-center justify-center bg-muted/20">
+                        <div className="text-center">
+                          <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Loading preview...</p>
+                        </div>
+                      </div>
+                    ) : previewUrl ? (
+                      <kicanvas-embed
+                        src={previewUrl}
+                        controls="basic"
+                        theme={theme === 'dark' ? 'kicad' : 'kicad'}
+                        style={{ width: '100%', height: '100%' }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-muted/20">
+                        <div className="text-center text-muted-foreground">
+                          <Camera className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p className="text-sm">Preview not available</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
