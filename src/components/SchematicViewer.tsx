@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 
 interface SchematicViewerProps {
   sexpr: string;
@@ -30,9 +31,21 @@ declare global {
 export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [componentCount, setComponentCount] = useState(0);
+  const { theme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
   // Generate API URL from slug - dynamically serves wrapped schematic
   const schematicUrl = `/api/schematic/${slug}.kicad_sch`;
   const viewerRef = useRef<HTMLDivElement>(null);
+
+  // Determine KiCanvas theme based on current theme
+  // Light mode -> "kicad", Dark mode -> "witchhazel"
+  const currentTheme = resolvedTheme || theme;
+  const kicanvasTheme = currentTheme === 'dark' ? 'witchhazel' : 'kicad';
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Count symbol instances in the S-expression
@@ -40,8 +53,9 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
     setComponentCount(symbolMatches ? symbolMatches.length : 0);
 
     console.log('Loading KiCanvas with file:', schematicUrl);
+    console.log('KiCanvas theme:', kicanvasTheme);
     console.log('S-expression preview:', sexpr.substring(0, 100));
-  }, [sexpr, schematicUrl]);
+  }, [sexpr, schematicUrl, kicanvasTheme]);
 
   return (
     <div className="bg-card border rounded-lg overflow-hidden">
@@ -66,12 +80,16 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
       {/* Main Viewer Area */}
       <div className="p-8" ref={viewerRef}>
         <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
-          <kicanvas-embed
-            src={schematicUrl}
-            controls="full"
-            theme="kicad"
-            style={{ width: '100%', height: '500px', display: 'block' }}
-          />
+          {mounted ? (
+            <kicanvas-embed
+              src={schematicUrl}
+              controls="full"
+              theme={kicanvasTheme}
+              style={{ width: '100%', height: '500px', display: 'block' }}
+            />
+          ) : (
+            <div className="w-full h-[500px] bg-muted animate-pulse" />
+          )}
         </div>
       </div>
 
