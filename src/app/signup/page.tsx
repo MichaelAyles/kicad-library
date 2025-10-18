@@ -2,21 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Mail, Lock, User, Github, ArrowRight, Loader } from 'lucide-react';
+import { Github, Loader } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading, signUpWithEmail, signInWithGitHub } = useAuth();
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const { user, isLoading: authLoading, signInWithGitHub, error } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -25,45 +19,10 @@ export default function SignupPage() {
     }
   }, [user, authLoading, router]);
 
-  const handleEmailSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMessage(null);
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      await signUpWithEmail(email, password, username);
-      setSuccessMessage('Account created! Check your email to verify.');
-      setUsername('');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign up failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleGitHubSignUp = async () => {
-    setError(null);
     setIsLoading(true);
-
     try {
       await signInWithGitHub();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'GitHub sign up failed');
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +36,7 @@ export default function SignupPage() {
         <div className="w-full max-w-md">
           <div className="bg-card border rounded-lg p-8 shadow-sm">
             <h1 className="text-3xl font-bold mb-2">Create Account</h1>
-            <p className="text-muted-foreground mb-8">Join the CircuitSnips community</p>
+            <p className="text-muted-foreground mb-8">Join CircuitSnips to upload and share circuits</p>
 
             {error && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
@@ -85,121 +44,23 @@ export default function SignupPage() {
               </div>
             )}
 
-            {successMessage && (
-              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md text-sm text-green-700">
-                {successMessage}
-              </div>
-            )}
-
-            {/* Email Form */}
-            <form onSubmit={handleEmailSignUp} className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium mb-2">Username</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="your_username"
-                    required
-                    minLength={3}
-                    maxLength={30}
-                    pattern="^[a-zA-Z0-9_-]+$"
-                    className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">3-30 characters, letters/numbers/underscore only</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    minLength={6}
-                    className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">At least 6 characters</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Confirm Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-start gap-2 mt-4">
-                <input type="checkbox" required className="mt-1" />
-                <span className="text-sm text-muted-foreground">
-                  I agree to the{' '}
-                  <Link href="/terms" className="text-primary hover:underline">
-                    Terms of Service
-                  </Link>{' '}
-                  and{' '}
-                  <Link href="/privacy" className="text-primary hover:underline">
-                    Privacy Policy
-                  </Link>
-                </span>
-              </label>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 mt-6"
-              >
-                {isLoading ? 'Creating account...' : 'Create Account'}
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-muted"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-card text-muted-foreground">Or sign up with</span>
-              </div>
-            </div>
-
-            {/* GitHub OAuth */}
+            {/* GitHub OAuth Button */}
             <button
               onClick={handleGitHubSignUp}
-              disabled={isLoading}
-              className="w-full py-2 border rounded-md font-medium hover:bg-muted transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading || authLoading}
+              className="w-full py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
-              <Github className="w-5 h-5" />
-              GitHub
+              {isLoading ? (
+                <>
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Signing up...
+                </>
+              ) : (
+                <>
+                  <Github className="w-5 h-5" />
+                  Sign up with GitHub
+                </>
+              )}
             </button>
 
             <p className="text-center text-sm text-muted-foreground mt-6">

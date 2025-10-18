@@ -39,51 +39,13 @@ export function useAuth() {
     };
   }, [supabase]);
 
-  const signInWithEmail = async (email: string, password: string) => {
-    setError(null);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      router.push('/');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign in failed';
-      setError(message);
-      throw err;
-    }
-  };
-
-  const signUpWithEmail = async (email: string, password: string, username: string) => {
-    setError(null);
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username,
-          },
-        },
-      });
-      if (error) throw error;
-      // Redirect to verify email or dashboard
-      router.push('/');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign up failed';
-      setError(message);
-      throw err;
-    }
-  };
-
   const signInWithGitHub = async () => {
     setError(null);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: 'https://circuitsnips.mikeayles.com/auth/callback',
         },
       });
       if (error) throw error;
@@ -112,8 +74,6 @@ export function useAuth() {
     user,
     isLoading,
     error,
-    signInWithEmail,
-    signUpWithEmail,
     signInWithGitHub,
     signOut,
     isAuthenticated: !!user,
