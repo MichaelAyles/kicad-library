@@ -468,6 +468,7 @@ export default function UploadPage() {
                     </div>
                   ) : previewUrl ? (
                     <kicanvas-embed
+                      key={`preview-viewer-${previewUrl}`}
                       src={previewUrl}
                       controls="basic"
                       theme={theme === 'dark' ? 'kicad' : 'kicad'}
@@ -770,6 +771,7 @@ export default function UploadPage() {
                       </div>
                     ) : previewUrl ? (
                       <kicanvas-embed
+                        key={`thumbnail-viewer-${previewUrl}`}
                         src={previewUrl}
                         controls="basic"
                         theme={theme === 'dark' ? 'kicad' : 'kicad'}
@@ -784,6 +786,9 @@ export default function UploadPage() {
                       </div>
                     )}
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Preview URL: {previewUrl || 'Not loaded'}
+                  </p>
                 </div>
               )}
 
