@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CircuitSnips is an open-source platform for sharing reusable KiCad schematic subcircuits. Users copy circuits from KiCad (S-expressions), upload with metadata and licensing, and others can search and paste them directly into their projects.
 
-**Status**: Planning phase complete, ready for MVP development
-**Deployment**: circuitsnips.mikeayles.com (MVP) → circuitsnips.io (production)
+**Status**: MVP Core Complete - Upload flow, KiCanvas preview, and database integration functional
+**Deployment**: https://circuitsnips.mikeayles.com (Live on Vercel)
+**Future**: circuitsnips.io (production domain)
 
 ## Architecture Overview
 
@@ -19,11 +20,11 @@ CircuitSnips is an open-source platform for sharing reusable KiCad schematic sub
 
 ### Key Technologies
 - **Next.js 14**: App Router, React Server Components, TypeScript
-- **KiCanvas**: MIT-licensed WebGL schematic viewer (https://github.com/theacodes/kicanvas)
-- **Prisma ORM**: Database schema and migrations
-- **NextAuth.js**: GitHub OAuth authentication
-- **PostgreSQL**: JSONB columns, full-text search (tsvector + GIN indexes)
+- **KiCanvas**: MIT-licensed WebGL schematic viewer (https://github.com/theacodes/kicanvas) - INTEGRATED ✅
+- **Supabase**: PostgreSQL database, authentication, storage (replaces Prisma + NextAuth)
+- **PostgreSQL 15+**: JSONB columns, full-text search (tsvector + GIN indexes)
 - **Tailwind CSS + shadcn/ui**: UI components
+- **html2canvas**: Client-side thumbnail generation from KiCanvas preview
 
 ## Development Commands
 
@@ -84,18 +85,23 @@ See `.claude/data-model.md` for complete schema with SQL.
 
 ## S-Expression Parser
 
-Location: `lib/parser.ts` (to be created)
+Location: `src/lib/kicad-parser.ts` ✅ IMPLEMENTED
 
-Requirements:
-- Parse KiCad S-expression format (version 20211014+)
-- Validate structure (check for required fields)
-- Extract metadata:
-  - Component list (reference, value, footprint, lib_id)
-  - Net list (labels, global labels, hierarchical labels)
-  - Bounding box (for rendering size)
-  - Statistics (component count, wire count)
-- Regenerate UUIDs on paste to avoid conflicts
-- Embed attribution in comments when copying
+The parser handles both clipboard snippets and full .kicad_sch files:
+
+### Key Functions
+- `isClipboardSnippet(sexpr)` - Detects if input is a snippet or full file
+- `wrapSnippetToFullFile(snippet, options)` - Wraps clipboard data into full KiCad file for KiCanvas
+- `extractSnippetFromFullFile(fullFile)` - Extracts pasteable snippet from full file
+- `validateSExpression(sexpr)` - Validates and parses S-expression
+- `addAttribution(sexpr, attribution)` - Embeds attribution in schematic metadata
+- `parseSExpression(sexpr)` - Tree-based S-expression parser
+- `extractMetadata(tree)` - Extracts components, nets, and statistics
+
+### Three Data Formats
+1. **Storage Format**: Original (snippet or full file as uploaded) → stored in `raw_sexpr` column
+2. **Copy Format**: Always snippet (extracted if needed) → for clipboard copy functionality
+3. **Preview/Download Format**: Always full file (wrapped if needed) → for KiCanvas and downloads
 
 Example metadata structure in TypeScript:
 ```typescript
@@ -205,23 +211,21 @@ Also support:
 
 Required in `.env.local`:
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/circuitsnips"
-GITHUB_ID="your_github_client_id"
-GITHUB_SECRET="your_github_client_secret"
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="generate_with_openssl_rand_base64_32"
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your_anon_key"
+
+# Note: GitHub OAuth is configured in Supabase Dashboard > Authentication > Providers
+# No need for separate GITHUB_ID/SECRET in .env - Supabase handles it
 ```
 
-Generate NEXTAUTH_SECRET:
-```bash
-openssl rand -base64 32
-```
-
-GitHub OAuth setup:
-1. Go to https://github.com/settings/developers
-2. Create new OAuth App
-3. Homepage URL: `http://localhost:3000` (dev) or `https://circuitsnips.mikeayles.com` (prod)
-4. Callback URL: `http://localhost:3000/api/auth/callback/github`
+Supabase Setup:
+1. Create project at https://supabase.com
+2. Run `supabase/schema.sql` in SQL Editor to create tables
+3. Run `supabase/migration-add-is-public.sql` for latest schema updates
+4. Configure GitHub OAuth in Authentication → Providers → GitHub
+5. Add allowed redirect URLs in Authentication → URL Configuration
+6. Create `thumbnails` storage bucket for circuit previews
 
 ## Code Style & Conventions
 
@@ -260,19 +264,113 @@ Comprehensive planning docs in `.claude/`:
 
 Read these for context before implementing features.
 
-## MVP Checklist (Current Phase)
+## MVP Implementation Status
 
-Priority features:
-- [ ] Next.js project setup with TypeScript + Tailwind
-- [ ] Prisma schema implementation (see `.claude/data-model.md`)
-- [ ] GitHub OAuth with NextAuth.js
-- [ ] S-expression parser with validation
-- [ ] Upload flow: paste → parse → extract metadata → save
-- [ ] Detail page with KiCanvas viewer
-- [ ] One-click copy to clipboard (with attribution embedding)
-- [ ] Search page with PostgreSQL FTS
-- [ ] User profile pages
-- [ ] Favorite button functionality
+### ✅ COMPLETED
+
+**Core Infrastructure**
+- [x] Next.js 14 project setup with TypeScript + Tailwind CSS
+- [x] Supabase database schema implementation (`supabase/schema.sql`)
+- [x] Database migrations (`supabase/migration-add-is-public.sql`)
+- [x] GitHub OAuth with Supabase Auth
+- [x] Dark mode support with theme persistence
+- [x] Responsive design (mobile & desktop)
+- [x] Live deployment on Vercel
+
+**S-Expression Parser** (`src/lib/kicad-parser.ts`)
+- [x] Parse KiCad S-expression format
+- [x] Detect clipboard snippets vs full files
+- [x] Wrap snippets into complete .kicad_sch files
+- [x] Extract snippets from full files
+- [x] Validate S-expression structure
+- [x] Extract metadata (components, nets, stats)
+- [x] Add attribution to schematics
+
+**Upload Flow** (`src/app/upload/page.tsx`)
+- [x] Step 1: Paste & validate schematic
+- [x] Step 2: Interactive KiCanvas preview
+- [x] Step 3: Metadata entry (title, description, tags, category, license)
+- [x] Step 4: Automatic thumbnail capture in light & dark modes
+- [x] Upload to Supabase with thumbnails
+- [x] Error handling and validation
+
+**KiCanvas Integration**
+- [x] KiCanvas viewer component (`src/components/SchematicViewer.tsx`)
+- [x] Preview API endpoint (`/api/preview/[filename]/route.ts`)
+- [x] Dynamic schematic serving (`/api/schematic/[filename]/route.ts`)
+- [x] Thumbnail capture utility (`src/lib/thumbnail.ts`)
+- [x] Theme synchronization (light/dark modes)
+
+**Circuit Detail Page** (`src/app/circuit/[slug]/page.tsx`)
+- [x] Interactive KiCanvas viewer with full controls
+- [x] Circuit metadata display
+- [x] Component list
+- [x] Statistics (component count, wires, nets, footprints)
+- [x] Tags and category
+- [x] License information with attribution
+- [x] Copy to clipboard (with embedded attribution)
+- [x] Download as .kicad_sch file
+- [x] Favorite button (UI ready, analytics pending)
+
+**User Interface**
+- [x] Header with authentication state
+- [x] Footer with links
+- [x] Homepage with hero section
+- [x] Browse page with circuit grid
+- [x] Login/Signup pages
+- [x] User profile page with avatar
+
+### 🔄 IN PROGRESS / PLANNED
+
+**Search & Discovery**
+- [ ] Full-text search with PostgreSQL (schema ready)
+- [ ] Advanced filtering (tags, category, license)
+- [ ] Sort options (relevance, recent, popular)
+
+**Analytics & Tracking**
+- [ ] Favorites functionality (database schema complete)
+- [ ] Copy event tracking
+- [ ] View count tracking
+- [ ] User engagement metrics
+
+**User Features**
+- [ ] User settings page
+- [ ] Edit uploaded circuits
+- [ ] Delete circuits
+- [ ] Collections/folders
+
+**Future Enhancements**
+- [ ] Comments and discussions
+- [ ] Version history and forking
+- [ ] Multi-language support
+- [ ] API for third-party integrations
+
+## Design Variants
+
+Multiple visual aesthetics have been created as experimental branches. See [DESIGN_VARIANTS.md](DESIGN_VARIANTS.md) for full documentation.
+
+### Available Variants
+- **main** - Current production design (baseline)
+- **design/hyper-modern** - Glassmorphism, neon accents, futuristic
+- **design/classic** - Serif typography, navy palette, traditional
+- **design/wild** - Neon brutalism, asymmetric, cyberpunk
+
+### Git Worktrees
+Each design variant is in its own worktree for independent development:
+```
+kicad-library/ (main)
+kicad-library-designs/
+  ├── hyper-modern/ (design/hyper-modern)
+  ├── classic/ (design/classic)
+  └── wild/ (design/wild)
+```
+
+### Vercel Previews
+Each branch automatically deploys to Vercel:
+- Main: https://circuitsnips.mikeayles.com
+- Hyper-modern: https://circuitsnips-git-design-hyper-modern-michaelayless-projects.vercel.app
+- Classic: https://circuitsnips-git-design-classic-michaelayless-projects.vercel.app
+- Wild: https://circuitsnips-git-design-wild-michaelayless-projects.vercel.app
 
 ## Key Constraints & Decisions
 
