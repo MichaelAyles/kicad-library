@@ -72,6 +72,7 @@ export default function UploadPage() {
   const [tagInput, setTagInput] = useState("");
   const [license, setLicense] = useState("CERN-OHL-S-2.0");
   const [slug, setSlug] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
 
   // Thumbnails
   const [lightThumbnail, setLightThumbnail] = useState<string>("");
@@ -229,6 +230,35 @@ export default function UploadPage() {
     }
   };
 
+  // Helper function to ensure slug is unique
+  const ensureUniqueSlug = async (baseSlug: string): Promise<string> => {
+    let uniqueSlug = baseSlug;
+    let counter = 2;
+
+    while (true) {
+      // Check if slug exists
+      const { data, error } = await supabase
+        .from('circuits')
+        .select('id')
+        .eq('slug', uniqueSlug)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking slug:', error);
+        throw error;
+      }
+
+      // If no circuit found with this slug, it's unique!
+      if (!data) {
+        return uniqueSlug;
+      }
+
+      // Slug exists, try with a number suffix
+      uniqueSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+  };
+
   // Step 5: Upload everything
   const handleUpload = async (lightThumb: string, darkThumb: string) => {
     if (!user) {
@@ -240,19 +270,27 @@ export default function UploadPage() {
     setIsUploading(true);
 
     try {
-      // 1. Create circuit record first to get ID
+      // 1. Ensure slug is unique
+      setUploadProgress("Checking slug availability...");
+      const uniqueSlug = await ensureUniqueSlug(slug);
+
+      if (uniqueSlug !== slug) {
+        console.log(`Slug "${slug}" was taken, using "${uniqueSlug}" instead`);
+      }
+
+      // 2. Create circuit record
       setUploadProgress("Creating circuit record...");
 
       const circuitData = {
         user_id: user.id,
-        slug,
+        slug: uniqueSlug,
         title,
         description,
         category,
         tags,
         license,
         raw_sexpr: sexpr, // Store original format (snippet or full file as entered)
-        is_public: true,
+        is_public: isPublic,
         // view_count, copy_count, favorite_count default to 0 in schema
       };
 
@@ -289,7 +327,7 @@ export default function UploadPage() {
 
       // Redirect to circuit page after 2 seconds
       setTimeout(() => {
-        router.push(`/circuit/${slug}`);
+        router.push(`/circuit/${uniqueSlug}`);
       }, 2000);
 
     } catch (err) {
@@ -701,6 +739,26 @@ export default function UploadPage() {
                     <option value="BSD-2-Clause">BSD-2-Clause</option>
                     <option value="TAPR-OHL-1.0">TAPR-OHL-1.0</option>
                   </select>
+                </div>
+
+                {/* Visibility */}
+                <div className="bg-muted/30 p-4 rounded-md">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isPublic}
+                      onChange={(e) => setIsPublic(e.target.checked)}
+                      className="mt-1"
+                    />
+                    <div>
+                      <span className="text-sm font-medium">Make this circuit public</span>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {isPublic
+                          ? "Anyone can discover and view this circuit. You can change this later."
+                          : "Only you can view this circuit. Others won't see it in search or browse."}
+                      </p>
+                    </div>
+                  </label>
                 </div>
 
                 {/* Terms agreement */}

@@ -103,12 +103,23 @@ GITHUB_SECRET="your_github_client_secret"
 
 ### Database Setup
 
-The database schema is already initialized in Supabase. Run the migration:
+1. Create a Supabase project at https://supabase.com
+2. Copy your project URL and anon key to `.env.local`
+3. Run the complete schema in Supabase SQL Editor:
 
 ```bash
-# Run schema from supabase/schema.sql in your Supabase SQL Editor
-# Or use Supabase CLI: supabase db push
+# In Supabase Dashboard → SQL Editor
+# Copy and paste contents of: supabase/complete-schema.sql
+# Then click "Run"
 ```
+
+This will create:
+- All database tables (profiles, circuits, favorites, etc.)
+- Storage buckets (`circuits` and `thumbnails`)
+- Row Level Security (RLS) policies
+- Helper functions and triggers
+
+The schema is **idempotent** - safe to run multiple times.
 
 ## 📖 Documentation
 
@@ -150,31 +161,41 @@ We welcome contributions! Whether you're:
 
 ## 📋 Project Status
 
-**Current Phase**: MVP Development (Early Stage)
+**Current Phase**: MVP Development - **70% Complete** 🚀
 
 ### Completed ✅
-- [x] Planning and research complete
-- [x] Project setup and documentation
-- [x] Database schema implementation (Supabase)
-- [x] GitHub OAuth integration
-- [x] Dark mode support
-- [x] Browse page with real database queries
-- [x] Authentication pages (login/signup)
+- [x] Planning and architecture complete
+- [x] Next.js 14 project setup with TypeScript
+- [x] Supabase database schema deployed
+- [x] GitHub OAuth authentication working
+- [x] Dark mode fully functional with theme toggle
+- [x] S-expression parser (handles snippets and full files)
+- [x] **Upload flow complete** (5-step wizard)
+  - [x] Paste & validate S-expressions
+  - [x] Interactive KiCanvas preview
+  - [x] Metadata form with auto-suggestions
+  - [x] Thumbnail capture (light & dark modes)
+  - [x] Upload to Supabase (circuits table + storage)
+- [x] Browse page with database integration and sorting
+- [x] Auth pages (login/signup) with protected routes
+- [x] Header/Footer components across all pages
 
-### In Progress 🔄
-- [ ] S-expression parser
-- [ ] Upload flow
-- [ ] Circuit detail page with KiCanvas viewer
-- [ ] Copy to clipboard functionality
+### In Progress 🔄 - **Next Priority**
+- [ ] **Circuit detail page** - View uploaded circuits with KiCanvas
+- [ ] **Browse page thumbnails** - Display thumbnail images
+- [ ] **Copy to clipboard** - One-click copy functionality
+- [ ] **Favorites system** - Favorite button + favorites page
 
-### Planned 📋
-- [ ] Search implementation (full-text search)
-- [ ] User profiles
-- [ ] Favorites and copy tracking
-- [ ] User settings
+### Planned 📋 - Post-MVP
+- [ ] Search page (UI exists, needs wiring)
+- [ ] User profile pages
+- [ ] Settings page
+- [ ] Testing and polish
 - [ ] Deployment to circuitsnips.mikeayles.com
 
-See [GitHub Projects](https://github.com/MichaelAyles/kicad-library/projects) for detailed roadmap.
+**Target MVP Launch**: After completing circuit detail page + thumbnails (est. 1-2 days)
+
+See [TODO.md](TODO.md) for detailed task breakdown.
 
 ## 🎓 Learning Resources
 
@@ -219,29 +240,34 @@ Each circuit clearly displays its license for users to understand usage rights.
 
 ## 🗺️ Roadmap
 
-### Q1 2025: MVP Launch
-- Core upload/download functionality
-- Search and discovery
-- GitHub authentication
-- 50+ seed circuits
+### Phase 1: MVP Launch (Current - 70% Complete)
+- [x] Core upload functionality with KiCanvas preview
+- [x] GitHub OAuth authentication
+- [x] Dark mode support
+- [ ] Circuit detail pages with copy-to-clipboard
+- [ ] Browse with thumbnails
+- [ ] Favorites system
+- [ ] Deploy to circuitsnips.mikeayles.com
 
-### Q2 2025: Community Growth
-- User engagement features
-- Mobile optimization
-- SEO improvements
-- Partnership with KiCad project
+### Phase 2: Core Features
+- [ ] Full-text search implementation
+- [ ] User profile pages
+- [ ] 50+ seed circuits
+- [ ] SEO optimization
+- [ ] Mobile responsiveness improvements
 
-### Q3 2025: Advanced Features
-- Collections
-- Comments and discussions
-- Version history
-- API v1
+### Phase 3: Community Growth
+- [ ] Comments and discussions
+- [ ] Collections (organize circuits)
+- [ ] Circuit forking and versioning
+- [ ] Email notifications
 
-### Q4 2025: Scale
-- Multi-language support
-- Advanced analytics
-- Premium features (teams, private circuits)
-- Custom domain (circuitsnips.io)
+### Phase 4: Scale & Advanced Features
+- [ ] Public API v1
+- [ ] KiCad plugin for direct integration
+- [ ] Multi-language support
+- [ ] Premium features (private circuits, teams)
+- [ ] Custom domain (circuitsnips.io)
 
 ---
 
