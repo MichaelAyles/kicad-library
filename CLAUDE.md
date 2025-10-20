@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CircuitSnips is an open-source platform for sharing reusable KiCad schematic subcircuits. Users copy circuits from KiCad (S-expressions), upload with metadata and licensing, and others can search and paste them directly into their projects.
 
-**Status**: MVP Core Complete - Upload flow, KiCanvas preview, and database integration functional
+**Status**: MVP+ Complete - Core features + Community engagement implemented
 **Deployment**: https://circuitsnips.mikeayles.com (Live on Vercel)
 **Future**: circuitsnips.io (production domain)
 
@@ -25,6 +25,7 @@ CircuitSnips is an open-source platform for sharing reusable KiCad schematic sub
 - **PostgreSQL 15+**: JSONB columns, full-text search (tsvector + GIN indexes)
 - **Tailwind CSS + shadcn/ui**: UI components
 - **html2canvas**: Client-side thumbnail generation from KiCanvas preview
+- **date-fns**: Relative timestamps for comments and activity
 
 ## Development Commands
 
@@ -67,19 +68,23 @@ npm run format               # Prettier
 - **Includes**: Symbols, wires, labels, footprint assignments
 - **Excludes**: PCB layout (separate `.kicad_pcb` files)
 
-### Database Schema (Prisma)
+### Database Schema (Supabase)
 Primary tables:
-- **users**: GitHub OAuth data, profile, stats
-- **subcircuits**: Raw S-expression + parsed JSONB + metadata
+- **profiles**: Extends auth.users with username, avatar, bio, GitHub URL
+- **circuits**: Raw S-expression + metadata (title, description, tags, license, engagement metrics)
+- **circuit_components**: Extracted component data from schematics
 - **favorites**: User favorites (many-to-many)
-- **copy_events**: Analytics for copy actions
-- **sessions**: NextAuth session storage
+- **circuit_copies**: Analytics for copy actions
+- **circuit_comments**: Threaded comments with replies (up to 3 levels)
+- **comment_likes**: Comment engagement tracking
 
 Key patterns:
-- Store both `sexpr_raw` (TEXT) and `sexpr_parsed` (JSONB)
-- Extract metadata (components, nets, bounding box) into separate JSONB column for fast queries
+- Store `raw_sexpr` (TEXT) for circuit data
+- Extract metadata (components, nets, stats) during upload
 - Use PostgreSQL full-text search with `tsvector` for title/description/tags
-- GIN indexes on JSONB columns and search vectors
+- GIN indexes on arrays and search vectors
+- Auto-incrementing counters via triggers (views, copies, favorites, comments, likes)
+- Row Level Security (RLS) for data access control
 
 See `.claude/data-model.md` for complete schema with SQL.
 
@@ -221,11 +226,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="your_anon_key"
 
 Supabase Setup:
 1. Create project at https://supabase.com
-2. Run `supabase/schema.sql` in SQL Editor to create tables
-3. Run `supabase/migration-add-is-public.sql` for latest schema updates
-4. Configure GitHub OAuth in Authentication → Providers → GitHub
-5. Add allowed redirect URLs in Authentication → URL Configuration
-6. Create `thumbnails` storage bucket for circuit previews
+2. Run `supabase/schema.sql` in SQL Editor to create all tables (idempotent)
+3. Configure GitHub OAuth in Authentication → Providers → GitHub
+4. Add allowed redirect URLs in Authentication → URL Configuration
+5. Storage buckets are created automatically by schema:
+   - `circuits` - Optional .kicad_sch files
+   - `thumbnails` - Circuit preview images (light/dark modes)
 
 ## Code Style & Conventions
 
@@ -311,6 +317,7 @@ Read these for context before implementing features.
 - [x] Copy to clipboard (with embedded attribution)
 - [x] Download as .kicad_sch file
 - [x] Favorite button (UI ready, analytics pending)
+- [x] View count tracking (increments on page view)
 
 **User Interface**
 - [x] Header with authentication state
@@ -318,7 +325,19 @@ Read these for context before implementing features.
 - [x] Homepage with hero section
 - [x] Browse page with circuit grid
 - [x] Login/Signup pages
-- [x] User profile page with avatar
+- [x] User profile page with avatar and circuits display
+- [x] Settings page for profile editing
+
+**Comments System** (`src/components/Comment*.tsx`, `src/lib/comments.ts`)
+- [x] Threaded comments (up to 3 levels deep)
+- [x] Top-level comments and nested replies
+- [x] Like/unlike comments
+- [x] Edit own comments (with "edited" indicator)
+- [x] Delete own comments
+- [x] User avatars and timestamps
+- [x] Real-time character counter (5000 max)
+- [x] Authentication checks
+- [x] Relative timestamps ("2 hours ago")
 
 ### 🔄 IN PROGRESS / PLANNED
 
@@ -328,22 +347,30 @@ Read these for context before implementing features.
 - [ ] Sort options (relevance, recent, popular)
 
 **Analytics & Tracking**
-- [ ] Favorites functionality (database schema complete)
-- [ ] Copy event tracking
-- [ ] View count tracking
-- [ ] User engagement metrics
+- [ ] Favorites functionality (database schema complete, UI ready)
+- [ ] Copy event tracking (database schema complete)
+- [ ] User engagement metrics dashboard
+
+**Community Features (Thingiverse-inspired)**
+- [ ] Multi-image upload by circuit authors
+- [ ] "I Built This" section - user-submitted build photos
+- [ ] Related/similar circuits recommendations
+- [ ] Collections/playlists
+- [ ] Activity feed
 
 **User Features**
-- [ ] User settings page
 - [ ] Edit uploaded circuits
 - [ ] Delete circuits
-- [ ] Collections/folders
+- [ ] Private circuits (is_public flag ready)
 
 **Future Enhancements**
-- [ ] Comments and discussions
+- [ ] @mentions in comments with notifications
+- [ ] Comment notifications (email/in-app)
 - [ ] Version history and forking
+- [ ] Remix/derivative tracking
 - [ ] Multi-language support
 - [ ] API for third-party integrations
+- [ ] Bill of Materials (BOM) generator
 
 ## Design Variants
 

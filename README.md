@@ -27,19 +27,24 @@ All in under 10 seconds!
 
 ## ✨ Features
 
-### MVP (Current Development)
-- 🔍 **Full-text search** with component and tag filtering
+### MVP+ (Currently Live)
 - 👁️ **Interactive preview** using KiCanvas (WebGL rendering)
 - 📋 **One-click copy** to clipboard with embedded attribution
 - 🔐 **GitHub OAuth** authentication
 - ⚖️ **License clarity** - 8 open source hardware licenses supported
 - 📦 **Metadata extraction** - automatic component lists, net names, statistics
-- ⭐ **Favorites** and social features
-- 🏷️ **Smart tagging** with autocomplete
+- 🏷️ **Smart tagging** with categories
+- 💬 **Threaded comments** - up to 3 levels of replies with likes
+- 📊 **View tracking** - automatic engagement metrics
+- 🖼️ **Dual thumbnails** - light & dark mode previews
+- 👤 **User profiles** - with avatar, bio, and uploaded circuits
 
 ### Planned (Phase 2)
+- 🔍 **Full-text search** with component and tag filtering (schema ready)
+- ⭐ **Favorites** functionality (database ready, UI ready)
 - 📚 Collections (organize circuits into groups)
-- 💬 Comments and discussions
+- 🖼️ **Multi-image upload** - showcase circuits from multiple angles
+- 🛠️ **"I Built This"** - user-submitted build photos (Thingiverse-inspired)
 - 🔄 Version history and forking
 - 🌐 Multi-language support
 - 📱 Mobile app
@@ -50,10 +55,11 @@ All in under 10 seconds!
 - **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS + shadcn/ui
 - **Rendering**: [KiCanvas](https://github.com/theacodes/kicanvas) (MIT licensed WebGL viewer)
 - **Backend**: Next.js API Routes (serverless)
-- **Database**: Supabase (PostgreSQL 15+ with JSONB)
-- **Search**: PostgreSQL full-text search with GIN indexes
+- **Database**: Supabase (PostgreSQL 15+ with JSONB, Row Level Security)
+- **Search**: PostgreSQL full-text search with tsvector + GIN indexes (ready)
 - **Authentication**: GitHub OAuth via Supabase Auth
-- **Storage**: Supabase Storage for S-expressions
+- **Storage**: Supabase Storage for thumbnails and optional .kicad_sch files
+- **Utilities**: html2canvas (thumbnails), date-fns (relative timestamps)
 - **Hosting**: Vercel (frontend + API)
 - **Domain**: circuitsnips.mikeayles.com (MVP), circuitsnips.io (production)
 
@@ -109,15 +115,16 @@ GITHUB_SECRET="your_github_client_secret"
 
 ```bash
 # In Supabase Dashboard → SQL Editor
-# Copy and paste contents of: supabase/complete-schema.sql
+# Copy and paste contents of: supabase/schema.sql
 # Then click "Run"
 ```
 
 This will create:
-- All database tables (profiles, circuits, favorites, etc.)
+- All 7 database tables (profiles, circuits, circuit_components, favorites, circuit_copies, circuit_comments, comment_likes)
 - Storage buckets (`circuits` and `thumbnails`)
-- Row Level Security (RLS) policies
-- Helper functions and triggers
+- Row Level Security (RLS) policies for all tables
+- Auto-incrementing triggers for engagement metrics
+- Helper functions for search and views
 
 The schema is **idempotent** - safe to run multiple times.
 
@@ -161,14 +168,14 @@ We welcome contributions! Whether you're:
 
 ## 📋 Project Status
 
-**Current Phase**: MVP Development (Advanced Stage) - Core functionality complete!
+**Current Phase**: MVP+ Complete - Core features + Community engagement live!
 
 ### Completed ✅
 - [x] Planning and research complete
 - [x] Project setup and documentation
-- [x] Database schema implementation with migrations (Supabase)
-- [x] GitHub OAuth integration
-- [x] Dark mode support with theme switching
+- [x] **Consolidated database schema** (single `schema.sql`, fully idempotent)
+- [x] GitHub OAuth integration via Supabase Auth
+- [x] Dark mode support with theme persistence
 - [x] **S-expression parser with clipboard snippet detection**
 - [x] **KiCanvas interactive preview integration**
 - [x] **Complete upload flow with 4 steps:**
@@ -178,22 +185,31 @@ We welcome contributions! Whether you're:
   - [x] Automatic thumbnail capture (light & dark modes)
 - [x] **Circuit detail page with KiCanvas viewer**
 - [x] **One-click copy to clipboard with attribution**
-- [x] Browse page with database queries
+- [x] **Threaded comments system:**
+  - [x] Top-level comments and nested replies (3 levels)
+  - [x] Like/unlike comments
+  - [x] Edit/delete own comments
+  - [x] User avatars and relative timestamps
+- [x] **View count tracking** (auto-increments on page view)
+- [x] Browse page with circuit grid
 - [x] Authentication pages (login/signup)
-- [x] User profile page with avatar support
+- [x] User profile page with avatar, bio, and circuits
+- [x] Settings page for profile editing
 - [x] Responsive design (mobile & desktop)
 - [x] **Live deployment**: https://circuitsnips.mikeayles.com
 
 ### In Progress 🔄
-- [ ] Search implementation (full-text search with PostgreSQL)
-- [ ] Favorites functionality (backend ready, UI pending)
-- [ ] Copy tracking analytics
+- [ ] Search implementation (full-text search schema complete, UI pending)
+- [ ] Favorites functionality (database ready, UI ready, backend integration pending)
+- [ ] Copy tracking analytics (database ready)
 
 ### Planned 📋
-- [ ] User settings page
+- [ ] Multi-image upload by circuit authors
+- [ ] "I Built This" section - user-submitted build photos
+- [ ] Related/similar circuits recommendations
+- [ ] Collections/playlists feature
 - [ ] Circuit editing/versioning
-- [ ] Collections feature
-- [ ] Comments and discussions
+- [ ] @mentions in comments with notifications
 - [ ] SEO optimization
 - [ ] API documentation
 
@@ -250,28 +266,36 @@ Each circuit clearly displays its license for users to understand usage rights.
 
 ## 🗺️ Roadmap
 
-### Phase 1: MVP Launch (Current - 90% Complete) ✅
+### Phase 1: MVP+ Launch (Current - COMPLETE) ✅
 - [x] Core upload functionality with KiCanvas preview
 - [x] GitHub OAuth authentication
 - [x] Dark mode support
 - [x] Circuit detail pages with copy-to-clipboard
 - [x] Browse page functionality
 - [x] Live deployment to circuitsnips.mikeayles.com
-- [ ] Favorites system
-- [ ] Full-text search
+- [x] **Threaded comments with likes**
+- [x] **View count tracking**
+- [x] **User profiles and settings**
+- [x] **Comprehensive database schema (7 tables, fully documented)**
+- [ ] Favorites system (database ready, UI ready)
+- [ ] Full-text search (schema ready)
 
-### Phase 2: Core Features (Q1 2025)
-- [ ] Search implementation with filters
-- [ ] User settings page
+### Phase 2: Community & Discovery (Q1 2025)
+- [ ] Search implementation with filters (PostgreSQL full-text)
+- [ ] Favorites functionality activation
+- [ ] Multi-image upload for circuits
+- [ ] "I Built This" user submissions
+- [ ] Related circuits recommendations
 - [ ] 50+ seed circuits
 - [ ] SEO optimization
 - [ ] Analytics dashboard
 
-### Phase 3: Community Growth (Q2 2025)
-- [ ] Comments and discussions
-- [ ] Collections (organize circuits)
+### Phase 3: Enhanced Engagement (Q2 2025)
+- [ ] Collections/playlists (organize circuits)
 - [ ] Circuit forking and versioning
-- [ ] Email notifications
+- [ ] @mentions with notifications
+- [ ] Email notifications for comments
+- [ ] Activity feeds
 - [ ] Mobile app optimization
 
 ### Phase 4: Scale & Advanced Features (Q3-Q4 2025)
@@ -279,6 +303,7 @@ Each circuit clearly displays its license for users to understand usage rights.
 - [ ] KiCad plugin for direct integration
 - [ ] Multi-language support
 - [ ] Premium features (private circuits, teams)
+- [ ] Bill of Materials (BOM) generator
 - [ ] Custom domain (circuitsnips.io)
 
 ---
