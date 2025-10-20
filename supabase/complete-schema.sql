@@ -27,13 +27,43 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Auto-create profile on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  extracted_username TEXT;
 BEGIN
-  INSERT INTO public.profiles (id, username, avatar_url)
+  -- Try to extract username from GitHub OAuth metadata
+  -- GitHub provides: user_name, preferred_username, or login
+  extracted_username := COALESCE(
+    NEW.raw_user_meta_data->>'user_name',
+    NEW.raw_user_meta_data->>'preferred_username',
+    NEW.raw_user_meta_data->>'login',
+    'user_' || substring(NEW.id::text from 1 for 8)
+  );
+
+  -- Sanitize username to match our constraints (alphanumeric, dash, underscore)
+  extracted_username := regexp_replace(extracted_username, '[^a-zA-Z0-9_-]', '', 'g');
+
+  -- Ensure minimum length
+  IF char_length(extracted_username) < 3 THEN
+    extracted_username := 'user_' || substring(NEW.id::text from 1 for 8);
+  END IF;
+
+  -- Handle duplicate usernames by appending a number
+  WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = extracted_username) LOOP
+    extracted_username := extracted_username || floor(random() * 100)::text;
+  END LOOP;
+
+  INSERT INTO public.profiles (id, username, avatar_url, github_url)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'username', 'user_' || substring(NEW.id::text from 1 for 8)),
-    NEW.raw_user_meta_data->>'avatar_url'
+    extracted_username,
+    NEW.raw_user_meta_data->>'avatar_url',
+    CASE
+      WHEN NEW.raw_user_meta_data->>'user_name' IS NOT NULL
+      THEN 'https://github.com/' || (NEW.raw_user_meta_data->>'user_name')
+      ELSE NULL
+    END
   );
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
