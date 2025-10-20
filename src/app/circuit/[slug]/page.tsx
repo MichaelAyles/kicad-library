@@ -8,6 +8,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnippetFromFullFile, validateSExpression } from "@/lib/kicad-parser";
 import { SchematicViewer } from "@/components/SchematicViewer";
+import { CommentList } from "@/components/CommentList";
 import { formatDate } from "@/lib/utils";
 import { getCircuitBySlug, incrementViewCount, type Circuit } from "@/lib/circuits";
 
@@ -385,6 +386,11 @@ export default function CircuitDetailPage() {
               Note: The &quot;Copy to Clipboard&quot; button copies raw data for easy pasting.
               The downloaded .kicad_sch file includes attribution in the schematic metadata.
             </p>
+          </div>
+
+          {/* Comments Section */}
+          <div className="mt-8">
+            <CommentList circuitId={circuit.id} />
           </div>
         </div>
       </main>
