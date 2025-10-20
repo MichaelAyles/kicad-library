@@ -309,7 +309,7 @@ export default function SettingsPage() {
               <div className="flex-1">
                 <h3 className="font-medium mb-1">Connected to GitHub</h3>
                 <p className="text-sm text-muted-foreground">
-                  You're signed in with GitHub as{' '}
+                  You&apos;re signed in with GitHub as{' '}
                   <span className="text-foreground font-medium">
                     @{githubUsername}
                   </span>
