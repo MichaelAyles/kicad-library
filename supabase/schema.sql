@@ -1,5 +1,7 @@
--- CircuitSnips Database Schema
--- Run this in Supabase SQL Editor after creating your project
+-- CircuitSnips Complete Database Schema
+-- This is the unified, up-to-date schema including all migrations
+-- Run this in Supabase SQL Editor for initial setup
+-- Last updated: 2025-01-20
 
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -8,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- PROFILES TABLE
 -- Extends auth.users with public profile information
 -- ============================================================================
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   username TEXT UNIQUE NOT NULL,
   avatar_url TEXT,
@@ -25,17 +27,48 @@ CREATE TABLE public.profiles (
 -- Auto-create profile on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  extracted_username TEXT;
 BEGIN
-  INSERT INTO public.profiles (id, username, avatar_url)
+  -- Try to extract username from GitHub OAuth metadata
+  -- GitHub provides: user_name, preferred_username, or login
+  extracted_username := COALESCE(
+    NEW.raw_user_meta_data->>'user_name',
+    NEW.raw_user_meta_data->>'preferred_username',
+    NEW.raw_user_meta_data->>'login',
+    'user_' || substring(NEW.id::text from 1 for 8)
+  );
+
+  -- Sanitize username to match our constraints (alphanumeric, dash, underscore)
+  extracted_username := regexp_replace(extracted_username, '[^a-zA-Z0-9_-]', '', 'g');
+
+  -- Ensure minimum length
+  IF char_length(extracted_username) < 3 THEN
+    extracted_username := 'user_' || substring(NEW.id::text from 1 for 8);
+  END IF;
+
+  -- Handle duplicate usernames by appending a number
+  WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = extracted_username) LOOP
+    extracted_username := extracted_username || floor(random() * 100)::text;
+  END LOOP;
+
+  INSERT INTO public.profiles (id, username, avatar_url, github_url)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'username', 'user_' || substring(NEW.id::text from 1 for 8)),
-    NEW.raw_user_meta_data->>'avatar_url'
+    extracted_username,
+    NEW.raw_user_meta_data->>'avatar_url',
+    CASE
+      WHEN NEW.raw_user_meta_data->>'user_name' IS NOT NULL
+      THEN 'https://github.com/' || (NEW.raw_user_meta_data->>'user_name')
+      ELSE NULL
+    END
   );
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -44,7 +77,7 @@ CREATE TRIGGER on_auth_user_created
 -- CIRCUITS TABLE
 -- Main table for storing circuit metadata
 -- ============================================================================
-CREATE TABLE public.circuits (
+CREATE TABLE IF NOT EXISTS public.circuits (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   slug TEXT UNIQUE NOT NULL,
   title TEXT NOT NULL,
@@ -52,7 +85,7 @@ CREATE TABLE public.circuits (
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   -- Storage paths
-  file_path TEXT NOT NULL, -- Path in Supabase Storage
+  file_path TEXT, -- Path in Supabase Storage (optional - we store raw_sexpr directly)
   raw_sexpr TEXT NOT NULL, -- Raw S-expression data (for quick access)
 
   -- Metadata from S-expression parsing
@@ -69,6 +102,14 @@ CREATE TABLE public.circuits (
   view_count INTEGER DEFAULT 0,
   copy_count INTEGER DEFAULT 0,
   favorite_count INTEGER DEFAULT 0,
+  comment_count INTEGER DEFAULT 0,
+
+  -- Visibility
+  is_public BOOLEAN DEFAULT true,
+
+  -- Thumbnail URLs (stored in Supabase Storage)
+  thumbnail_light_url TEXT,
+  thumbnail_dark_url TEXT,
 
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -77,16 +118,54 @@ CREATE TABLE public.circuits (
   CONSTRAINT slug_format CHECK (slug ~ '^[a-z0-9-]+$')
 );
 
+-- Add columns if they don't exist (for existing tables)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='is_public') THEN
+    ALTER TABLE public.circuits ADD COLUMN is_public BOOLEAN DEFAULT true;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='thumbnail_light_url') THEN
+    ALTER TABLE public.circuits ADD COLUMN thumbnail_light_url TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='thumbnail_dark_url') THEN
+    ALTER TABLE public.circuits ADD COLUMN thumbnail_dark_url TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='comment_count') THEN
+    ALTER TABLE public.circuits ADD COLUMN comment_count INTEGER DEFAULT 0;
+  END IF;
+
+  -- Make file_path nullable if not already
+  BEGIN
+    ALTER TABLE public.circuits ALTER COLUMN file_path DROP NOT NULL;
+  EXCEPTION
+    WHEN others THEN NULL; -- Ignore if already nullable
+  END;
+END $$;
+
 -- Indexes for performance
-CREATE INDEX circuits_user_id_idx ON public.circuits(user_id);
-CREATE INDEX circuits_created_at_idx ON public.circuits(created_at DESC);
-CREATE INDEX circuits_tags_idx ON public.circuits USING GIN(tags);
-CREATE INDEX circuits_category_idx ON public.circuits(category);
+CREATE INDEX IF NOT EXISTS circuits_user_id_idx ON public.circuits(user_id);
+CREATE INDEX IF NOT EXISTS circuits_created_at_idx ON public.circuits(created_at DESC);
+CREATE INDEX IF NOT EXISTS circuits_tags_idx ON public.circuits USING GIN(tags);
+CREATE INDEX IF NOT EXISTS circuits_category_idx ON public.circuits(category);
+CREATE INDEX IF NOT EXISTS circuits_is_public_idx ON public.circuits(is_public) WHERE is_public = true;
 
 -- Full-text search column and index
-ALTER TABLE public.circuits ADD COLUMN search_vector tsvector;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='search_vector') THEN
+    ALTER TABLE public.circuits ADD COLUMN search_vector tsvector;
+  END IF;
+END $$;
 
-CREATE INDEX circuits_search_idx ON public.circuits USING GIN(search_vector);
+CREATE INDEX IF NOT EXISTS circuits_search_idx ON public.circuits USING GIN(search_vector);
 
 -- Function to update search vector
 CREATE OR REPLACE FUNCTION update_circuit_search_vector()
@@ -101,6 +180,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update search_vector on insert/update
+DROP TRIGGER IF EXISTS update_circuit_search_trigger ON public.circuits;
 CREATE TRIGGER update_circuit_search_trigger
   BEFORE INSERT OR UPDATE ON public.circuits
   FOR EACH ROW EXECUTE FUNCTION update_circuit_search_vector();
@@ -109,7 +189,7 @@ CREATE TRIGGER update_circuit_search_trigger
 -- CIRCUIT COMPONENTS
 -- Detailed component information extracted from schematic
 -- ============================================================================
-CREATE TABLE public.circuit_components (
+CREATE TABLE IF NOT EXISTS public.circuit_components (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
   reference TEXT NOT NULL, -- e.g., "R1", "IC19"
@@ -124,14 +204,14 @@ CREATE TABLE public.circuit_components (
   UNIQUE(circuit_id, uuid)
 );
 
-CREATE INDEX circuit_components_circuit_id_idx ON public.circuit_components(circuit_id);
-CREATE INDEX circuit_components_lib_id_idx ON public.circuit_components(lib_id);
+CREATE INDEX IF NOT EXISTS circuit_components_circuit_id_idx ON public.circuit_components(circuit_id);
+CREATE INDEX IF NOT EXISTS circuit_components_lib_id_idx ON public.circuit_components(lib_id);
 
 -- ============================================================================
 -- FAVORITES
 -- Track which users favorited which circuits
 -- ============================================================================
-CREATE TABLE public.favorites (
+CREATE TABLE IF NOT EXISTS public.favorites (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
@@ -140,8 +220,8 @@ CREATE TABLE public.favorites (
   UNIQUE(user_id, circuit_id)
 );
 
-CREATE INDEX favorites_user_id_idx ON public.favorites(user_id);
-CREATE INDEX favorites_circuit_id_idx ON public.favorites(circuit_id);
+CREATE INDEX IF NOT EXISTS favorites_user_id_idx ON public.favorites(user_id);
+CREATE INDEX IF NOT EXISTS favorites_circuit_id_idx ON public.favorites(circuit_id);
 
 -- Update favorite_count when favorites change
 CREATE OR REPLACE FUNCTION update_circuit_favorite_count()
@@ -160,6 +240,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_favorite_count_trigger ON public.favorites;
 CREATE TRIGGER update_favorite_count_trigger
   AFTER INSERT OR DELETE ON public.favorites
   FOR EACH ROW EXECUTE FUNCTION update_circuit_favorite_count();
@@ -168,14 +249,119 @@ CREATE TRIGGER update_favorite_count_trigger
 -- COPY TRACKING
 -- Track when users copy circuits to their clipboard
 -- ============================================================================
-CREATE TABLE public.circuit_copies (
+CREATE TABLE IF NOT EXISTS public.circuit_copies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL, -- Allow anonymous copies
   copied_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX circuit_copies_circuit_id_idx ON public.circuit_copies(circuit_id);
+CREATE INDEX IF NOT EXISTS circuit_copies_circuit_id_idx ON public.circuit_copies(circuit_id);
+
+-- ============================================================================
+-- CIRCUIT COMMENTS
+-- Supports threaded replies via parent_comment_id
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.circuit_comments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  parent_comment_id UUID REFERENCES public.circuit_comments(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  likes_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  is_edited BOOLEAN DEFAULT false,
+
+  CONSTRAINT content_length CHECK (char_length(content) >= 1 AND char_length(content) <= 5000)
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS circuit_comments_circuit_id_idx ON public.circuit_comments(circuit_id);
+CREATE INDEX IF NOT EXISTS circuit_comments_user_id_idx ON public.circuit_comments(user_id);
+CREATE INDEX IF NOT EXISTS circuit_comments_parent_id_idx ON public.circuit_comments(parent_comment_id);
+CREATE INDEX IF NOT EXISTS circuit_comments_created_at_idx ON public.circuit_comments(created_at DESC);
+
+-- ============================================================================
+-- COMMENT LIKES
+-- Track which users liked which comments
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.comment_likes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  comment_id UUID NOT NULL REFERENCES public.circuit_comments(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(comment_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS comment_likes_comment_id_idx ON public.comment_likes(comment_id);
+CREATE INDEX IF NOT EXISTS comment_likes_user_id_idx ON public.comment_likes(user_id);
+
+-- ============================================================================
+-- TRIGGERS FOR COMMENTS
+-- ============================================================================
+
+-- Update likes_count when comment_likes change
+CREATE OR REPLACE FUNCTION update_comment_likes_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.circuit_comments
+    SET likes_count = likes_count + 1
+    WHERE id = NEW.comment_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.circuit_comments
+    SET likes_count = likes_count - 1
+    WHERE id = OLD.comment_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_comment_likes_count_trigger ON public.comment_likes;
+CREATE TRIGGER update_comment_likes_count_trigger
+  AFTER INSERT OR DELETE ON public.comment_likes
+  FOR EACH ROW EXECUTE FUNCTION update_comment_likes_count();
+
+-- Trigger to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_comment_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  NEW.is_edited = true;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_comment_updated_at ON public.circuit_comments;
+CREATE TRIGGER update_comment_updated_at
+  BEFORE UPDATE ON public.circuit_comments
+  FOR EACH ROW
+  WHEN (OLD.content IS DISTINCT FROM NEW.content)
+  EXECUTE FUNCTION update_comment_updated_at_column();
+
+-- Function to update circuit comment count
+CREATE OR REPLACE FUNCTION update_circuit_comment_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.circuits
+    SET comment_count = comment_count + 1
+    WHERE id = NEW.circuit_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.circuits
+    SET comment_count = comment_count - 1
+    WHERE id = OLD.circuit_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_circuit_comment_count_trigger ON public.circuit_comments;
+CREATE TRIGGER update_circuit_comment_count_trigger
+  AFTER INSERT OR DELETE ON public.circuit_comments
+  FOR EACH ROW EXECUTE FUNCTION update_circuit_comment_count();
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -187,38 +373,49 @@ ALTER TABLE public.circuits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.circuit_components ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.circuit_copies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.circuit_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Public read, users can update own profile
+DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "Profiles are viewable by everyone"
   ON public.profiles FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
--- Circuits: Public read, authenticated users can insert, owners can update/delete
-CREATE POLICY "Circuits are viewable by everyone"
+-- Circuits: Public circuits viewable by everyone, users can see own private circuits
+DROP POLICY IF EXISTS "Circuits are viewable by everyone" ON public.circuits;
+DROP POLICY IF EXISTS "Public circuits and own circuits are viewable" ON public.circuits;
+CREATE POLICY "Public circuits and own circuits are viewable"
   ON public.circuits FOR SELECT
-  USING (true);
+  USING (is_public = true OR auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Authenticated users can create circuits" ON public.circuits;
 CREATE POLICY "Authenticated users can create circuits"
   ON public.circuits FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own circuits" ON public.circuits;
 CREATE POLICY "Users can update own circuits"
   ON public.circuits FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own circuits" ON public.circuits;
 CREATE POLICY "Users can delete own circuits"
   ON public.circuits FOR DELETE
   USING (auth.uid() = user_id);
 
 -- Circuit Components: Same as circuits
+DROP POLICY IF EXISTS "Components are viewable by everyone" ON public.circuit_components;
 CREATE POLICY "Components are viewable by everyone"
   ON public.circuit_components FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Circuit owners can manage components" ON public.circuit_components;
 CREATE POLICY "Circuit owners can manage components"
   ON public.circuit_components FOR ALL
   USING (
@@ -230,37 +427,80 @@ CREATE POLICY "Circuit owners can manage components"
   );
 
 -- Favorites: Users can manage their own favorites
+DROP POLICY IF EXISTS "Users can view all favorites" ON public.favorites;
 CREATE POLICY "Users can view all favorites"
   ON public.favorites FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Users can manage own favorites" ON public.favorites;
 CREATE POLICY "Users can manage own favorites"
   ON public.favorites FOR ALL
   USING (auth.uid() = user_id);
 
 -- Circuit Copies: Anyone can insert, users can view own
+DROP POLICY IF EXISTS "Anyone can record a copy" ON public.circuit_copies;
 CREATE POLICY "Anyone can record a copy"
   ON public.circuit_copies FOR INSERT
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Users can view own copies" ON public.circuit_copies;
 CREATE POLICY "Users can view own copies"
   ON public.circuit_copies FOR SELECT
   USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- Comments: Everyone can read, authenticated users can create, owners can update/delete
+DROP POLICY IF EXISTS "Comments are viewable by everyone" ON public.circuit_comments;
+CREATE POLICY "Comments are viewable by everyone"
+  ON public.circuit_comments FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can create comments" ON public.circuit_comments;
+CREATE POLICY "Authenticated users can create comments"
+  ON public.circuit_comments FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own comments" ON public.circuit_comments;
+CREATE POLICY "Users can update own comments"
+  ON public.circuit_comments FOR UPDATE
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own comments" ON public.circuit_comments;
+CREATE POLICY "Users can delete own comments"
+  ON public.circuit_comments FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Comment Likes: Users can manage their own likes
+DROP POLICY IF EXISTS "Users can view all comment likes" ON public.comment_likes;
+CREATE POLICY "Users can view all comment likes"
+  ON public.comment_likes FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Users can manage own comment likes" ON public.comment_likes;
+CREATE POLICY "Users can manage own comment likes"
+  ON public.comment_likes FOR ALL
+  USING (auth.uid() = user_id);
 
 -- ============================================================================
 -- STORAGE BUCKETS
 -- ============================================================================
 
--- Create circuits bucket (run this in SQL Editor)
+-- Create circuits bucket
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('circuits', 'circuits', true)
 ON CONFLICT (id) DO NOTHING;
 
--- RLS policies for storage
+-- Create thumbnails bucket
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('thumbnails', 'thumbnails', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- RLS policies for circuits storage
+DROP POLICY IF EXISTS "Anyone can view circuit files" ON storage.objects;
 CREATE POLICY "Anyone can view circuit files"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'circuits');
 
+DROP POLICY IF EXISTS "Authenticated users can upload circuit files" ON storage.objects;
 CREATE POLICY "Authenticated users can upload circuit files"
   ON storage.objects FOR INSERT
   WITH CHECK (
@@ -268,6 +508,7 @@ CREATE POLICY "Authenticated users can upload circuit files"
     auth.role() = 'authenticated'
   );
 
+DROP POLICY IF EXISTS "Users can update own circuit files" ON storage.objects;
 CREATE POLICY "Users can update own circuit files"
   ON storage.objects FOR UPDATE
   USING (
@@ -275,11 +516,42 @@ CREATE POLICY "Users can update own circuit files"
     auth.uid()::text = (storage.foldername(name))[1]
   );
 
+DROP POLICY IF EXISTS "Users can delete own circuit files" ON storage.objects;
 CREATE POLICY "Users can delete own circuit files"
   ON storage.objects FOR DELETE
   USING (
     bucket_id = 'circuits' AND
     auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- RLS policies for thumbnails storage
+DROP POLICY IF EXISTS "Anyone can view thumbnails" ON storage.objects;
+CREATE POLICY "Anyone can view thumbnails"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'thumbnails');
+
+DROP POLICY IF EXISTS "Authenticated users can upload thumbnails" ON storage.objects;
+CREATE POLICY "Authenticated users can upload thumbnails"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'thumbnails' AND
+    auth.role() = 'authenticated'
+  );
+
+DROP POLICY IF EXISTS "Users can update own thumbnails" ON storage.objects;
+CREATE POLICY "Users can update own thumbnails"
+  ON storage.objects FOR UPDATE
+  USING (
+    bucket_id = 'thumbnails' AND
+    auth.role() = 'authenticated'
+  );
+
+DROP POLICY IF EXISTS "Users can delete own thumbnails" ON storage.objects;
+CREATE POLICY "Users can delete own thumbnails"
+  ON storage.objects FOR DELETE
+  USING (
+    bucket_id = 'thumbnails' AND
+    auth.role() = 'authenticated'
   );
 
 -- ============================================================================
@@ -315,13 +587,14 @@ BEGIN
     ts_rank(c.search_vector, plainto_tsquery('english', search_query)) as rank
   FROM public.circuits c
   WHERE c.search_vector @@ plainto_tsquery('english', search_query)
+  AND c.is_public = true
   ORDER BY rank DESC;
 END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- SAMPLE DATA (Optional - for testing)
+-- COMPLETE!
 -- ============================================================================
 
--- This will be populated by your application
--- The knock sensor example will be the first circuit in the system
+-- Note: This script is idempotent and can be run multiple times
+-- All CREATE statements use IF NOT EXISTS or DROP IF EXISTS to avoid errors

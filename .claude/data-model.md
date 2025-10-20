@@ -1,696 +1,870 @@
-# Data Model & Database Schema
+# CircuitSnips Data Model
 
-## Database Choice: PostgreSQL
+Complete documentation of CircuitSnips' database schema, authentication, and storage architecture.
 
-### Why PostgreSQL?
+**Last Updated:** 2025-01-20
+**Database:** PostgreSQL 15+ (Supabase)
+**Schema File:** `supabase/schema.sql`
 
-1. **JSONB Support**: Store S-expression parsed data with full indexing
-2. **Full-Text Search**: Built-in FTS with tsvector and GIN indexes
-3. **Array Types**: Native support for tags[], component lists
-4. **ACID Compliance**: Data integrity for user uploads
-5. **Mature Ecosystem**: Excellent ORMs (Prisma, Drizzle, TypeORM)
-6. **Performance**: Excellent query optimization, especially with proper indexes
+---
 
-### PostgreSQL Extensions to Enable
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Database Tables](#database-tables)
+3. [Authentication](#authentication)
+4. [Storage Buckets](#storage-buckets)
+5. [Row Level Security](#row-level-security)
+6. [Triggers & Functions](#triggers--functions)
+7. [Indexes](#indexes)
+8. [Data Relationships](#data-relationships)
+9. [Example Queries](#example-queries)
+
+---
+
+## Overview
+
+CircuitSnips uses **Supabase** (PostgreSQL 15+) for its backend infrastructure:
+- **Database**: Relational tables with JSONB support
+- **Authentication**: GitHub OAuth via Supabase Auth
+- **Storage**: Public buckets for thumbnails and circuit files
+- **Search**: PostgreSQL full-text search with `tsvector`
+- **Security**: Row Level Security (RLS) policies
+
+### Key Features
+- Threaded comments system (up to 3 levels)
+- Full-text search across titles, descriptions, and tags
+- Auto-incrementing engagement metrics (views, copies, favorites, comments, likes)
+- Public/private circuit visibility
+- Automatic thumbnail generation in light/dark modes
+
+---
+
+## Database Tables
+
+### 1. profiles
+
+Extends Supabase's `auth.users` with public profile information.
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";     -- UUID generation
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";       -- Trigram similarity for autocomplete
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";      -- Additional crypto functions
-```
+CREATE TABLE public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username TEXT UNIQUE NOT NULL,
+  avatar_url TEXT,
+  bio TEXT,
+  website TEXT,
+  github_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-## Complete Schema
-
-### Users Table
-
-```sql
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    -- OAuth Data (GitHub)
-    github_id INTEGER UNIQUE NOT NULL,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    email VARCHAR(255),
-    avatar_url TEXT,
-    profile_url TEXT,
-    name VARCHAR(255),
-
-    -- Bio/Profile
-    bio TEXT,
-    website VARCHAR(500),
-    location VARCHAR(255),
-
-    -- OAuth Token (encrypted)
-    access_token TEXT,                              -- GitHub access token (encrypted)
-    refresh_token TEXT,
-
-    -- Settings
-    email_notifications BOOLEAN DEFAULT true,
-    public_profile BOOLEAN DEFAULT true,
-
-    -- Stats
-    subcircuit_count INTEGER DEFAULT 0,
-    total_copies_received INTEGER DEFAULT 0,
-
-    -- Timestamps
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    last_login TIMESTAMPTZ
+  CONSTRAINT username_length CHECK (char_length(username) >= 3 AND char_length(username) <= 30),
+  CONSTRAINT username_format CHECK (username ~ '^[a-zA-Z0-9_-]+$')
 );
-
-CREATE INDEX idx_users_github_id ON users(github_id);
-CREATE INDEX idx_users_username ON users(username);
 ```
 
-### Subcircuits Table
+**Fields:**
+- `id` - UUID, foreign key to `auth.users(id)`, primary identifier
+- `username` - Unique username (3-30 chars, alphanumeric + dash/underscore)
+- `avatar_url` - URL to user's GitHub avatar
+- `bio` - Optional user bio text
+- `website` - Optional personal website URL
+- `github_url` - Constructed from GitHub OAuth metadata
+- `created_at` - Account creation timestamp
+- `updated_at` - Last profile update timestamp
+
+**Creation:**
+- Automatically created on user signup via `handle_new_user()` trigger
+- Username extracted from GitHub OAuth metadata (`user_name`, `preferred_username`, or `login`)
+- Duplicates handled by appending random number
+
+---
+
+### 2. circuits
+
+Main table storing circuit metadata and S-expression data.
 
 ```sql
-CREATE TABLE subcircuits (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE public.circuits (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  slug TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
-    -- Owner
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Storage
+  file_path TEXT,
+  raw_sexpr TEXT NOT NULL,
 
-    -- Identifiers
-    slug VARCHAR(255) NOT NULL,                     -- URL-friendly: "lm358-opamp-circuit"
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
+  -- Metadata
+  component_count INTEGER DEFAULT 0,
+  wire_count INTEGER DEFAULT 0,
+  net_count INTEGER DEFAULT 0,
 
-    -- Raw S-Expression Data
-    sexpr_raw TEXT NOT NULL,                        -- Original pasted S-expression
+  -- Categorization
+  category TEXT,
+  tags TEXT[] DEFAULT '{}',
+  license TEXT DEFAULT 'CERN-OHL-S-2.0',
 
-    -- Parsed S-Expression (full AST)
-    sexpr_parsed JSONB NOT NULL,                   -- Complete parsed tree
+  -- Engagement
+  view_count INTEGER DEFAULT 0,
+  copy_count INTEGER DEFAULT 0,
+  favorite_count INTEGER DEFAULT 0,
+  comment_count INTEGER DEFAULT 0,
 
-    -- Extracted Metadata (for fast queries without parsing)
-    metadata JSONB NOT NULL,                        -- See metadata schema below
+  -- Visibility
+  is_public BOOLEAN DEFAULT true,
 
-    -- Categorization
-    tags TEXT[] DEFAULT '{}',
-    category VARCHAR(100),                          -- 'power', 'amplifier', 'digital', etc.
+  -- Thumbnails
+  thumbnail_light_url TEXT,
+  thumbnail_dark_url TEXT,
 
-    -- License
-    license VARCHAR(50) NOT NULL,                   -- 'MIT', 'CC-BY-4.0', 'CERN-OHL-S-2.0', etc.
-    license_notes TEXT,
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-    -- Rendering
-    preview_svg TEXT,                               -- Inline SVG or URL to storage
-    thumbnail_url TEXT,                             -- Small preview image URL
-    has_preview BOOLEAN DEFAULT false,
-
-    -- Version Info
-    kicad_version INTEGER,                          -- e.g., 20230121 (from file)
-    format_version VARCHAR(20),                     -- e.g., "6.0", "7.0"
-
-    -- Search
-    search_vector TSVECTOR,                         -- Full-text search vector
-
-    -- Stats
-    view_count INTEGER DEFAULT 0,
-    copy_count INTEGER DEFAULT 0,
-    favorite_count INTEGER DEFAULT 0,
-
-    -- Visibility
-    is_public BOOLEAN DEFAULT true,
-    is_featured BOOLEAN DEFAULT false,              -- Admin can feature high-quality circuits
-
-    -- Timestamps
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    published_at TIMESTAMPTZ,
-
-    -- Constraints
-    UNIQUE(user_id, slug),
-    CHECK (char_length(title) >= 3),
-    CHECK (char_length(description) <= 5000)
+  CONSTRAINT slug_format CHECK (slug ~ '^[a-z0-9-]+$')
 );
-
--- Indexes
-CREATE INDEX idx_subcircuits_user ON subcircuits(user_id);
-CREATE INDEX idx_subcircuits_slug ON subcircuits(slug);
-CREATE INDEX idx_subcircuits_tags ON subcircuits USING GIN(tags);
-CREATE INDEX idx_subcircuits_category ON subcircuits(category);
-CREATE INDEX idx_subcircuits_license ON subcircuits(license);
-CREATE INDEX idx_subcircuits_search ON subcircuits USING GIN(search_vector);
-CREATE INDEX idx_subcircuits_metadata ON subcircuits USING GIN(metadata jsonb_path_ops);
-CREATE INDEX idx_subcircuits_created ON subcircuits(created_at DESC);
-CREATE INDEX idx_subcircuits_popular ON subcircuits(copy_count DESC);
-CREATE INDEX idx_subcircuits_public ON subcircuits(is_public) WHERE is_public = true;
-
--- Full-text search trigger
-CREATE OR REPLACE FUNCTION subcircuits_search_trigger() RETURNS trigger AS $$
-BEGIN
-    NEW.search_vector :=
-        setweight(to_tsvector('english', COALESCE(NEW.title, '')), 'A') ||
-        setweight(to_tsvector('english', COALESCE(NEW.description, '')), 'B') ||
-        setweight(to_tsvector('english', COALESCE(array_to_string(NEW.tags, ' '), '')), 'C');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER subcircuits_search_update
-BEFORE INSERT OR UPDATE ON subcircuits
-FOR EACH ROW EXECUTE FUNCTION subcircuits_search_trigger();
-
--- Update timestamp trigger
-CREATE OR REPLACE FUNCTION update_updated_at() RETURNS trigger AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER subcircuits_updated_at
-BEFORE UPDATE ON subcircuits
-FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 ```
 
-### Metadata JSONB Schema
+**Fields:**
+- `id` - Primary UUID identifier
+- `slug` - URL-friendly unique identifier (lowercase, alphanumeric + dashes)
+- `title` - Circuit name/title
+- `description` - Detailed circuit description
+- `user_id` - Owner (foreign key to `profiles`)
+- `file_path` - Optional Supabase Storage path (nullable)
+- `raw_sexpr` - Raw KiCad S-expression data (TEXT)
+- `component_count`, `wire_count`, `net_count` - Extracted statistics
+- `category` - Circuit category (e.g., "Power Supply", "Audio")
+- `tags` - Array of searchable tags
+- `license` - Open source hardware license (defaults to CERN-OHL-S-2.0)
+- `view_count` - Number of views
+- `copy_count` - Number of times copied to clipboard
+- `favorite_count` - Number of favorites (auto-updated via trigger)
+- `comment_count` - Number of comments (auto-updated via trigger)
+- `is_public` - Visibility flag (true = public, false = private)
+- `thumbnail_light_url`, `thumbnail_dark_url` - URLs to Supabase Storage thumbnails
+- `search_vector` - `tsvector` for full-text search (auto-updated via trigger)
 
-Stored in `subcircuits.metadata` column:
+**Supported Licenses:**
+- CERN-OHL-S-2.0 (recommended)
+- MIT, Apache-2.0, GPL-3.0
+- CC-BY-4.0, CC-BY-SA-4.0
+- TAPR-OHL-1.0, BSD-2-Clause
 
-```typescript
-interface SubcircuitMetadata {
-  // Component inventory
-  components: Array<{
-    reference: string;          // "R1", "U2", "C5"
-    value: string;              // "10k", "LM358", "100nF"
-    footprint: string;          // "Resistor_SMD:R_0805_2012Metric"
-    lib_id: string;             // "Device:R"
-    description?: string;        // From datasheet property
-    manufacturer?: string;
-    part_number?: string;
-    uuid: string;
-    position: { x: number; y: number; angle: number };
-    properties: Record<string, string>;  // All other properties
-  }>;
+---
 
-  // Unique component types (for search/filter)
-  uniqueComponents: Array<{
-    lib_id: string;             // "Device:R"
-    count: number;              // How many of this type
-    values: string[];           // ["10k", "100k", "1M"]
-  }>;
+### 3. circuit_components
 
-  // Net list
-  nets: Array<{
-    name: string;               // "VCC", "GND", "SIGNAL"
-    type: 'net_label' | 'global_label' | 'hierarchical_label';
-    labelCount: number;
-  }>;
-
-  // Interface (hierarchical labels = ports)
-  interface: Array<{
-    name: string;               // "VIN", "VOUT", "SCL", "SDA"
-    direction: 'input' | 'output' | 'bidirectional' | 'tri_state' | 'passive';
-    position: { x: number; y: number };
-  }>;
-
-  // Statistics
-  stats: {
-    componentCount: number;
-    uniqueComponentCount: number;
-    wireCount: number;
-    netCount: number;
-    labelCount: number;
-    hierarchicalLabelCount: number;
-  };
-
-  // Bounding box (for rendering size estimation)
-  boundingBox: {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-    width: number;
-    height: number;
-  };
-
-  // Footprint summary
-  footprints: {
-    assigned: number;           // Components with footprints
-    unassigned: number;         // Components without
-    types: string[];            // Unique footprint names
-  };
-
-  // Warnings/issues
-  warnings?: string[];          // "Missing footprint on R5", etc.
-}
-```
-
-Example metadata query:
-```sql
--- Find circuits with LM358 op-amp
-SELECT * FROM subcircuits
-WHERE metadata @> '{"uniqueComponents": [{"lib_id": "Amplifier_Operational:LM358"}]}';
-
--- Find circuits with 10+ components
-SELECT * FROM subcircuits
-WHERE (metadata->'stats'->>'componentCount')::int > 10;
-
--- Find circuits with specific footprint
-SELECT * FROM subcircuits
-WHERE metadata->'footprints'->'types' ? 'Resistor_SMD:R_0805_2012Metric';
-```
-
-### Collections Table (Optional - Phase 2)
-
-Allow users to organize subcircuits into collections:
+Detailed component information extracted from schematics.
 
 ```sql
-CREATE TABLE collections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+CREATE TABLE public.circuit_components (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
+  reference TEXT NOT NULL,     -- e.g., "R1", "IC19"
+  value TEXT NOT NULL,          -- e.g., "10k", "TPIC8101DWRG4"
+  footprint TEXT,               -- e.g., "Resistor_SMD:R_0805_2012Metric"
+  lib_id TEXT NOT NULL,         -- e.g., "Device:R"
+  uuid TEXT NOT NULL,
+  position_x FLOAT,
+  position_y FLOAT,
+  rotation FLOAT DEFAULT 0,
 
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    slug VARCHAR(255) NOT NULL,
-
-    is_public BOOLEAN DEFAULT true,
-
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-    UNIQUE(user_id, slug)
+  UNIQUE(circuit_id, uuid)
 );
-
-CREATE TABLE collection_subcircuits (
-    collection_id UUID REFERENCES collections(id) ON DELETE CASCADE,
-    subcircuit_id UUID REFERENCES subcircuits(id) ON DELETE CASCADE,
-    added_at TIMESTAMPTZ DEFAULT NOW(),
-    note TEXT,
-
-    PRIMARY KEY (collection_id, subcircuit_id)
-);
-
-CREATE INDEX idx_collection_subcircuits_collection ON collection_subcircuits(collection_id);
-CREATE INDEX idx_collection_subcircuits_subcircuit ON collection_subcircuits(subcircuit_id);
 ```
 
-### Favorites Table
+**Fields:**
+- `circuit_id` - Parent circuit (CASCADE delete)
+- `reference` - Component designator (R1, C2, U3, etc.)
+- `value` - Component value (10k, 100nF, LM358, etc.)
+- `footprint` - PCB footprint assignment
+- `lib_id` - KiCad library symbol ID
+- `uuid` - KiCad-generated unique identifier
+- `position_x`, `position_y` - Schematic coordinates
+- `rotation` - Component rotation angle (degrees)
 
-Track which circuits users have favorited:
+**Usage:**
+- Extracted from S-expression during upload
+- Used for component search/filtering
+- Displayed on circuit detail page
+
+---
+
+### 4. favorites
+
+Many-to-many relationship between users and circuits.
 
 ```sql
-CREATE TABLE favorites (
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    subcircuit_id UUID REFERENCES subcircuits(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
+CREATE TABLE public.favorites (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
 
-    PRIMARY KEY (user_id, subcircuit_id)
+  UNIQUE(user_id, circuit_id)
 );
-
-CREATE INDEX idx_favorites_user ON favorites(user_id);
-CREATE INDEX idx_favorites_subcircuit ON favorites(subcircuit_id);
-
--- Trigger to update favorite_count on subcircuits
-CREATE OR REPLACE FUNCTION update_favorite_count() RETURNS trigger AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE subcircuits SET favorite_count = favorite_count + 1
-        WHERE id = NEW.subcircuit_id;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE subcircuits SET favorite_count = favorite_count - 1
-        WHERE id = OLD.subcircuit_id;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER favorites_count_update
-AFTER INSERT OR DELETE ON favorites
-FOR EACH ROW EXECUTE FUNCTION update_favorite_count();
 ```
 
-### Copy Events Table
+**Fields:**
+- `user_id` - User who favorited
+- `circuit_id` - Favorited circuit
+- `created_at` - When favorited
 
-Track when circuits are copied (analytics + sorting by popularity):
+**Behavior:**
+- Unique constraint prevents duplicate favorites
+- Auto-updates `circuits.favorite_count` via trigger
+
+---
+
+### 5. circuit_copies
+
+Analytics tracking for circuit copy events.
 
 ```sql
-CREATE TABLE copy_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    subcircuit_id UUID NOT NULL REFERENCES subcircuits(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- NULL if not logged in
-    ip_address INET,                                        -- For rate limiting
-    user_agent TEXT,
-
-    created_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE public.circuit_copies (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  copied_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-CREATE INDEX idx_copy_events_subcircuit ON copy_events(subcircuit_id);
-CREATE INDEX idx_copy_events_user ON copy_events(user_id);
-CREATE INDEX idx_copy_events_created ON copy_events(created_at);
-
--- Trigger to update copy_count and user stats
-CREATE OR REPLACE FUNCTION update_copy_count() RETURNS trigger AS $$
-BEGIN
-    -- Increment subcircuit copy count
-    UPDATE subcircuits
-    SET copy_count = copy_count + 1
-    WHERE id = NEW.subcircuit_id;
-
-    -- Increment user's total_copies_received
-    UPDATE users
-    SET total_copies_received = total_copies_received + 1
-    WHERE id = (SELECT user_id FROM subcircuits WHERE id = NEW.subcircuit_id);
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER copy_events_count_update
-AFTER INSERT ON copy_events
-FOR EACH ROW EXECUTE FUNCTION update_copy_count();
 ```
 
-### Comments Table (Optional - Phase 2)
+**Fields:**
+- `circuit_id` - Circuit that was copied
+- `user_id` - User who copied (NULL for anonymous)
+- `copied_at` - Timestamp of copy event
+
+**Usage:**
+- Logged when user clicks "Copy to Clipboard"
+- Used for analytics and popularity metrics
+
+---
+
+### 6. circuit_comments
+
+Threaded comments system with support for replies.
 
 ```sql
-CREATE TABLE comments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    subcircuit_id UUID NOT NULL REFERENCES subcircuits(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+CREATE TABLE public.circuit_comments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  parent_comment_id UUID REFERENCES public.circuit_comments(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  likes_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  is_edited BOOLEAN DEFAULT false,
 
-    content TEXT NOT NULL,
-    parent_id UUID REFERENCES comments(id) ON DELETE CASCADE,  -- For threaded comments
-
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-    CHECK (char_length(content) >= 1 AND char_length(content) <= 2000)
+  CONSTRAINT content_length CHECK (char_length(content) >= 1 AND char_length(content) <= 5000)
 );
-
-CREATE INDEX idx_comments_subcircuit ON comments(subcircuit_id);
-CREATE INDEX idx_comments_user ON comments(user_id);
-CREATE INDEX idx_comments_parent ON comments(parent_id);
 ```
 
-### Tags Table (Optional - for autocomplete)
+**Fields:**
+- `circuit_id` - Parent circuit
+- `user_id` - Comment author
+- `parent_comment_id` - NULL for top-level, UUID for replies (CASCADE delete)
+- `content` - Comment text (1-5000 chars)
+- `likes_count` - Number of likes (auto-updated via trigger)
+- `created_at` - When comment was created
+- `updated_at` - When last edited (auto-updated via trigger)
+- `is_edited` - True if edited after creation
 
-Denormalized tag tracking for autocomplete:
+**Threading:**
+- Top-level comments: `parent_comment_id = NULL`
+- Replies: `parent_comment_id` points to parent comment
+- Max depth enforced at application level (3 levels)
+- Deleting a comment deletes all replies (CASCADE)
+
+---
+
+### 7. comment_likes
+
+Tracks which users liked which comments.
 
 ```sql
-CREATE TABLE tag_stats (
-    tag VARCHAR(100) PRIMARY KEY,
-    usage_count INTEGER DEFAULT 1,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    last_used TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE public.comment_likes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  comment_id UUID NOT NULL REFERENCES public.circuit_comments(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(comment_id, user_id)
 );
+```
 
-CREATE INDEX idx_tag_stats_usage ON tag_stats(usage_count DESC);
-CREATE INDEX idx_tag_stats_name ON tag_stats(tag varchar_pattern_ops);  -- For LIKE queries
+**Fields:**
+- `comment_id` - Liked comment
+- `user_id` - User who liked
+- `created_at` - When liked
 
--- Trigger to update tag_stats when subcircuit tags change
-CREATE OR REPLACE FUNCTION update_tag_stats() RETURNS trigger AS $$
+**Behavior:**
+- Unique constraint prevents duplicate likes
+- Auto-updates `circuit_comments.likes_count` via trigger
+
+---
+
+## Authentication
+
+CircuitSnips uses **Supabase Auth** with GitHub OAuth.
+
+### GitHub OAuth Setup
+
+1. **GitHub OAuth App** (configured in Supabase Dashboard):
+   - Provider: GitHub
+   - Scopes: `user:email`, `read:user`
+   - Redirect URLs configured in Supabase
+
+2. **User Metadata Captured:**
+   ```typescript
+   {
+     user_name: string,         // GitHub username
+     avatar_url: string,         // GitHub avatar
+     preferred_username: string, // Fallback username
+     login: string               // Alternate username field
+   }
+   ```
+
+3. **Profile Creation:**
+   - Automatic via `handle_new_user()` trigger
+   - Triggered on `auth.users` INSERT
+   - Extracts username from metadata
+   - Sanitizes to match constraints (alphanumeric + dash/underscore)
+   - Handles duplicates by appending random number
+
+### Environment Variables
+
+```env
+# In .env.local
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your_anon_key"
+```
+
+**Note:** GitHub OAuth credentials are configured in Supabase Dashboard, not in `.env.local`.
+
+### Authentication Flow
+
+```
+1. User clicks "Login with GitHub"
+2. Redirected to GitHub OAuth
+3. GitHub redirects back to /auth/callback
+4. Supabase creates auth.users entry
+5. handle_new_user() trigger creates profiles entry
+6. User redirected to app
+```
+
+### Protected Routes
+
+Next.js middleware (`middleware.ts`) protects:
+- `/upload` - Requires authentication
+- `/profile` - Requires authentication
+- `/settings` - Requires authentication
+
+---
+
+## Storage Buckets
+
+CircuitSnips uses **Supabase Storage** for file uploads.
+
+### 1. circuits Bucket
+
+- **Purpose**: Store optional `.kicad_sch` files
+- **Access**: Public read, authenticated write
+- **Folder Structure**: `{user_id}/{circuit_id}.kicad_sch`
+
+**RLS Policies:**
+```sql
+-- Anyone can view
+USING (bucket_id = 'circuits')
+
+-- Authenticated users can upload
+WITH CHECK (bucket_id = 'circuits' AND auth.role() = 'authenticated')
+
+-- Users can update/delete own files
+USING (bucket_id = 'circuits' AND auth.uid()::text = (storage.foldername(name))[1])
+```
+
+### 2. thumbnails Bucket
+
+- **Purpose**: Store circuit preview thumbnails
+- **Access**: Public read, authenticated write
+- **Folder Structure**: `{user_id}/{circuit_id}_light.png`, `{circuit_id}_dark.png`
+
+**Thumbnail Generation:**
+- Captured client-side using `html2canvas`
+- Two versions: light mode and dark mode
+- Uploaded during circuit creation
+- Displayed on browse page and circuit cards
+
+**RLS Policies:**
+- Same as `circuits` bucket
+- Public read, owner write/update/delete
+
+---
+
+## Row Level Security
+
+All tables have RLS enabled. Key policies:
+
+### Profiles
+```sql
+-- Public read
+USING (true)
+
+-- Users can update own profile
+USING (auth.uid() = id)
+```
+
+### Circuits
+```sql
+-- View public circuits OR own private circuits
+USING (is_public = true OR auth.uid() = user_id)
+
+-- Create circuits as authenticated user
+WITH CHECK (auth.uid() = user_id)
+
+-- Update/delete own circuits only
+USING (auth.uid() = user_id)
+```
+
+### Favorites
+```sql
+-- View all favorites
+USING (true)
+
+-- Manage own favorites only
+USING (auth.uid() = user_id)
+```
+
+### Comments
+```sql
+-- View all comments
+USING (true)
+
+-- Create comments as authenticated user
+WITH CHECK (auth.uid() = user_id)
+
+-- Update/delete own comments only
+USING (auth.uid() = user_id)
+```
+
+### Comment Likes
+```sql
+-- View all likes
+USING (true)
+
+-- Manage own likes only
+USING (auth.uid() = user_id)
+```
+
+---
+
+## Triggers & Functions
+
+### 1. handle_new_user()
+
+**Purpose:** Auto-create profile on signup
+
+```sql
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
 DECLARE
-    tag TEXT;
+  extracted_username TEXT;
 BEGIN
-    -- Handle new tags
-    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-        FOREACH tag IN ARRAY NEW.tags
-        LOOP
-            INSERT INTO tag_stats (tag, usage_count, last_used)
-            VALUES (tag, 1, NOW())
-            ON CONFLICT (tag) DO UPDATE
-            SET usage_count = tag_stats.usage_count + 1,
-                last_used = NOW();
-        END LOOP;
-    END IF;
+  -- Extract username from GitHub metadata
+  extracted_username := COALESCE(
+    NEW.raw_user_meta_data->>'user_name',
+    NEW.raw_user_meta_data->>'preferred_username',
+    NEW.raw_user_meta_data->>'login',
+    'user_' || substring(NEW.id::text from 1 for 8)
+  );
 
-    -- Handle removed tags
-    IF TG_OP = 'UPDATE' OR TG_OP = 'DELETE' THEN
-        FOREACH tag IN ARRAY OLD.tags
-        LOOP
-            UPDATE tag_stats
-            SET usage_count = usage_count - 1
-            WHERE tag_stats.tag = tag;
-        END LOOP;
-    END IF;
+  -- Sanitize and ensure uniqueness
+  extracted_username := regexp_replace(extracted_username, '[^a-zA-Z0-9_-]', '', 'g');
 
-    RETURN NEW;
+  IF char_length(extracted_username) < 3 THEN
+    extracted_username := 'user_' || substring(NEW.id::text from 1 for 8);
+  END IF;
+
+  WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = extracted_username) LOOP
+    extracted_username := extracted_username || floor(random() * 100)::text;
+  END LOOP;
+
+  INSERT INTO public.profiles (id, username, avatar_url, github_url)
+  VALUES (...);
+
+  RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tag_stats_update
-AFTER INSERT OR UPDATE OR DELETE ON subcircuits
-FOR EACH ROW EXECUTE FUNCTION update_tag_stats();
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
-### Sessions Table (for NextAuth.js)
+### 2. update_circuit_search_vector()
+
+**Purpose:** Auto-update full-text search index
 
 ```sql
-CREATE TABLE sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    session_token VARCHAR(255) UNIQUE NOT NULL,
-    expires TIMESTAMPTZ NOT NULL,
-
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_sessions_user ON sessions(user_id);
-CREATE INDEX idx_sessions_token ON sessions(session_token);
+CREATE OR REPLACE FUNCTION update_circuit_search_vector()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.search_vector :=
+    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(NEW.description, '')), 'B') ||
+    setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'C');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
-## ORM/Query Builder Choice
+**Weighting:**
+- A: Title (highest relevance)
+- B: Description
+- C: Tags
 
-### Option 1: Prisma (Recommended)
+### 3. update_circuit_favorite_count()
 
-**Pros**:
-- Excellent TypeScript support with generated types
-- Great DX with Prisma Studio for DB browsing
-- Migrations handled automatically
-- Good documentation
+**Purpose:** Auto-update favorite counter
 
-**Cons**:
-- Can be slower than raw SQL for complex queries
-- Less flexible for JSONB operations
-
-**Schema Example**:
-```prisma
-model Subcircuit {
-  id            String   @id @default(uuid())
-  userId        String   @map("user_id")
-  title         String
-  description   String?
-  sexprRaw      String   @map("sexpr_raw") @db.Text
-  sexprParsed   Json     @map("sexpr_parsed")
-  metadata      Json
-  tags          String[]
-  license       String
-  searchVector  Unsupported("tsvector")?  @map("search_vector")
-
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  user          User     @relation(fields: [userId], references: [id])
-  favorites     Favorite[]
-  copyEvents    CopyEvent[]
-
-  @@index([userId])
-  @@index([tags], type: Gin)
-  @@map("subcircuits")
-}
+```sql
+CREATE OR REPLACE FUNCTION update_circuit_favorite_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.circuits SET favorite_count = favorite_count + 1 WHERE id = NEW.circuit_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.circuits SET favorite_count = favorite_count - 1 WHERE id = OLD.circuit_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
-### Option 2: Drizzle ORM
+### 4. update_circuit_comment_count()
 
-**Pros**:
-- Lighter weight than Prisma
-- Better raw SQL support
-- Excellent TypeScript inference
-- More control over queries
+**Purpose:** Auto-update comment counter
 
-**Cons**:
-- Smaller ecosystem
-- Less tooling (no Studio equivalent)
+```sql
+CREATE OR REPLACE FUNCTION update_circuit_comment_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.circuits SET comment_count = comment_count + 1 WHERE id = NEW.circuit_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.circuits SET comment_count = comment_count - 1 WHERE id = OLD.circuit_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+```
 
-### Option 3: Kysely
+### 5. update_comment_likes_count()
 
-**Pros**:
-- Type-safe SQL query builder
-- Very close to raw SQL
-- Excellent for complex queries
+**Purpose:** Auto-update comment likes counter
 
-**Cons**:
-- More verbose
-- No schema management
+```sql
+CREATE OR REPLACE FUNCTION update_comment_likes_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.circuit_comments SET likes_count = likes_count + 1 WHERE id = NEW.comment_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.circuit_comments SET likes_count = likes_count - 1 WHERE id = OLD.comment_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+```
 
-**Recommendation**: **Prisma** for MVP (fast development), consider Drizzle if we need more control.
+### 6. update_comment_updated_at_column()
+
+**Purpose:** Track comment edits
+
+```sql
+CREATE OR REPLACE FUNCTION update_comment_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  NEW.is_edited = true;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+**Trigger Condition:**
+```sql
+WHEN (OLD.content IS DISTINCT FROM NEW.content)
+```
+
+### 7. increment_circuit_views()
+
+**Purpose:** Manual view count increment
+
+```sql
+CREATE OR REPLACE FUNCTION increment_circuit_views(circuit_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.circuits SET view_count = view_count + 1 WHERE id = circuit_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+**Usage:** Called from application when circuit is viewed
+
+### 8. search_circuits()
+
+**Purpose:** Full-text search query
+
+```sql
+CREATE OR REPLACE FUNCTION search_circuits(search_query TEXT)
+RETURNS TABLE (
+  id UUID,
+  slug TEXT,
+  title TEXT,
+  description TEXT,
+  rank REAL
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    c.id,
+    c.slug,
+    c.title,
+    c.description,
+    ts_rank(c.search_vector, plainto_tsquery('english', search_query)) as rank
+  FROM public.circuits c
+  WHERE c.search_vector @@ plainto_tsquery('english', search_query)
+  AND c.is_public = true
+  ORDER BY rank DESC;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+---
+
+## Indexes
+
+### circuits Table
+```sql
+CREATE INDEX circuits_user_id_idx ON circuits(user_id);
+CREATE INDEX circuits_created_at_idx ON circuits(created_at DESC);
+CREATE INDEX circuits_tags_idx ON circuits USING GIN(tags);
+CREATE INDEX circuits_category_idx ON circuits(category);
+CREATE INDEX circuits_is_public_idx ON circuits(is_public) WHERE is_public = true;
+CREATE INDEX circuits_search_idx ON circuits USING GIN(search_vector);
+```
+
+### circuit_components Table
+```sql
+CREATE INDEX circuit_components_circuit_id_idx ON circuit_components(circuit_id);
+CREATE INDEX circuit_components_lib_id_idx ON circuit_components(lib_id);
+```
+
+### favorites Table
+```sql
+CREATE INDEX favorites_user_id_idx ON favorites(user_id);
+CREATE INDEX favorites_circuit_id_idx ON favorites(circuit_id);
+```
+
+### circuit_copies Table
+```sql
+CREATE INDEX circuit_copies_circuit_id_idx ON circuit_copies(circuit_id);
+```
+
+### circuit_comments Table
+```sql
+CREATE INDEX circuit_comments_circuit_id_idx ON circuit_comments(circuit_id);
+CREATE INDEX circuit_comments_user_id_idx ON circuit_comments(user_id);
+CREATE INDEX circuit_comments_parent_id_idx ON circuit_comments(parent_comment_id);
+CREATE INDEX circuit_comments_created_at_idx ON circuit_comments(created_at DESC);
+```
+
+### comment_likes Table
+```sql
+CREATE INDEX comment_likes_comment_id_idx ON comment_likes(comment_id);
+CREATE INDEX comment_likes_user_id_idx ON comment_likes(user_id);
+```
+
+---
+
+## Data Relationships
+
+```
+auth.users (Supabase Auth)
+  ↓ 1:1
+profiles
+  ↓ 1:N
+circuits ←──┐
+  ↓ 1:N     │
+circuit_components
+
+circuits ←──┐
+  ↓ M:N     │
+favorites   │
+  ↓ N:1     │
+profiles ───┘
+
+circuits ←──┐
+  ↓ 1:N     │
+circuit_copies
+  ↓ N:1 (optional)
+profiles ───┘
+
+circuits ←──┐
+  ↓ 1:N     │
+circuit_comments (self-referencing for threading)
+  ↓ 1:N     │
+comment_likes
+  ↓ N:1     │
+profiles ───┘
+```
+
+---
 
 ## Example Queries
 
-### Search Subcircuits
-
-```sql
--- Full-text search with ranking
-SELECT
-    s.*,
-    u.username,
-    u.avatar_url,
-    ts_rank(s.search_vector, query) AS rank
-FROM subcircuits s
-JOIN users u ON s.user_id = u.id
-CROSS JOIN plainto_tsquery('english', 'voltage regulator') AS query
-WHERE s.search_vector @@ query
-  AND s.is_public = true
-ORDER BY rank DESC, s.copy_count DESC
-LIMIT 20;
-
--- Tag-based search with autocomplete
-SELECT * FROM subcircuits
-WHERE tags && ARRAY['power-supply', 'buck-converter']
-ORDER BY created_at DESC;
-
--- Component search (find circuits using specific IC)
-SELECT * FROM subcircuits
-WHERE metadata @> '{"uniqueComponents": [{"lib_id": "Regulator_Linear:LM7805"}]}'
-ORDER BY copy_count DESC;
-
--- Autocomplete tags
-SELECT tag, usage_count
-FROM tag_stats
-WHERE tag ILIKE 'pow%'
-ORDER BY usage_count DESC
-LIMIT 10;
-```
-
-### User Profile
-
-```sql
--- Get user with their subcircuits
-SELECT
-    u.*,
-    json_agg(
-        json_build_object(
-            'id', s.id,
-            'title', s.title,
-            'copy_count', s.copy_count,
-            'created_at', s.created_at
-        ) ORDER BY s.created_at DESC
-    ) AS subcircuits
-FROM users u
-LEFT JOIN subcircuits s ON u.id = s.user_id AND s.is_public = true
-WHERE u.username = 'johndoe'
-GROUP BY u.id;
-```
-
-### Analytics
-
-```sql
--- Most popular circuits this month
-SELECT
-    s.id,
-    s.title,
-    COUNT(ce.id) AS copies_this_month,
-    s.copy_count AS total_copies
-FROM subcircuits s
-LEFT JOIN copy_events ce ON s.id = ce.subcircuit_id
-    AND ce.created_at >= NOW() - INTERVAL '30 days'
-GROUP BY s.id
-ORDER BY copies_this_month DESC
-LIMIT 10;
-
--- Trending tags
-SELECT
-    tag,
-    COUNT(*) AS circuit_count
-FROM subcircuits,
-LATERAL unnest(tags) AS tag
-WHERE created_at >= NOW() - INTERVAL '30 days'
-GROUP BY tag
-ORDER BY circuit_count DESC
-LIMIT 20;
-```
-
-## Data Validation
-
-### Application-Level Validation
+### Get Circuit with Comments (Nested)
 
 ```typescript
-import { z } from 'zod';
-
-const SubcircuitCreateSchema = z.object({
-  title: z.string().min(3).max(255),
-  description: z.string().max(5000).optional(),
-  sexprRaw: z.string().min(10).max(1_000_000),  // 1MB limit
-  tags: z.array(z.string().max(50)).max(10),
-  license: z.enum(['MIT', 'CC-BY-4.0', 'CC-BY-SA-4.0', 'CERN-OHL-S-2.0', 'TAPR-OHL-1.0']),
-  isPublic: z.boolean().default(true),
-});
-
-// Metadata validation
-const ComponentSchema = z.object({
-  reference: z.string(),
-  value: z.string(),
-  footprint: z.string(),
-  lib_id: z.string(),
-  uuid: z.string().uuid(),
-  position: z.object({
-    x: z.number(),
-    y: z.number(),
-    angle: z.number(),
-  }),
-});
-
-const MetadataSchema = z.object({
-  components: z.array(ComponentSchema),
-  uniqueComponents: z.array(z.object({
-    lib_id: z.string(),
-    count: z.number().int().positive(),
-    values: z.array(z.string()),
-  })),
-  stats: z.object({
-    componentCount: z.number().int().nonnegative(),
-    wireCount: z.number().int().nonnegative(),
-    netCount: z.number().int().nonnegative(),
-  }),
-  // ... etc
-});
+const { data } = await supabase
+  .from('circuits')
+  .select(`
+    *,
+    user:profiles(id, username, avatar_url),
+    comments:circuit_comments(
+      *,
+      user:profiles(id, username, avatar_url),
+      replies:circuit_comments!parent_comment_id(
+        *,
+        user:profiles(id, username, avatar_url)
+      )
+    )
+  `)
+  .eq('slug', 'my-circuit')
+  .single();
 ```
 
-## Migrations
+### Search Circuits
 
-Using Prisma migrations:
+```sql
+SELECT * FROM search_circuits('op amp');
+```
 
+### Get User's Favorites
+
+```sql
+SELECT
+  c.*,
+  p.username as author_username
+FROM favorites f
+JOIN circuits c ON f.circuit_id = c.id
+JOIN profiles p ON c.user_id = p.id
+WHERE f.user_id = 'user-uuid'
+ORDER BY f.created_at DESC;
+```
+
+### Get Most Popular Circuits
+
+```sql
+SELECT
+  c.*,
+  p.username as author_username
+FROM circuits c
+JOIN profiles p ON c.user_id = p.id
+WHERE c.is_public = true
+ORDER BY c.favorite_count DESC, c.copy_count DESC
+LIMIT 10;
+```
+
+### Get User's Activity
+
+```sql
+-- User's circuits
+SELECT 'circuit' as type, created_at, title FROM circuits WHERE user_id = 'user-uuid'
+UNION ALL
+-- User's comments
+SELECT 'comment', created_at, substring(content from 1 for 50) FROM circuit_comments WHERE user_id = 'user-uuid'
+UNION ALL
+-- User's favorites
+SELECT 'favorite', f.created_at, c.title FROM favorites f JOIN circuits c ON f.circuit_id = c.id WHERE f.user_id = 'user-uuid'
+ORDER BY created_at DESC;
+```
+
+---
+
+## Migration Notes
+
+### Initial Setup
+
+Run `supabase/schema.sql` in Supabase SQL Editor. This creates all tables, triggers, and policies.
+
+### Idempotency
+
+The schema file uses:
+- `CREATE TABLE IF NOT EXISTS`
+- `DROP TRIGGER IF EXISTS` before `CREATE TRIGGER`
+- `DROP POLICY IF EXISTS` before `CREATE POLICY`
+- `DO $$ BEGIN ... END $$;` blocks for conditional column additions
+
+**Safe to run multiple times** without errors.
+
+### Existing Databases
+
+For databases with existing data, the schema includes:
+- Conditional column additions (checks `information_schema.columns`)
+- Default values for new columns
+- No destructive operations
+
+---
+
+## Performance Considerations
+
+1. **GIN Indexes**: Used for arrays (`tags`) and `tsvector` (search)
+2. **Partial Indexes**: `is_public = true` filter reduces index size
+3. **Cascade Deletes**: Automatic cleanup when parent records deleted
+4. **Triggers**: Minimal overhead, only fire on actual changes
+5. **Connection Pooling**: Handled by Supabase
+
+### Query Optimization Tips
+
+- Use `is_public = true` filter for public queries
+- Index on `created_at DESC` for "recent" sorting
+- GIN index on `tags` for array overlap queries (`tags && ARRAY['tag1']`)
+- Full-text search uses pre-computed `search_vector`
+
+---
+
+## Backup & Recovery
+
+### Supabase Automatic Backups
+- Daily backups included in Supabase Pro plan
+- Point-in-time recovery available
+- Manual backups via Supabase Dashboard
+
+### Manual Backup
 ```bash
-# Create initial migration
-npx prisma migrate dev --name init
-
-# Apply to production
-npx prisma migrate deploy
-
-# Generate Prisma Client
-npx prisma generate
+pg_dump -h db.your-project.supabase.co -U postgres -d postgres > backup.sql
 ```
 
-## Backup Strategy
+### Restore
+```bash
+psql -h db.your-project.supabase.co -U postgres -d postgres < backup.sql
+```
 
-1. **Automated Daily Backups**: PostgreSQL pg_dump
-2. **Point-in-Time Recovery**: WAL archiving
-3. **Replica**: Read replica for high availability
-4. **Export Feature**: Allow users to export all their data (GDPR compliance)
+---
 
-## Performance Optimization
+## Security Best Practices
 
-1. **Indexes**: Created on all frequently queried columns
-2. **JSONB Indexing**: GIN indexes on metadata
-3. **Partial Indexes**: `WHERE is_public = true` for public queries
-4. **Connection Pooling**: PgBouncer or Prisma's built-in pooling
-5. **Query Optimization**: Use EXPLAIN ANALYZE for slow queries
-6. **Caching**: Redis for frequent queries (top circuits, trending tags)
+1. **RLS Policies**: Enforce data access at database level
+2. **SECURITY DEFINER**: Used for `handle_new_user()` to bypass RLS during signup
+3. **Unique Constraints**: Prevent duplicate favorites, likes, usernames
+4. **CHECK Constraints**: Validate data format (username, slug, content length)
+5. **Foreign Keys**: Enforce referential integrity
+6. **CASCADE Deletes**: Clean up orphaned records automatically
 
-## Summary
+---
 
-### Key Design Decisions
-
-1. **PostgreSQL JSONB**: Store both raw and parsed S-expressions
-2. **Metadata Extraction**: Denormalize common queries into metadata JSONB
-3. **Full-Text Search**: Built-in PostgreSQL FTS with GIN indexes
-4. **Triggers**: Auto-update search vectors, counts, timestamps
-5. **Normalization**: Balance between normalized (users, favorites) and denormalized (metadata)
-6. **UUID Primary Keys**: Better for distributed systems, no sequence contention
-7. **Soft Deletes** (optional): Consider adding `deleted_at` for recovery
-8. **Audit Trail** (optional): Consider adding version history table
-
-This schema supports the MVP and scales to 100k+ subcircuits with proper indexing and caching.
+**Questions or Issues?**
+- Check `supabase/schema.sql` for complete SQL
+- Review RLS policies in Supabase Dashboard → Authentication → Policies
+- Monitor query performance in Supabase Dashboard → Database → Query Performance
