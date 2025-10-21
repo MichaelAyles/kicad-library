@@ -36,7 +36,7 @@ export default function EditCircuitPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params?.slug as string;
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
 
   const [circuit, setCircuit] = useState<Circuit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +55,9 @@ export default function EditCircuitPage() {
   // Load circuit data
   useEffect(() => {
     if (!slug) return;
+
+    // Wait for auth to load before checking permissions
+    if (authLoading) return;
 
     const loadCircuit = async () => {
       setIsLoading(true);
@@ -99,7 +102,7 @@ export default function EditCircuitPage() {
     };
 
     loadCircuit();
-  }, [slug, user]);
+  }, [slug, user, authLoading]);
 
   const handleAddTag = () => {
     const trimmedTag = tagInput.trim().toLowerCase();
@@ -180,7 +183,7 @@ export default function EditCircuitPage() {
   };
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
