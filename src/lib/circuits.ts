@@ -165,3 +165,80 @@ export async function incrementCopyCount(circuitId: string): Promise<void> {
     // Silently fail - don't block user experience for analytics
   }
 }
+
+/**
+ * Check if the current user has favorited a circuit
+ */
+export async function checkIfFavorited(circuitId: string, userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('favorites')
+      .select('id')
+      .eq('circuit_id', circuitId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return !!data;
+  } catch (error) {
+    console.error('Error checking favorite status:', error);
+    return false;
+  }
+}
+
+/**
+ * Add a circuit to user's favorites
+ * Triggers automatic favorite_count increment via database trigger
+ */
+export async function addFavorite(circuitId: string, userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('favorites')
+      .insert({ circuit_id: circuitId, user_id: userId });
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error adding favorite:', error);
+    throw error;
+  }
+}
+
+/**
+ * Remove a circuit from user's favorites
+ * Triggers automatic favorite_count decrement via database trigger
+ */
+export async function removeFavorite(circuitId: string, userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('favorites')
+      .delete()
+      .eq('circuit_id', circuitId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error removing favorite:', error);
+    throw error;
+  }
+}
+
+/**
+ * Toggle favorite status for a circuit
+ * Returns the new favorited state
+ */
+export async function toggleFavorite(circuitId: string, userId: string): Promise<boolean> {
+  try {
+    const isFavorited = await checkIfFavorited(circuitId, userId);
+
+    if (isFavorited) {
+      await removeFavorite(circuitId, userId);
+      return false;
+    } else {
+      await addFavorite(circuitId, userId);
+      return true;
+    }
+  } catch (error) {
+    console.error('Error toggling favorite:', error);
+    throw error;
+  }
+}

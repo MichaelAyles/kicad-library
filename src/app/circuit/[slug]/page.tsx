@@ -10,15 +10,18 @@ import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnipp
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { CommentList } from "@/components/CommentList";
 import { formatDate } from "@/lib/utils";
-import { getCircuitBySlug, incrementViewCount, type Circuit } from "@/lib/circuits";
+import { getCircuitBySlug, incrementViewCount, checkIfFavorited, toggleFavorite, type Circuit } from "@/lib/circuits";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function CircuitDetailPage() {
   const params = useParams();
   const slug = params?.slug as string;
+  const { user } = useAuth();
 
   const [circuit, setCircuit] = useState<Circuit | null>(null);
   const [copied, setCopied] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriteCount, setFavoriteCount] = useState(0);
   const [snippetData, setSnippetData] = useState<string>(""); // For copy button - always snippet
   const [fullFileData, setFullFileData] = useState<string>(""); // For preview/download - always full file
   const [isLoading, setIsLoading] = useState(true);
@@ -44,11 +47,18 @@ export default function CircuitDetailPage() {
         }
 
         setCircuit(circuitData);
+        setFavoriteCount(circuitData.favorite_count);
 
         // Increment view count (fire and forget)
         incrementViewCount(circuitData.id).catch(err =>
           console.error("Failed to increment view count:", err)
         );
+
+        // Check if user has favorited this circuit
+        if (user?.id) {
+          const favorited = await checkIfFavorited(circuitData.id, user.id);
+          setIsFavorited(favorited);
+        }
 
         // Prepare circuit data for copy and preview
         prepareCircuitData(circuitData.raw_sexpr, circuitData.title);
@@ -62,7 +72,7 @@ export default function CircuitDetailPage() {
     };
 
     loadCircuit();
-  }, [slug]);
+  }, [slug, user?.id]);
 
   // Helper function to prepare data from database
   const prepareCircuitData = (rawSexpr: string, title: string) => {
@@ -134,9 +144,29 @@ export default function CircuitDetailPage() {
     console.log("Download event tracked");
   };
 
-  const handleFavorite = () => {
-    // TODO: Implement favorite functionality
-    setIsFavorited(!isFavorited);
+  const handleFavorite = async () => {
+    if (!user) {
+      alert("Please sign in to favorite circuits");
+      return;
+    }
+
+    if (!circuit) {
+      return;
+    }
+
+    try {
+      // Toggle favorite in database
+      const newFavoritedState = await toggleFavorite(circuit.id, user.id);
+
+      // Update local state
+      setIsFavorited(newFavoritedState);
+
+      // Update count optimistically
+      setFavoriteCount(prev => newFavoritedState ? prev + 1 : prev - 1);
+    } catch (error) {
+      console.error("Failed to toggle favorite:", error);
+      alert("Failed to update favorite. Please try again.");
+    }
   };
 
   // Show loading state
@@ -254,7 +284,7 @@ export default function CircuitDetailPage() {
               }`}
             >
               <Heart className={`w-5 h-5 ${isFavorited ? "fill-current" : ""}`} />
-              {isFavorited ? "Favorited" : "Favorite"} ({circuit.favorite_count})
+              {isFavorited ? "Favorited" : "Favorite"} ({favoriteCount})
             </button>
 
             <button
@@ -334,7 +364,7 @@ export default function CircuitDetailPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Favorites:</span>
-                    <span className="font-medium">{circuit.favorite_count}</span>
+                    <span className="font-medium">{favoriteCount}</span>
                   </div>
                 </div>
               </div>
