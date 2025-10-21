@@ -1,0 +1,434 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, Save, Loader, X } from "lucide-react";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
+import { useAuth } from "@/hooks/useAuth";
+
+const LICENSES = [
+  "CERN-OHL-S-2.0",
+  "MIT",
+  "CC-BY-4.0",
+  "CC-BY-SA-4.0",
+  "GPL-3.0",
+  "Apache-2.0",
+  "TAPR-OHL-1.0",
+  "BSD-2-Clause",
+];
+
+const CATEGORIES = [
+  "Analog",
+  "Digital",
+  "Power",
+  "Interface",
+  "Sensors",
+  "Microcontroller",
+  "Communication",
+  "Audio",
+  "Other",
+];
+
+export default function EditCircuitPage() {
+  const params = useParams();
+  const router = useRouter();
+  const slug = params?.slug as string;
+  const { user } = useAuth();
+
+  const [circuit, setCircuit] = useState<Circuit | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Form fields
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [category, setCategory] = useState("");
+  const [license, setLicense] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+
+  // Load circuit data
+  useEffect(() => {
+    if (!slug) return;
+
+    const loadCircuit = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const circuitData = await getCircuitBySlug(slug);
+
+        if (!circuitData) {
+          setError("Circuit not found");
+          setIsLoading(false);
+          return;
+        }
+
+        // Check if user is the owner
+        if (!user || circuitData.user_id !== user.id) {
+          setError("You don't have permission to edit this circuit");
+          setIsLoading(false);
+          return;
+        }
+
+        setCircuit(circuitData);
+        setTitle(circuitData.title);
+        setDescription(circuitData.description);
+        setTags(circuitData.tags);
+        setCategory(circuitData.category || "");
+        setLicense(circuitData.license);
+        setIsPublic(circuitData.is_public);
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Failed to load circuit:", err);
+        setError(err instanceof Error ? err.message : "Failed to load circuit");
+        setIsLoading(false);
+      }
+    };
+
+    loadCircuit();
+  }, [slug, user]);
+
+  const handleAddTag = () => {
+    const trimmedTag = tagInput.trim().toLowerCase();
+    if (trimmedTag && !tags.includes(trimmedTag) && tags.length < 10) {
+      setTags([...tags, trimmedTag]);
+      setTagInput("");
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter((tag) => tag !== tagToRemove));
+  };
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddTag();
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!circuit) return;
+
+    // Validation
+    if (!title.trim()) {
+      alert("Please enter a title");
+      return;
+    }
+
+    if (!description.trim()) {
+      alert("Please enter a description");
+      return;
+    }
+
+    if (tags.length === 0) {
+      alert("Please add at least one tag");
+      return;
+    }
+
+    if (!license) {
+      alert("Please select a license");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/circuits/${circuit.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+          tags,
+          category: category || null,
+          license,
+          is_public: isPublic,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update circuit");
+      }
+
+      // Redirect back to circuit detail page
+      router.push(`/circuit/${slug}`);
+    } catch (err) {
+      console.error("Failed to update circuit:", err);
+      setError(err instanceof Error ? err.message : "Failed to update circuit");
+      setIsSaving(false);
+    }
+  };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-lg text-muted-foreground">Loading circuit...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !circuit) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1">
+          <div className="container mx-auto px-4 py-8 max-w-6xl">
+            <Link
+              href={slug ? `/circuit/${slug}` : "/browse"}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-6 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </Link>
+            <div className="bg-card border rounded-lg p-12 text-center">
+              <h1 className="text-2xl font-bold mb-2">Cannot Edit Circuit</h1>
+              <p className="text-muted-foreground mb-6">{error || "An error occurred"}</p>
+              <Link
+                href="/browse"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
+              >
+                Browse Circuits
+              </Link>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Header />
+
+      <main className="flex-1">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          {/* Back Button */}
+          <Link
+            href={`/circuit/${slug}`}
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Circuit
+          </Link>
+
+          {/* Page Header */}
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold mb-2">Edit Circuit</h1>
+            <p className="text-muted-foreground">
+              Update metadata for your circuit. The schematic data cannot be changed.
+            </p>
+          </div>
+
+          {/* Edit Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Title */}
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium mb-2">
+                Title <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="text"
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                placeholder="e.g., LM358 Op-Amp Circuit"
+                maxLength={100}
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {title.length}/100 characters
+              </p>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium mb-2">
+                Description <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background min-h-[120px]"
+                placeholder="Describe what this circuit does, its key features, and how to use it..."
+                maxLength={1000}
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {description.length}/1000 characters
+              </p>
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label htmlFor="tags" className="block text-sm font-medium mb-2">
+                Tags <span className="text-destructive">*</span>
+              </label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  id="tags"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagInputKeyDown}
+                  className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                  placeholder="Add tags (press Enter)"
+                  maxLength={30}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddTag}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                  disabled={tags.length >= 10}
+                >
+                  Add
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 min-h-[40px]">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-3 py-1 bg-primary/10 text-primary rounded-md flex items-center gap-2"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="hover:text-destructive transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {tags.length}/10 tags. Tags help others discover your circuit.
+              </p>
+            </div>
+
+            {/* Category */}
+            <div>
+              <label htmlFor="category" className="block text-sm font-medium mb-2">
+                Category
+              </label>
+              <select
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+              >
+                <option value="">Select a category (optional)</option>
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* License */}
+            <div>
+              <label htmlFor="license" className="block text-sm font-medium mb-2">
+                License <span className="text-destructive">*</span>
+              </label>
+              <select
+                id="license"
+                value={license}
+                onChange={(e) => setLicense(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                required
+              >
+                <option value="">Select a license</option>
+                {LICENSES.map((lic) => (
+                  <option key={lic} value={lic}>
+                    {lic}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Choose an open source hardware license. Cannot be changed after upload.
+              </p>
+            </div>
+
+            {/* Visibility */}
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium">Make this circuit public</span>
+              </label>
+              <p className="text-xs text-muted-foreground mt-1 ml-6">
+                Public circuits can be discovered and copied by anyone
+              </p>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Save Changes
+                  </>
+                )}
+              </button>
+
+              <Link
+                href={`/circuit/${slug}`}
+                className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2"
+              >
+                Cancel
+              </Link>
+            </div>
+          </form>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Copy, Heart, Download, ArrowLeft, Check, FileDown, Loader } from "lucide-react";
+import { Copy, Heart, Download, ArrowLeft, Check, FileDown, Loader, Edit } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnippetFromFullFile, validateSExpression } from "@/lib/kicad-parser";
@@ -308,6 +308,17 @@ export default function CircuitDetailPage() {
               <FileDown className="w-5 h-5" />
               Download .kicad_sch
             </button>
+
+            {/* Edit button - only shown to circuit owner */}
+            {user && circuit.user_id === user.id && (
+              <Link
+                href={`/circuit/${slug}/edit`}
+                className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2"
+              >
+                <Edit className="w-5 h-5" />
+                Edit
+              </Link>
+            )}
           </div>
 
           {/* Schematic Viewer */}
