@@ -70,6 +70,13 @@ export default function EditCircuitPage() {
         }
 
         // Check if user is the owner
+        console.log("Edit permission check:", {
+          hasUser: !!user,
+          userId: user?.id,
+          circuitUserId: circuitData.user_id,
+          matches: user?.id === circuitData.user_id
+        });
+
         if (!user || circuitData.user_id !== user.id) {
           setError("You don't have permission to edit this circuit");
           setIsLoading(false);

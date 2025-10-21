@@ -15,7 +15,8 @@ import {
   Save,
   AlertCircle,
   CheckCircle,
-  ArrowLeft
+  ArrowLeft,
+  Trash2
 } from 'lucide-react';
 
 interface ProfileData {
@@ -31,6 +32,9 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const supabase = createClient();
 
   // Redirect if not logged in
@@ -103,6 +107,38 @@ export default function SettingsPage() {
       setMessage({ type: 'error', text: error.message || 'Failed to save profile' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    if (deleteConfirmText !== 'DELETE') {
+      alert('Please type DELETE to confirm');
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      // Call API endpoint to delete account and all data
+      const response = await fetch('/api/user/delete', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete account');
+      }
+
+      // Sign out
+      await supabase.auth.signOut();
+
+      // Redirect to home page
+      router.push('/');
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      alert(error.message || 'Failed to delete account');
+      setIsDeleting(false);
     }
   };
 
@@ -317,6 +353,87 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Delete Account Section */}
+          <div className="mt-8 p-6 border border-destructive/30 bg-destructive/5 rounded-lg">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-destructive mb-1">Danger Zone</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Permanently delete your account and all associated data. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-4 py-2 border border-destructive text-destructive rounded-md font-medium hover:bg-destructive hover:text-destructive-foreground transition-colors inline-flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Account
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium mb-2">
+                    This will permanently delete:
+                  </p>
+                  <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                    <li>Your profile and account information</li>
+                    <li>All circuits you&apos;ve uploaded</li>
+                    <li>All your comments and favorites</li>
+                    <li>All associated data and statistics</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <label htmlFor="deleteConfirm" className="block text-sm font-medium mb-2">
+                    Type <span className="font-mono font-bold">DELETE</span> to confirm:
+                  </label>
+                  <input
+                    type="text"
+                    id="deleteConfirm"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    className="w-full max-w-xs px-3 py-2 border border-destructive rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-destructive"
+                    placeholder="DELETE"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={isDeleting || deleteConfirmText !== 'DELETE'}
+                    className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Permanently Delete Account
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteConfirmText('');
+                    }}
+                    disabled={isDeleting}
+                    className="px-4 py-2 border rounded-md font-medium hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
