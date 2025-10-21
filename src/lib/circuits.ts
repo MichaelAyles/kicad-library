@@ -162,10 +162,13 @@ export async function incrementCopyCount(circuitId: string): Promise<void> {
       circuit_id: circuitId
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error incrementing copy count:', error);
+      throw error;
+    }
   } catch (error) {
     console.error('Error incrementing copy count:', error);
-    // Silently fail - don't block user experience for analytics
+    throw error;
   }
 }
 

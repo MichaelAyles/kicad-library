@@ -113,9 +113,12 @@ export default function CircuitDetailPage() {
       setCopied(true);
 
       // Increment copy count in database
-      incrementCopyCount(circuit.id).catch(err =>
-        console.error("Failed to increment copy count:", err)
-      );
+      try {
+        await incrementCopyCount(circuit.id);
+        console.log("Successfully incremented copy count");
+      } catch (err) {
+        console.error("Failed to increment copy count:", err);
+      }
 
       // Update local copy count optimistically
       setCopyCount(prev => prev + 1);
