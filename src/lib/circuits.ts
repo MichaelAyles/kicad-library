@@ -14,6 +14,7 @@ export interface Circuit {
   view_count: number;
   copy_count: number;
   favorite_count: number;
+  comment_count: number;
   is_public: boolean;
   is_featured: boolean;
   created_at: string;

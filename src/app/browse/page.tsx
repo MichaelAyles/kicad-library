@@ -159,6 +159,7 @@ export default function BrowsePage() {
                       <div className="flex items-center gap-3">
                         <span>📋 {circuit.copy_count}</span>
                         <span>⭐ {circuit.favorite_count}</span>
+                        <span>💬 {circuit.comment_count}</span>
                       </div>
                     </div>
 
