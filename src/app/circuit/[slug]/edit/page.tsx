@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Loader, X } from "lucide-react";
+import { ArrowLeft, Save, Loader, X, Trash2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
@@ -41,6 +41,8 @@ export default function EditCircuitPage() {
   const [circuit, setCircuit] = useState<Circuit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Form fields
@@ -179,6 +181,32 @@ export default function EditCircuitPage() {
       console.error("Failed to update circuit:", err);
       setError(err instanceof Error ? err.message : "Failed to update circuit");
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!circuit) return;
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/circuits/${circuit.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete circuit");
+      }
+
+      // Redirect to profile page
+      router.push("/profile");
+    } catch (err) {
+      console.error("Failed to delete circuit:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete circuit");
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -435,6 +463,62 @@ export default function EditCircuitPage() {
               </Link>
             </div>
           </form>
+
+          {/* Delete Circuit Section */}
+          <div className="mt-8 p-6 border border-destructive/30 bg-destructive/5 rounded-lg">
+            <h3 className="font-semibold text-destructive mb-2">Delete Circuit</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Permanently delete this circuit. This action cannot be undone.
+            </p>
+
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-4 py-2 border border-destructive text-destructive rounded-md font-medium hover:bg-destructive hover:text-destructive-foreground transition-colors inline-flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Circuit
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm font-medium">
+                  Are you sure you want to delete &quot;{circuit?.title}&quot;? This will permanently remove:
+                </p>
+                <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                  <li>The circuit and all its data</li>
+                  <li>All comments on this circuit</li>
+                  <li>All favorites and view statistics</li>
+                </ul>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Yes, Delete Permanently
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
+                    className="px-4 py-2 border rounded-md font-medium hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
