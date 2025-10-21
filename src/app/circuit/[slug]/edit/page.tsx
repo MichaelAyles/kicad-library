@@ -221,8 +221,8 @@ export default function EditCircuitPage() {
     }
   };
 
-  const handleRegenerateThumbnails = async () => {
-    if (!circuit || !user) return;
+  const handleLoadPreview = async () => {
+    if (!circuit) return;
 
     setIsRegeneratingThumbnails(true);
     setError(null);
@@ -255,9 +255,23 @@ export default function EditCircuitPage() {
       const newPreviewUrl = `/api/preview/preview.kicad_sch?id=${previewId}`;
       setPreviewUrl(newPreviewUrl);
       setShowThumbnailPreview(true);
+    } catch (err) {
+      console.error('Failed to load preview:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load preview');
+    } finally {
+      setIsRegeneratingThumbnails(false);
+    }
+  };
 
-      // Wait for viewer to load
-      await new Promise(resolve => setTimeout(resolve, 2000));
+  const handleCaptureThumbnails = async () => {
+    if (!circuit || !user || !previewUrl) return;
+
+    setIsRegeneratingThumbnails(true);
+    setError(null);
+
+    try {
+      // Wait for viewer to be ready
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Capture thumbnails
       const kicanvasElement = viewerRef.current;
@@ -271,6 +285,8 @@ export default function EditCircuitPage() {
         currentTheme,
         (newTheme) => setTheme(newTheme)
       );
+
+      const supabase = createClient();
 
       // Upload new thumbnails
       const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', thumbnails.light);
@@ -293,6 +309,7 @@ export default function EditCircuitPage() {
       }
 
       // Clean up preview
+      const previewId = previewUrl.split('id=')[1];
       await supabase.storage.from('previews').remove([`${previewId}.kicad_sch`]);
 
       // Reload circuit to show new thumbnails
@@ -305,8 +322,8 @@ export default function EditCircuitPage() {
       setPreviewUrl(null);
       alert('Thumbnails regenerated successfully!');
     } catch (err) {
-      console.error('Failed to regenerate thumbnails:', err);
-      setError(err instanceof Error ? err.message : 'Failed to regenerate thumbnails');
+      console.error('Failed to capture thumbnails:', err);
+      setError(err instanceof Error ? err.message : 'Failed to capture thumbnails');
     } finally {
       setIsRegeneratingThumbnails(false);
     }
@@ -570,12 +587,12 @@ export default function EditCircuitPage() {
           <div className="mt-8 p-6 border border-primary/30 bg-primary/5 rounded-lg">
             <h3 className="font-semibold text-primary mb-2">Regenerate Thumbnails</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Update the circuit thumbnails. This will capture new screenshots in both light and dark modes.
+              Update the circuit thumbnails. First load the preview to verify it looks correct, then capture new screenshots in both light and dark modes.
             </p>
 
             {showThumbnailPreview && previewUrl ? (
               <div className="mb-4">
-                <p className="text-sm font-medium mb-2">Capturing thumbnails from preview...</p>
+                <p className="text-sm font-medium mb-2">Preview (verify this looks correct before capturing):</p>
                 <div className="bg-background rounded-md overflow-hidden border" style={{ height: '400px' }} ref={viewerRef}>
                   <kicanvas-embed
                     src={previewUrl}
@@ -586,23 +603,57 @@ export default function EditCircuitPage() {
               </div>
             ) : null}
 
-            <button
-              onClick={handleRegenerateThumbnails}
-              disabled={isRegeneratingThumbnails}
-              className="px-4 py-2 border border-primary text-primary rounded-md font-medium hover:bg-primary/10 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isRegeneratingThumbnails ? (
-                <>
-                  <Loader className="w-4 h-4 animate-spin" />
-                  Regenerating...
-                </>
+            <div className="flex gap-3">
+              {!showThumbnailPreview ? (
+                <button
+                  onClick={handleLoadPreview}
+                  disabled={isRegeneratingThumbnails}
+                  className="px-4 py-2 border border-primary text-primary rounded-md font-medium hover:bg-primary/10 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRegeneratingThumbnails ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      Loading Preview...
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-4 h-4" />
+                      Load Preview
+                    </>
+                  )}
+                </button>
               ) : (
                 <>
-                  <Camera className="w-4 h-4" />
-                  Regenerate Thumbnails
+                  <button
+                    onClick={handleCaptureThumbnails}
+                    disabled={isRegeneratingThumbnails}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isRegeneratingThumbnails ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Capturing...
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="w-4 h-4" />
+                        Capture Thumbnails
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowThumbnailPreview(false);
+                      setPreviewUrl(null);
+                    }}
+                    disabled={isRegeneratingThumbnails}
+                    className="px-4 py-2 border rounded-md font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
                 </>
               )}
-            </button>
+            </div>
           </div>
 
           {/* Delete Circuit Section */}
