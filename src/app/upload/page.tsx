@@ -507,7 +507,6 @@ export default function UploadPage() {
                       key={`preview-viewer-${previewUrl}`}
                       src={previewUrl}
                       controls="basic"
-                      theme={theme === 'dark' ? 'kicad' : 'kicad'}
                       style={{ width: '100%', height: '100%' }}
                     />
                   ) : (
@@ -830,7 +829,6 @@ export default function UploadPage() {
                         key={`thumbnail-viewer-${previewUrl}`}
                         src={previewUrl}
                         controls="basic"
-                        theme={theme === 'dark' ? 'kicad' : 'kicad'}
                         style={{ width: '100%', height: '100%' }}
                       />
                     ) : (
