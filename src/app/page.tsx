@@ -8,9 +8,16 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getCircuits, type Circuit } from "@/lib/circuits";
 
+interface Stats {
+  circuits: number;
+  copies: number;
+  makers: number;
+}
+
 export default function HomePage() {
   const [topCircuits, setTopCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<Stats>({ circuits: 0, copies: 0, makers: 0 });
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -33,6 +40,23 @@ export default function HomePage() {
     };
 
     loadTopCircuits();
+  }, []);
+
+  // Load stats
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const response = await fetch('/api/stats');
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
+    };
+
+    loadStats();
   }, []);
   return (
     <div className="flex flex-col">
@@ -83,15 +107,21 @@ export default function HomePage() {
               {/* Stats */}
               <div className="flex gap-8 justify-center lg:justify-start">
                 <div className="flex flex-col">
-                  <span className="text-3xl font-bold green-gradient-text">500+</span>
+                  <span className="text-3xl font-bold green-gradient-text">
+                    {stats.circuits > 0 ? `${stats.circuits}` : '...'}
+                  </span>
                   <span className="text-sm text-muted-foreground">Circuits</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-3xl font-bold green-gradient-text">10K+</span>
+                  <span className="text-3xl font-bold green-gradient-text">
+                    {stats.copies > 0 ? `${stats.copies.toLocaleString()}` : '...'}
+                  </span>
                   <span className="text-sm text-muted-foreground">Downloads</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-3xl font-bold green-gradient-text">300+</span>
+                  <span className="text-3xl font-bold green-gradient-text">
+                    {stats.makers > 0 ? `${stats.makers}` : '...'}
+                  </span>
                   <span className="text-sm text-muted-foreground">Makers</span>
                 </div>
               </div>
@@ -99,11 +129,8 @@ export default function HomePage() {
 
             {/* Right Visual - PCB Preview */}
             <div className="flex justify-center lg:justify-end">
-              <div className="relative w-full max-w-md aspect-[4/3]">
-                <div className="pcb-green-bg rounded-xl p-8 shadow-2xl green-glow animate-float relative overflow-hidden"
-                  style={{
-                    transform: 'perspective(1000px) rotateY(-10deg) rotateX(5deg)'
-                  }}>
+              <div className="relative w-full max-w-md aspect-[4/3] perspective-1000">
+                <div className="pcb-green-bg rounded-xl p-8 shadow-2xl green-glow relative overflow-hidden h-full pcb-3d">
                   {/* PCB Layers */}
                   <div className="absolute top-8 left-8 w-32 h-24 rounded-lg bg-primary/20 animate-pulse-glow" />
                   <div className="absolute top-16 right-12 w-24 h-24 rounded-lg bg-cyan-400/20 animate-pulse-glow" style={{ animationDelay: '1s' }} />

@@ -112,9 +112,13 @@
   100% { transform: translate(40px, 40px); }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+@keyframes floatPCB {
+  0%, 100% {
+    transform: perspective(1000px) rotateY(-10deg) rotateX(5deg) translateY(0);
+  }
+  50% {
+    transform: perspective(1000px) rotateY(-10deg) rotateX(5deg) translateY(-10px);
+  }
 }
 
 @keyframes pulse-glow {
@@ -126,8 +130,13 @@
   animation: circuitMove 20s linear infinite;
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.pcb-3d {
+  animation: floatPCB 6s ease-in-out infinite;
+  transform-style: preserve-3d;
 }
 
 .animate-pulse-glow {
