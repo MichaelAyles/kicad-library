@@ -82,6 +82,7 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
         <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
           {mounted ? (
             <kicanvas-embed
+              key={kicanvasTheme}
               src={schematicUrl}
               controls="full"
               theme={kicanvasTheme}
@@ -116,7 +117,7 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
       )}
 
       {/* Info Footer */}
-      <div className="bg-blue-50 px-4 py-3 border-t text-sm text-blue-900">
+      <div className="bg-blue-50 dark:bg-blue-950/30 px-4 py-3 border-t text-sm text-blue-900 dark:text-blue-100">
         <p>
           💡 <strong>Tip:</strong> Use the interactive viewer above to explore the circuit. Click &quot;Copy to Clipboard&quot; button
           on the main page to get this circuit with attribution, then paste directly into your KiCad project (Ctrl+V).
