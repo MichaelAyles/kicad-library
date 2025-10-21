@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Copy, Heart, Download, ArrowLeft, Check, FileDown, Loader, Edit } from "lucide-react";
+import { Copy, Heart, Download, ArrowLeft, Check, FileDown, Loader, Edit, Lock } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnippetFromFullFile, validateSExpression } from "@/lib/kicad-parser";
@@ -250,7 +250,15 @@ export default function CircuitDetailPage() {
 
           {/* Title and Metadata */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4">{circuit.title}</h1>
+            <div className="flex items-center gap-3 mb-4">
+              <h1 className="text-4xl font-bold">{circuit.title}</h1>
+              {!circuit.is_public && (
+                <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border border-yellow-300 dark:border-yellow-700 rounded-md text-sm font-medium inline-flex items-center gap-1">
+                  <Lock className="w-4 h-4" />
+                  Private
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
               {circuit.user && (

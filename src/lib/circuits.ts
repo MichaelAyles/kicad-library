@@ -77,6 +77,8 @@ export async function getCircuits(
 
 export async function getCircuitBySlug(slug: string): Promise<Circuit | null> {
   try {
+    // Don't filter by is_public - let RLS policy handle access control
+    // RLS allows: public circuits for everyone, private circuits for owner
     const { data, error } = await supabase
       .from('circuits')
       .select(
@@ -84,7 +86,6 @@ export async function getCircuitBySlug(slug: string): Promise<Circuit | null> {
         user:profiles(id, username, avatar_url)`
       )
       .eq('slug', slug)
-      .eq('is_public', true)
       .single();
 
     if (error) {
