@@ -47,69 +47,87 @@ export async function PUT(
 
     // Parse request body
     const body = await request.json();
-    const { title, description, tags, category, license, is_public } = body;
+    const { title, description, tags, category, license, is_public, thumbnail_light_url, thumbnail_dark_url } = body;
 
-    // Validate required fields
-    if (!title || !description || !tags || !license) {
-      return NextResponse.json(
-        { error: 'Missing required fields: title, description, tags, license' },
-        { status: 400 }
-      );
-    }
+    // Build update object - only include fields that are provided
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    };
 
-    // Validate title length
-    if (title.length > 100) {
-      return NextResponse.json(
-        { error: 'Title must be 100 characters or less' },
-        { status: 400 }
-      );
-    }
+    // If this is a thumbnail-only update (both thumbnail URLs provided)
+    const isThumbnailOnlyUpdate = thumbnail_light_url && thumbnail_dark_url && !title && !description && !tags && !license;
 
-    // Validate description length
-    if (description.length > 1000) {
-      return NextResponse.json(
-        { error: 'Description must be 1000 characters or less' },
-        { status: 400 }
-      );
-    }
-
-    // Validate tags
-    if (!Array.isArray(tags) || tags.length === 0) {
-      return NextResponse.json(
-        { error: 'At least one tag is required' },
-        { status: 400 }
-      );
-    }
-
-    if (tags.length > 10) {
-      return NextResponse.json(
-        { error: 'Maximum 10 tags allowed' },
-        { status: 400 }
-      );
-    }
-
-    // Validate each tag
-    for (const tag of tags) {
-      if (typeof tag !== 'string' || tag.length > 30) {
+    if (isThumbnailOnlyUpdate) {
+      // Only update thumbnails
+      updateData.thumbnail_light_url = thumbnail_light_url;
+      updateData.thumbnail_dark_url = thumbnail_dark_url;
+    } else {
+      // Validate required fields for metadata update
+      if (!title || !description || !tags || !license) {
         return NextResponse.json(
-          { error: 'Each tag must be a string with maximum 30 characters' },
+          { error: 'Missing required fields: title, description, tags, license' },
           { status: 400 }
         );
       }
+
+      // Validate title length
+      if (title.length > 100) {
+        return NextResponse.json(
+          { error: 'Title must be 100 characters or less' },
+          { status: 400 }
+        );
+      }
+
+      // Validate description length
+      if (description.length > 1000) {
+        return NextResponse.json(
+          { error: 'Description must be 1000 characters or less' },
+          { status: 400 }
+        );
+      }
+
+      // Validate tags
+      if (!Array.isArray(tags) || tags.length === 0) {
+        return NextResponse.json(
+          { error: 'At least one tag is required' },
+          { status: 400 }
+        );
+      }
+
+      if (tags.length > 10) {
+        return NextResponse.json(
+          { error: 'Maximum 10 tags allowed' },
+          { status: 400 }
+        );
+      }
+
+      // Validate each tag
+      for (const tag of tags) {
+        if (typeof tag !== 'string' || tag.length > 30) {
+          return NextResponse.json(
+            { error: 'Each tag must be a string with maximum 30 characters' },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Update metadata fields
+      updateData.title = title.trim();
+      updateData.description = description.trim();
+      updateData.tags = tags;
+      updateData.category = category || null;
+      updateData.license = license;
+      updateData.is_public = is_public !== undefined ? is_public : true;
+
+      // Also update thumbnails if provided
+      if (thumbnail_light_url) updateData.thumbnail_light_url = thumbnail_light_url;
+      if (thumbnail_dark_url) updateData.thumbnail_dark_url = thumbnail_dark_url;
     }
 
     // Update the circuit
     const { data: updatedCircuit, error: updateError } = await supabase
       .from('circuits')
-      .update({
-        title: title.trim(),
-        description: description.trim(),
-        tags,
-        category: category || null,
-        license,
-        is_public: is_public !== undefined ? is_public : true,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', params.id)
       .select()
       .single();
