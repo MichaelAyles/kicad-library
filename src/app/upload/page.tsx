@@ -304,10 +304,10 @@ export default function UploadPage() {
 
       // 2. Upload thumbnails to storage
       setUploadProgress("Uploading light theme thumbnail...");
-      const lightUrl = await uploadThumbnail(supabase, circuit.id, 'light', lightThumb);
+      const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', lightThumb);
 
       setUploadProgress("Uploading dark theme thumbnail...");
-      const darkUrl = await uploadThumbnail(supabase, circuit.id, 'dark', darkThumb);
+      const darkUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'dark', darkThumb);
 
       // 3. Update circuit with thumbnail URLs
       setUploadProgress("Finalizing...");

@@ -164,12 +164,14 @@ export function dataURLtoBlob(dataURL: string): Blob {
  */
 export async function uploadThumbnail(
   supabase: any,
+  userId: string,
   circuitId: string,
   theme: 'light' | 'dark',
   dataURL: string
 ): Promise<string> {
   const blob = dataURLtoBlob(dataURL);
-  const fileName = `${circuitId}/${theme}.png`;
+  // Store in user's folder: {userId}/{circuitId}-{theme}.png
+  const fileName = `${userId}/${circuitId}-${theme}.png`;
 
   const { data, error } = await supabase.storage
     .from('thumbnails')
