@@ -134,15 +134,15 @@ export default function HomePage() {
                   {/* Main IC Chip */}
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-zinc-800 rounded border-2 border-zinc-600 shadow-lg">
                     <div className="grid grid-cols-3 gap-1 p-2 h-full">
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
-                      <div className="w-full h-full bg-primary/30 rounded-sm animate-pulse-glow" />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0s' }} />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0.2s' }} />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0.4s' }} />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0.6s' }} />
+                      <div className="w-full h-full bg-primary/30 rounded-sm chip-process" style={{ animationDelay: '0.8s' }} />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1s' }} />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1.2s' }} />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1.4s' }} />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1.6s' }} />
                     </div>
                   </div>
 
@@ -168,22 +168,45 @@ export default function HomePage() {
                     <div className="w-2 h-6 bg-blue-700 rounded-sm" />
                   </div>
 
-                  {/* LEDs */}
-                  <div className="absolute bottom-12 right-16 w-3 h-3 rounded-full bg-red-500 animate-pulse-glow" style={{ animationDelay: '0.5s' }} />
-                  <div className="absolute top-12 left-1/3 w-3 h-3 rounded-full bg-green-400 animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
+                  {/* LEDs with dynamic blinking */}
+                  <div className="absolute bottom-12 right-16 w-3 h-3 rounded-full bg-red-500 led-blink" style={{ animationDelay: '0s' }} />
+                  <div className="absolute top-12 left-1/3 w-3 h-3 rounded-full bg-green-400 led-blink" style={{ animationDelay: '0.75s' }} />
+                  <div className="absolute top-1/3 right-12 w-3 h-3 rounded-full bg-yellow-400 led-blink" style={{ animationDelay: '1.5s' }} />
 
-                  {/* Animated Circuit Traces */}
-                  {/* Horizontal traces */}
-                  <div className="absolute top-1/2 left-8 w-16 h-0.5 bg-primary/60 trace-glow" />
-                  <div className="absolute top-1/2 right-8 w-20 h-0.5 bg-primary/60 trace-glow" style={{ animationDelay: '0.3s' }} />
-                  <div className="absolute bottom-20 left-12 w-24 h-0.5 bg-primary/60 trace-glow" style={{ animationDelay: '0.6s' }} />
-                  <div className="absolute top-16 right-16 w-16 h-0.5 bg-primary/60 trace-glow" style={{ animationDelay: '0.9s' }} />
+                  {/* Animated Circuit Traces with Data Pulses */}
+                  {/* Horizontal traces with flowing data */}
+                  <div className="absolute top-1/2 left-8 w-16 h-0.5 bg-primary/60 trace-glow overflow-hidden">
+                    <div className="data-pulse-h" style={{ animationDelay: '0s' }} />
+                  </div>
+                  <div className="absolute top-1/2 right-8 w-20 h-0.5 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.3s' }}>
+                    <div className="data-pulse-h" style={{ animationDelay: '0.7s' }} />
+                  </div>
+                  <div className="absolute bottom-20 left-12 w-24 h-0.5 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.6s' }}>
+                    <div className="data-pulse-h" style={{ animationDelay: '1.4s' }} />
+                  </div>
+                  <div className="absolute top-16 right-16 w-16 h-0.5 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.9s' }}>
+                    <div className="data-pulse-h" style={{ animationDelay: '0.3s' }} />
+                  </div>
+                  <div className="absolute bottom-1/3 left-1/4 w-20 h-0.5 bg-primary/60 trace-glow overflow-hidden">
+                    <div className="data-pulse-h" style={{ animationDelay: '1s' }} />
+                  </div>
 
-                  {/* Vertical traces */}
-                  <div className="absolute top-16 left-16 w-0.5 h-20 bg-primary/60 trace-glow" style={{ animationDelay: '0.2s' }} />
-                  <div className="absolute top-20 right-20 w-0.5 h-16 bg-primary/60 trace-glow" style={{ animationDelay: '0.5s' }} />
-                  <div className="absolute bottom-12 left-24 w-0.5 h-12 bg-primary/60 trace-glow" style={{ animationDelay: '0.8s' }} />
-                  <div className="absolute top-24 left-1/2 w-0.5 h-16 bg-primary/60 trace-glow" style={{ animationDelay: '1.1s' }} />
+                  {/* Vertical traces with flowing data */}
+                  <div className="absolute top-16 left-16 w-0.5 h-20 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.2s' }}>
+                    <div className="data-pulse-v" style={{ animationDelay: '0.5s' }} />
+                  </div>
+                  <div className="absolute top-20 right-20 w-0.5 h-16 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.5s' }}>
+                    <div className="data-pulse-v" style={{ animationDelay: '1.2s' }} />
+                  </div>
+                  <div className="absolute bottom-12 left-24 w-0.5 h-12 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.8s' }}>
+                    <div className="data-pulse-v" style={{ animationDelay: '0.9s' }} />
+                  </div>
+                  <div className="absolute top-24 left-1/2 w-0.5 h-16 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '1.1s' }}>
+                    <div className="data-pulse-v" style={{ animationDelay: '0.2s' }} />
+                  </div>
+                  <div className="absolute top-1/3 right-1/3 w-0.5 h-14 bg-primary/60 trace-glow overflow-hidden">
+                    <div className="data-pulse-v" style={{ animationDelay: '1.6s' }} />
+                  </div>
 
                   {/* Connection Nodes */}
                   <div className="absolute top-1/2 left-24 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" />
