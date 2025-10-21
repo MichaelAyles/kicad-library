@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTheme } from "next-themes";
 
 interface SchematicViewerProps {
   sexpr: string;
@@ -31,21 +30,11 @@ declare global {
 export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [componentCount, setComponentCount] = useState(0);
-  const { theme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [viewerTheme, setViewerTheme] = useState<'kicad' | 'witchhazel'>('kicad');
 
   // Generate API URL from slug - dynamically serves wrapped schematic
   const schematicUrl = `/api/schematic/${slug}.kicad_sch`;
   const viewerRef = useRef<HTMLDivElement>(null);
-
-  // Initialize viewer theme based on page theme
-  const currentTheme = resolvedTheme || theme;
-
-  useEffect(() => {
-    // Set initial viewer theme to match page theme
-    setViewerTheme(currentTheme === 'dark' ? 'witchhazel' : 'kicad');
-  }, [currentTheme]);
 
   useEffect(() => {
     setMounted(true);
@@ -57,13 +46,8 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
     setComponentCount(symbolMatches ? symbolMatches.length : 0);
 
     console.log('Loading KiCanvas with file:', schematicUrl);
-    console.log('KiCanvas theme:', viewerTheme);
     console.log('S-expression preview:', sexpr.substring(0, 100));
-  }, [sexpr, schematicUrl, viewerTheme]);
-
-  const toggleViewerTheme = () => {
-    setViewerTheme(prev => prev === 'kicad' ? 'witchhazel' : 'kicad');
-  };
+  }, [sexpr, schematicUrl]);
 
   return (
     <div className="bg-card border rounded-lg overflow-hidden">
@@ -76,13 +60,6 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={toggleViewerTheme}
-            className="px-3 py-1 text-sm border rounded-md hover:bg-background transition-colors"
-            title="Toggle viewer theme"
-          >
-            {viewerTheme === 'kicad' ? '🌙' : '☀️'} Theme
-          </button>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="px-3 py-1 text-sm border rounded-md hover:bg-background transition-colors"
@@ -97,10 +74,8 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
         <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
           {mounted ? (
             <kicanvas-embed
-              key={viewerTheme}
               src={schematicUrl}
               controls="full"
-              theme={viewerTheme}
               style={{ width: '100%', height: '500px', display: 'block' }}
             />
           ) : (
