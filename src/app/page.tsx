@@ -1,10 +1,39 @@
+'use client';
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Upload, Copy, Zap } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { knockSensorCircuit } from "@/lib/knock-sensor-data";
+import { getCircuits, type Circuit } from "@/lib/circuits";
 
 export default function HomePage() {
+  const [topCircuits, setTopCircuits] = useState<Circuit[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { theme, systemTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Load top circuits
+  useEffect(() => {
+    const loadTopCircuits = async () => {
+      try {
+        const { circuits } = await getCircuits(6, 0, 'copies'); // Get top 6 most copied
+        setTopCircuits(circuits);
+      } catch (error) {
+        console.error('Error loading top circuits:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTopCircuits();
+  }, []);
   return (
     <div className="flex flex-col">
       <Header />
@@ -73,7 +102,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Top Circuits - Placeholder */}
+      {/* Top Circuits */}
       <section className="py-16 px-4 bg-muted/30">
         <div className="container mx-auto max-w-6xl">
           <div className="flex items-center justify-between mb-8">
@@ -82,45 +111,96 @@ export default function HomePage() {
               View all →
             </Link>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Featured Circuit */}
-            <Link
-              href={`/circuit/${knockSensorCircuit.slug}`}
-              className="bg-card border rounded-lg p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="aspect-video bg-gradient-to-br from-blue-50 to-purple-50 rounded-md mb-4 flex items-center justify-center text-primary border-2 border-dashed border-muted">
-                <div className="text-center">
-                  <p className="text-sm font-medium">{knockSensorCircuit.metadata.stats.componentCount} Components</p>
-                  <p className="text-xs text-muted-foreground">Click to view</p>
-                </div>
-              </div>
-              <h3 className="font-semibold mb-2 line-clamp-1">{knockSensorCircuit.title}</h3>
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                {knockSensorCircuit.description}
-              </p>
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>by @{knockSensorCircuit.user.username}</span>
-                <span>{knockSensorCircuit.copyCount} copies</span>
-              </div>
-            </Link>
 
-            {/* Placeholder cards for future circuits */}
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-card border rounded-lg p-6 opacity-50">
-                <div className="aspect-video bg-muted rounded-md mb-4 flex items-center justify-center text-muted-foreground text-xs">
-                  More circuits coming soon
-                </div>
-                <h3 className="font-semibold mb-2">Circuit #{i + 1}</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Help us grow the library by uploading your circuits!
-                </p>
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>by community</span>
-                  <span>-</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* Loading State */}
+          {isLoading && (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading top circuits...
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && topCircuits.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">No circuits uploaded yet.</p>
+              <Link href="/upload" className="text-primary hover:underline font-medium">
+                Be the first to share a circuit!
+              </Link>
+            </div>
+          )}
+
+          {/* Circuit Grid */}
+          {!isLoading && topCircuits.length > 0 && (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {topCircuits.map((circuit) => {
+                // Determine which thumbnail to show based on theme
+                const currentTheme = theme === 'system' ? systemTheme : theme;
+                const isDark = currentTheme === 'dark';
+                const thumbnailUrl = mounted
+                  ? (isDark ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || circuit.thumbnail_light_url
+                  : circuit.thumbnail_light_url;
+
+                return (
+                  <Link
+                    key={circuit.id}
+                    href={`/circuit/${circuit.slug}`}
+                    className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
+                  >
+                    {/* Circuit Thumbnail */}
+                    <div className="aspect-video bg-muted relative overflow-hidden group-hover:bg-muted/80 transition-colors">
+                      {thumbnailUrl ? (
+                        <img
+                          src={thumbnailUrl}
+                          alt={circuit.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                          <span className="text-sm">No preview</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4">
+                      <h3 className="font-semibold mb-2 group-hover:text-primary transition-colors line-clamp-1">
+                        {circuit.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                        {circuit.description}
+                      </p>
+
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {circuit.tags.slice(0, 2).map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-2 py-1 text-xs bg-primary/10 text-primary rounded"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                        {circuit.tags.length > 2 && (
+                          <span className="px-2 py-1 text-xs text-muted-foreground">
+                            +{circuit.tags.length - 2}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>by @{circuit.user?.username || 'unknown'}</span>
+                        <div className="flex items-center gap-3">
+                          <span>📋 {circuit.copy_count}</span>
+                          <span>⭐ {circuit.favorite_count}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
