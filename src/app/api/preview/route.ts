@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isClipboardSnippet, wrapSnippetToFullFile } from '@/lib/kicad-parser';
-import { previewCache, cleanupOldPreviews } from '@/lib/preview-cache';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * POST: Store a preview schematic and return its ID
+ * Uses Supabase storage for serverless compatibility
  */
 export async function POST(request: NextRequest) {
   try {
@@ -32,14 +33,19 @@ export async function POST(request: NextRequest) {
     // Generate unique preview ID
     const previewId = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // Store in cache (store the full file format)
-    previewCache.set(previewId, {
-      sexpr: fullFile,
-      timestamp: Date.now(),
-    });
+    // Store in Supabase storage (temporary bucket)
+    const supabase = await createClient();
+    const { error: uploadError } = await supabase.storage
+      .from('previews')
+      .upload(`${previewId}.kicad_sch`, fullFile, {
+        contentType: 'text/plain',
+        upsert: true,
+      });
 
-    // Cleanup old previews
-    cleanupOldPreviews();
+    if (uploadError) {
+      console.error('Failed to upload preview:', uploadError);
+      throw new Error('Failed to store preview');
+    }
 
     return NextResponse.json({ previewId });
   } catch (error) {
@@ -66,18 +72,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const cached = previewCache.get(previewId);
+    // Retrieve from Supabase storage
+    const supabase = await createClient();
+    const { data, error } = await supabase.storage
+      .from('previews')
+      .download(`${previewId}.kicad_sch`);
 
-    if (!cached) {
+    if (error || !data) {
+      console.error('Failed to retrieve preview:', error);
       return NextResponse.json(
         { error: 'Preview not found or expired' },
         { status: 404 }
       );
     }
 
+    // Convert Blob to text
+    const text = await data.text();
+
     // Return the schematic as a .kicad_sch file
     // IMPORTANT: Use text/plain (not application/x-kicad-schematic) - this is what KiCanvas expects
-    return new NextResponse(cached.sexpr, {
+    return new NextResponse(text, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Content-Disposition': 'inline; filename="preview.kicad_sch"',
