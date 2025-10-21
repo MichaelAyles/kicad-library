@@ -131,20 +131,70 @@ export default function HomePage() {
             <div className="flex justify-center lg:justify-end">
               <div className="relative w-full max-w-md aspect-[4/3] perspective-1000">
                 <div className="pcb-green-bg rounded-xl p-8 shadow-2xl green-glow relative overflow-hidden h-full pcb-3d">
-                  {/* PCB Layers */}
-                  <div className="absolute top-8 left-8 w-32 h-24 rounded-lg bg-primary/20 animate-pulse-glow" />
-                  <div className="absolute top-16 right-12 w-24 h-24 rounded-lg bg-cyan-400/20 animate-pulse-glow" style={{ animationDelay: '1s' }} />
-                  <div className="absolute bottom-12 left-16 w-20 h-16 rounded-lg bg-red-400/20 animate-pulse-glow" style={{ animationDelay: '2s' }} />
+                  {/* Main IC Chip */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-zinc-800 rounded border-2 border-zinc-600 shadow-lg">
+                    <div className="grid grid-cols-3 gap-1 p-2 h-full">
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-primary/30 rounded-sm animate-pulse-glow" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                      <div className="w-full h-full bg-zinc-700 rounded-sm" />
+                    </div>
+                  </div>
 
-                  {/* Components */}
-                  <div className="absolute top-12 left-20 w-10 h-5 rounded bg-zinc-600" />
-                  <div className="absolute top-32 right-20 w-5 h-10 rounded bg-zinc-500" />
-                  <div className="absolute bottom-20 left-24 w-8 h-8 rounded-full bg-zinc-700" />
+                  {/* Resistors */}
+                  <div className="absolute top-16 left-12 w-12 h-3 bg-amber-900 rounded-full border border-amber-700 flex items-center justify-center">
+                    <div className="w-1 h-full bg-amber-700" />
+                    <div className="w-1 h-full bg-zinc-300 mx-0.5" />
+                    <div className="w-1 h-full bg-amber-700" />
+                  </div>
+                  <div className="absolute top-28 right-16 w-12 h-3 bg-amber-900 rounded-full border border-amber-700 flex items-center justify-center">
+                    <div className="w-1 h-full bg-red-600" />
+                    <div className="w-1 h-full bg-amber-700 mx-0.5" />
+                    <div className="w-1 h-full bg-zinc-300" />
+                  </div>
 
-                  {/* Traces */}
-                  <div className="absolute top-14 left-28 w-0.5 h-16 bg-primary/60" />
-                  <div className="absolute top-24 left-24 w-20 h-0.5 bg-primary/60" />
-                  <div className="absolute bottom-24 right-24 w-0.5 h-10 bg-primary/60" />
+                  {/* Capacitors */}
+                  <div className="absolute bottom-16 left-16 flex gap-0.5">
+                    <div className="w-2 h-6 bg-yellow-600 rounded-sm" />
+                    <div className="w-2 h-6 bg-yellow-700 rounded-sm" />
+                  </div>
+                  <div className="absolute top-20 right-12 flex gap-0.5">
+                    <div className="w-2 h-6 bg-blue-600 rounded-sm" />
+                    <div className="w-2 h-6 bg-blue-700 rounded-sm" />
+                  </div>
+
+                  {/* LEDs */}
+                  <div className="absolute bottom-12 right-16 w-3 h-3 rounded-full bg-red-500 animate-pulse-glow" style={{ animationDelay: '0.5s' }} />
+                  <div className="absolute top-12 left-1/3 w-3 h-3 rounded-full bg-green-400 animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
+
+                  {/* Animated Circuit Traces */}
+                  {/* Horizontal traces */}
+                  <div className="absolute top-1/2 left-8 w-16 h-0.5 bg-primary/60 trace-glow" />
+                  <div className="absolute top-1/2 right-8 w-20 h-0.5 bg-primary/60 trace-glow" style={{ animationDelay: '0.3s' }} />
+                  <div className="absolute bottom-20 left-12 w-24 h-0.5 bg-primary/60 trace-glow" style={{ animationDelay: '0.6s' }} />
+                  <div className="absolute top-16 right-16 w-16 h-0.5 bg-primary/60 trace-glow" style={{ animationDelay: '0.9s' }} />
+
+                  {/* Vertical traces */}
+                  <div className="absolute top-16 left-16 w-0.5 h-20 bg-primary/60 trace-glow" style={{ animationDelay: '0.2s' }} />
+                  <div className="absolute top-20 right-20 w-0.5 h-16 bg-primary/60 trace-glow" style={{ animationDelay: '0.5s' }} />
+                  <div className="absolute bottom-12 left-24 w-0.5 h-12 bg-primary/60 trace-glow" style={{ animationDelay: '0.8s' }} />
+                  <div className="absolute top-24 left-1/2 w-0.5 h-16 bg-primary/60 trace-glow" style={{ animationDelay: '1.1s' }} />
+
+                  {/* Connection Nodes */}
+                  <div className="absolute top-1/2 left-24 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" />
+                  <div className="absolute top-1/2 right-28 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" style={{ animationDelay: '0.5s' }} />
+                  <div className="absolute top-20 left-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" style={{ animationDelay: '1s' }} />
+                  <div className="absolute bottom-20 left-1/3 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" style={{ animationDelay: '1.5s' }} />
+
+                  {/* Via holes */}
+                  <div className="absolute top-12 left-20 w-2 h-2 rounded-full border-2 border-primary/40 bg-zinc-900" />
+                  <div className="absolute bottom-16 right-20 w-2 h-2 rounded-full border-2 border-primary/40 bg-zinc-900" />
+                  <div className="absolute top-32 right-1/3 w-2 h-2 rounded-full border-2 border-primary/40 bg-zinc-900" />
                 </div>
               </div>
             </div>
