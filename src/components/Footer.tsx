@@ -30,7 +30,7 @@ export function Footer() {
             </a>
           </div>
           <div className="text-center md:text-right">
-            © 2025 CircuitSnips. MIT License.
+            © 2025 CircuitSnips
           </div>
         </div>
       </div>

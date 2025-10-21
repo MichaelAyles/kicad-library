@@ -31,7 +31,7 @@ export function CookieNotice() {
               <strong>Cookie Notice:</strong> We use only essential cookies for authentication and platform functionality.
               We do not use tracking or advertising cookies.
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mb-3">
               By using CircuitSnips, you agree to our{' '}
               <Link href="/privacy" className="text-primary hover:underline">
                 Privacy Policy
@@ -41,6 +41,12 @@ export function CookieNotice() {
                 Terms of Service
               </Link>.
             </p>
+            <button
+              onClick={handleDismiss}
+              className="px-6 py-2 green-gradient text-black rounded-md font-semibold hover:shadow-lg green-glow-hover transition-all"
+            >
+              Got it
+            </button>
           </div>
           <button
             onClick={handleDismiss}
