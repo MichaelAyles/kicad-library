@@ -448,11 +448,18 @@ CREATE POLICY "Users can view own copies"
   ON public.circuit_copies FOR SELECT
   USING (auth.uid() = user_id OR user_id IS NULL);
 
--- Comments: Everyone can read, authenticated users can create, owners can update/delete
+-- Comments: Viewable if circuit is public or user owns circuit, authenticated users can create, owners can update/delete
 DROP POLICY IF EXISTS "Comments are viewable by everyone" ON public.circuit_comments;
-CREATE POLICY "Comments are viewable by everyone"
+DROP POLICY IF EXISTS "Comments viewable if circuit is accessible" ON public.circuit_comments;
+CREATE POLICY "Comments viewable if circuit is accessible"
   ON public.circuit_comments FOR SELECT
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.circuits
+      WHERE circuits.id = circuit_comments.circuit_id
+      AND (circuits.is_public = true OR circuits.user_id = auth.uid())
+    )
+  );
 
 DROP POLICY IF EXISTS "Authenticated users can create comments" ON public.circuit_comments;
 CREATE POLICY "Authenticated users can create comments"
@@ -543,7 +550,7 @@ CREATE POLICY "Users can update own thumbnails"
   ON storage.objects FOR UPDATE
   USING (
     bucket_id = 'thumbnails' AND
-    auth.role() = 'authenticated'
+    auth.uid()::text = (storage.foldername(name))[1]
   );
 
 DROP POLICY IF EXISTS "Users can delete own thumbnails" ON storage.objects;
@@ -564,6 +571,16 @@ RETURNS VOID AS $$
 BEGIN
   UPDATE public.circuits
   SET view_count = view_count + 1
+  WHERE id = circuit_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to increment copy count (call this when copying a circuit)
+CREATE OR REPLACE FUNCTION increment_circuit_copies(circuit_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.circuits
+  SET copy_count = copy_count + 1
   WHERE id = circuit_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -10,15 +10,18 @@ import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnipp
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { CommentList } from "@/components/CommentList";
 import { formatDate } from "@/lib/utils";
-import { getCircuitBySlug, incrementViewCount, type Circuit } from "@/lib/circuits";
+import { getCircuitBySlug, incrementViewCount, trackCopyEvent, toggleFavorite, isFavorited as checkIsFavorited, type Circuit } from "@/lib/circuits";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function CircuitDetailPage() {
   const params = useParams();
   const slug = params?.slug as string;
+  const { user } = useAuth();
 
   const [circuit, setCircuit] = useState<Circuit | null>(null);
   const [copied, setCopied] = useState(false);
-  const [isFavorited, setIsFavorited] = useState(false);
+  const [favorited, setFavorited] = useState(false);
+  const [favoriteCount, setFavoriteCount] = useState(0);
   const [snippetData, setSnippetData] = useState<string>(""); // For copy button - always snippet
   const [fullFileData, setFullFileData] = useState<string>(""); // For preview/download - always full file
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +47,12 @@ export default function CircuitDetailPage() {
         }
 
         setCircuit(circuitData);
+        setFavoriteCount(circuitData.favorite_count);
+
+        // Check if user has favorited this circuit
+        if (user) {
+          checkIsFavorited(circuitData.id, user.id).then(setFavorited).catch(() => setFavorited(false));
+        }
 
         // Increment view count (fire and forget)
         incrementViewCount(circuitData.id).catch(err =>
@@ -62,7 +71,7 @@ export default function CircuitDetailPage() {
     };
 
     loadCircuit();
-  }, [slug]);
+  }, [slug, user]);
 
   // Helper function to prepare data from database
   const prepareCircuitData = (rawSexpr: string, title: string) => {
@@ -85,7 +94,7 @@ export default function CircuitDetailPage() {
   };
 
   const handleCopy = async () => {
-    if (!snippetData) {
+    if (!snippetData || !circuit) {
       alert("Circuit data is still loading");
       return;
     }
@@ -96,8 +105,10 @@ export default function CircuitDetailPage() {
       await navigator.clipboard.writeText(snippetData);
       setCopied(true);
 
-      // TODO: Track copy event in database
-      console.log("Copy event tracked");
+      // Track copy event in database
+      trackCopyEvent(circuit.id, user?.id).catch(err =>
+        console.error("Failed to track copy:", err)
+      );
 
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -134,9 +145,22 @@ export default function CircuitDetailPage() {
     console.log("Download event tracked");
   };
 
-  const handleFavorite = () => {
-    // TODO: Implement favorite functionality
-    setIsFavorited(!isFavorited);
+  const handleFavorite = async () => {
+    if (!circuit) return;
+
+    if (!user) {
+      alert("Please log in to favorite circuits");
+      return;
+    }
+
+    try {
+      const nowFavorited = await toggleFavorite(circuit.id, user.id);
+      setFavorited(nowFavorited);
+      setFavoriteCount(prev => nowFavorited ? prev + 1 : prev - 1);
+    } catch (err) {
+      console.error("Failed to toggle favorite:", err);
+      alert("Failed to favorite circuit");
+    }
   };
 
   // Show loading state
@@ -250,11 +274,11 @@ export default function CircuitDetailPage() {
             <button
               onClick={handleFavorite}
               className={`px-6 py-3 border rounded-md font-medium transition-colors flex items-center gap-2 ${
-                isFavorited ? "bg-red-50 border-red-200 text-red-600" : "hover:bg-muted/50"
+                favorited ? "bg-red-50 border-red-200 text-red-600" : "hover:bg-muted/50"
               }`}
             >
-              <Heart className={`w-5 h-5 ${isFavorited ? "fill-current" : ""}`} />
-              {isFavorited ? "Favorited" : "Favorite"} ({circuit.favorite_count})
+              <Heart className={`w-5 h-5 ${favorited ? "fill-current" : ""}`} />
+              {favorited ? "Favorited" : "Favorite"} ({favoriteCount})
             </button>
 
             <button
@@ -334,7 +358,7 @@ export default function CircuitDetailPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Favorites:</span>
-                    <span className="font-medium">{circuit.favorite_count}</span>
+                    <span className="font-medium">{favoriteCount}</span>
                   </div>
                 </div>
               </div>
