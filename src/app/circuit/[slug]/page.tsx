@@ -10,7 +10,7 @@ import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnipp
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { CommentList } from "@/components/CommentList";
 import { formatDate } from "@/lib/utils";
-import { getCircuitBySlug, incrementViewCount, checkIfFavorited, toggleFavorite, type Circuit } from "@/lib/circuits";
+import { getCircuitBySlug, incrementViewCount, incrementCopyCount, checkIfFavorited, toggleFavorite, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function CircuitDetailPage() {
@@ -22,6 +22,7 @@ export default function CircuitDetailPage() {
   const [copied, setCopied] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteCount, setFavoriteCount] = useState(0);
+  const [copyCount, setCopyCount] = useState(0);
   const [snippetData, setSnippetData] = useState<string>(""); // For copy button - always snippet
   const [fullFileData, setFullFileData] = useState<string>(""); // For preview/download - always full file
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +49,7 @@ export default function CircuitDetailPage() {
 
         setCircuit(circuitData);
         setFavoriteCount(circuitData.favorite_count);
+        setCopyCount(circuitData.copy_count);
 
         // Increment view count (fire and forget)
         incrementViewCount(circuitData.id).catch(err =>
@@ -100,14 +102,23 @@ export default function CircuitDetailPage() {
       return;
     }
 
+    if (!circuit) {
+      return;
+    }
+
     // Copy snippet data only (no kicad_sch wrapper)
     // Users can paste this directly into KiCad
     try {
       await navigator.clipboard.writeText(snippetData);
       setCopied(true);
 
-      // TODO: Track copy event in database
-      console.log("Copy event tracked");
+      // Increment copy count in database
+      incrementCopyCount(circuit.id).catch(err =>
+        console.error("Failed to increment copy count:", err)
+      );
+
+      // Update local copy count optimistically
+      setCopyCount(prev => prev + 1);
 
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -360,7 +371,7 @@ export default function CircuitDetailPage() {
                   </div>
                   <div className="flex justify-between pt-3 border-t">
                     <span className="text-muted-foreground">Copies:</span>
-                    <span className="font-medium">{circuit.copy_count}</span>
+                    <span className="font-medium">{copyCount}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Favorites:</span>
