@@ -28,11 +28,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
-  extracted_username TEXT;
+  base_username TEXT;
+  final_username TEXT;
+  counter INTEGER := 0;
 BEGIN
   -- Try to extract username from GitHub OAuth metadata
   -- GitHub provides: user_name, preferred_username, or login
-  extracted_username := COALESCE(
+  base_username := COALESCE(
     NEW.raw_user_meta_data->>'user_name',
     NEW.raw_user_meta_data->>'preferred_username',
     NEW.raw_user_meta_data->>'login',
@@ -40,31 +42,41 @@ BEGIN
   );
 
   -- Sanitize username to match our constraints (alphanumeric, dash, underscore)
-  extracted_username := regexp_replace(extracted_username, '[^a-zA-Z0-9_-]', '', 'g');
+  base_username := regexp_replace(base_username, '[^a-zA-Z0-9_-]', '', 'g');
 
   -- Ensure minimum length
-  IF char_length(extracted_username) < 3 THEN
-    extracted_username := 'user_' || substring(NEW.id::text from 1 for 8);
+  IF char_length(base_username) < 3 THEN
+    base_username := 'user_' || substring(NEW.id::text from 1 for 8);
   END IF;
 
-  -- Handle duplicate usernames by appending a number
-  WHILE EXISTS (SELECT 1 FROM public.profiles WHERE username = extracted_username) LOOP
-    extracted_username := extracted_username || floor(random() * 100)::text;
+  final_username := base_username;
+
+  -- Handle duplicate usernames with atomic retry logic
+  -- This prevents race conditions by using exception handling
+  LOOP
+    BEGIN
+      INSERT INTO public.profiles (id, username, avatar_url, github_url)
+      VALUES (
+        NEW.id,
+        final_username,
+        NEW.raw_user_meta_data->>'avatar_url',
+        CASE
+          WHEN NEW.raw_user_meta_data->>'user_name' IS NOT NULL
+          THEN 'https://github.com/' || (NEW.raw_user_meta_data->>'user_name')
+          ELSE NULL
+        END
+      );
+      -- Success - exit loop
+      RETURN NEW;
+    EXCEPTION WHEN unique_violation THEN
+      -- Username already taken, try with a counter
+      counter := counter + 1;
+      IF counter > 100 THEN
+        RAISE EXCEPTION 'Could not generate unique username after 100 attempts for user %', NEW.id;
+      END IF;
+      final_username := base_username || '_' || counter;
+    END;
   END LOOP;
-
-  INSERT INTO public.profiles (id, username, avatar_url, github_url)
-  VALUES (
-    NEW.id,
-    extracted_username,
-    NEW.raw_user_meta_data->>'avatar_url',
-    CASE
-      WHEN NEW.raw_user_meta_data->>'user_name' IS NOT NULL
-      THEN 'https://github.com/' || (NEW.raw_user_meta_data->>'user_name')
-      ELSE NULL
-    END
-  );
-
-  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -505,7 +517,9 @@ CREATE POLICY "Authenticated users can upload circuit files"
   ON storage.objects FOR INSERT
   WITH CHECK (
     bucket_id = 'circuits' AND
-    auth.role() = 'authenticated'
+    auth.role() = 'authenticated' AND
+    -- Ensure files are stored in user's own folder: {user_id}/filename
+    auth.uid()::text = (storage.foldername(name))[1]
   );
 
 DROP POLICY IF EXISTS "Users can update own circuit files" ON storage.objects;
@@ -535,7 +549,9 @@ CREATE POLICY "Authenticated users can upload thumbnails"
   ON storage.objects FOR INSERT
   WITH CHECK (
     bucket_id = 'thumbnails' AND
-    auth.role() = 'authenticated'
+    auth.role() = 'authenticated' AND
+    -- Ensure thumbnails are stored in user's own folder: {user_id}/filename
+    auth.uid()::text = (storage.foldername(name))[1]
   );
 
 DROP POLICY IF EXISTS "Users can update own thumbnails" ON storage.objects;
@@ -543,7 +559,9 @@ CREATE POLICY "Users can update own thumbnails"
   ON storage.objects FOR UPDATE
   USING (
     bucket_id = 'thumbnails' AND
-    auth.role() = 'authenticated'
+    auth.role() = 'authenticated' AND
+    -- Only allow updating own thumbnails
+    auth.uid()::text = (storage.foldername(name))[1]
   );
 
 DROP POLICY IF EXISTS "Users can delete own thumbnails" ON storage.objects;
@@ -551,19 +569,31 @@ CREATE POLICY "Users can delete own thumbnails"
   ON storage.objects FOR DELETE
   USING (
     bucket_id = 'thumbnails' AND
-    auth.role() = 'authenticated'
+    auth.role() = 'authenticated' AND
+    -- Only allow deleting own thumbnails
+    auth.uid()::text = (storage.foldername(name))[1]
   );
 
 -- ============================================================================
 -- HELPER FUNCTIONS
 -- ============================================================================
 
--- Function to increment view count (call this when viewing a circuit)
+-- Function to increment view count (atomic operation to prevent race conditions)
 CREATE OR REPLACE FUNCTION increment_circuit_views(circuit_id UUID)
 RETURNS VOID AS $$
 BEGIN
   UPDATE public.circuits
   SET view_count = view_count + 1
+  WHERE id = circuit_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to increment copy count (atomic operation to prevent race conditions)
+CREATE OR REPLACE FUNCTION increment_circuit_copies(circuit_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.circuits
+  SET copy_count = copy_count + 1
   WHERE id = circuit_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

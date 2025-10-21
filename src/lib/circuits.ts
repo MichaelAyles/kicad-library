@@ -132,48 +132,36 @@ export async function searchCircuits(
   }
 }
 
+/**
+ * Atomically increment view count to prevent race conditions
+ * Uses database RPC function for atomic increment
+ */
 export async function incrementViewCount(circuitId: string): Promise<void> {
   try {
-    // Get current count
-    const { data, error: fetchError } = await supabase
-      .from('circuits')
-      .select('view_count')
-      .eq('id', circuitId)
-      .single();
+    const { error } = await supabase.rpc('increment_circuit_views', {
+      circuit_id: circuitId
+    });
 
-    if (fetchError) throw fetchError;
-
-    // Update with incremented value
-    const { error: updateError } = await supabase
-      .from('circuits')
-      .update({ view_count: (data?.view_count || 0) + 1 })
-      .eq('id', circuitId);
-
-    if (updateError) throw updateError;
+    if (error) throw error;
   } catch (error) {
     console.error('Error incrementing view count:', error);
+    // Silently fail - don't block user experience for analytics
   }
 }
 
+/**
+ * Atomically increment copy count to prevent race conditions
+ * Uses database RPC function for atomic increment
+ */
 export async function incrementCopyCount(circuitId: string): Promise<void> {
   try {
-    // Get current count
-    const { data, error: fetchError } = await supabase
-      .from('circuits')
-      .select('copy_count')
-      .eq('id', circuitId)
-      .single();
+    const { error } = await supabase.rpc('increment_circuit_copies', {
+      circuit_id: circuitId
+    });
 
-    if (fetchError) throw fetchError;
-
-    // Update with incremented value
-    const { error: updateError } = await supabase
-      .from('circuits')
-      .update({ copy_count: (data?.copy_count || 0) + 1 })
-      .eq('id', circuitId);
-
-    if (updateError) throw updateError;
+    if (error) throw error;
   } catch (error) {
     console.error('Error incrementing copy count:', error);
+    // Silently fail - don't block user experience for analytics
   }
 }
