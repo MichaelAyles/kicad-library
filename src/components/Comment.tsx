@@ -105,7 +105,7 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
           {/* User and timestamp */}
           <div className="flex items-center gap-2 text-sm mb-1">
             <Link
-              href={`/user/${comment.user?.username}`}
+              href="/profile"
               className="font-medium text-primary hover:underline"
             >
               @{comment.user?.username || "Unknown"}

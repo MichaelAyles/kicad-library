@@ -1,37 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { knockSensorCircuit } from '@/lib/knock-sensor-data';
 import { isClipboardSnippet, wrapSnippetToFullFile } from '@/lib/kicad-parser';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { getCircuitBySlug } from '@/lib/circuits';
 
+/**
+ * API endpoint to serve schematic files for KiCanvas viewer
+ * Fetches circuit from database and serves the raw S-expression as a .kicad_sch file
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: { filename: string } }
 ) {
   try {
-    // Extract slug from filename (e.g., "tpic8101-knock-sensor-interface.kicad_sch" -> "tpic8101-knock-sensor-interface")
+    // Extract slug from filename (e.g., "8k2-r.kicad_sch" -> "8k2-r")
     const slug = params.filename.replace('.kicad_sch', '');
 
-    // For MVP, only support knock sensor circuit
-    if (slug !== knockSensorCircuit.slug) {
+    // Fetch circuit from database
+    const circuit = await getCircuitBySlug(slug);
+
+    if (!circuit) {
       return NextResponse.json(
         { error: 'Circuit not found' },
         { status: 404 }
       );
     }
 
-    // Load raw data from filesystem (server-side)
-    // TODO: In production, load from database: raw_sexpr field
-    const filePath = join(process.cwd(), 'public', 'example-Knock-Sensor.txt');
-    const rawData = await readFile(filePath, 'utf-8');
+    // Get raw S-expression from database
+    const rawData = circuit.raw_sexpr;
+
+    if (!rawData) {
+      return NextResponse.json(
+        { error: 'Circuit data not found' },
+        { status: 404 }
+      );
+    }
 
     // Check if raw data is a snippet or full file, and prepare accordingly
     let schematicFile: string;
     if (isClipboardSnippet(rawData)) {
       // It's a snippet - wrap it for serving as .kicad_sch file
       schematicFile = wrapSnippetToFullFile(rawData, {
-        title: knockSensorCircuit.title,
-        uuid: knockSensorCircuit.uuid,
+        title: circuit.title,
+        uuid: circuit.id, // Use circuit UUID
       });
     } else {
       // It's already a full file - use as-is
@@ -47,9 +56,9 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Failed to generate schematic:', error);
+    console.error('Failed to serve schematic:', error);
     return NextResponse.json(
-      { error: 'Failed to generate schematic file' },
+      { error: 'Failed to serve schematic file' },
       { status: 500 }
     );
   }

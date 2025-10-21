@@ -213,7 +213,7 @@ export default function CircuitDetailPage() {
                 <>
                   <span>
                     by{" "}
-                    <Link href={`/user/${circuit.user.username}`} className="text-primary hover:underline">
+                    <Link href="/profile" className="text-primary hover:underline">
                       @{circuit.user.username}
                     </Link>
                   </span>
