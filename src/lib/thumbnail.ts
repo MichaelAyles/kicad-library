@@ -28,6 +28,22 @@ function waitForTheme(ms: number = 500): Promise<void> {
  */
 async function captureElement(element: HTMLElement): Promise<string> {
   try {
+    // Find the kicanvas-embed element and trigger interaction to remove overlay
+    const kicanvasEmbed = element.querySelector('kicanvas-embed') as any;
+    if (kicanvasEmbed) {
+      // Simulate a click to activate the viewer and dismiss overlay
+      kicanvasEmbed.click();
+      // Wait a bit for the overlay to disappear
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Additionally, try to hide overlay by class name if it still exists
+    const overlay = element.querySelector('.kc-overlay') as HTMLElement;
+    const originalDisplay = overlay?.style.display;
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+
     const canvas = await html2canvas(element, {
       backgroundColor: null,
       scale: 2, // Higher quality (2x resolution)
@@ -37,6 +53,11 @@ async function captureElement(element: HTMLElement): Promise<string> {
       width: element.scrollWidth,
       height: element.scrollHeight,
     });
+
+    // Restore overlay after capture
+    if (overlay && originalDisplay !== undefined) {
+      overlay.style.display = originalDisplay;
+    }
 
     // Resize canvas to thumbnail dimensions while maintaining aspect ratio
     const resizedCanvas = document.createElement('canvas');
