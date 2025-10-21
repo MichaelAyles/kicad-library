@@ -506,6 +506,11 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('thumbnails', 'thumbnails', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Create previews bucket (for temporary upload flow previews)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('previews', 'previews', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- RLS policies for circuits storage
 DROP POLICY IF EXISTS "Anyone can view circuit files" ON storage.objects;
 CREATE POLICY "Anyone can view circuit files"
@@ -573,6 +578,33 @@ CREATE POLICY "Users can delete own thumbnails"
     -- Only allow deleting own thumbnails
     auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- RLS policies for previews storage (temporary upload previews)
+DROP POLICY IF EXISTS "Anyone can view previews" ON storage.objects;
+CREATE POLICY "Anyone can view previews"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'previews');
+
+DROP POLICY IF EXISTS "Authenticated users can upload previews" ON storage.objects;
+CREATE POLICY "Authenticated users can upload previews"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'previews' AND
+    auth.role() = 'authenticated'
+  );
+
+DROP POLICY IF EXISTS "Authenticated users can update previews" ON storage.objects;
+CREATE POLICY "Authenticated users can update previews"
+  ON storage.objects FOR UPDATE
+  USING (
+    bucket_id = 'previews' AND
+    auth.role() = 'authenticated'
+  );
+
+DROP POLICY IF EXISTS "Anyone can delete old previews" ON storage.objects;
+CREATE POLICY "Anyone can delete old previews"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'previews');
 
 -- ============================================================================
 -- HELPER FUNCTIONS
