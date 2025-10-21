@@ -1,0 +1,146 @@
+
+.how-it-works {
+  background: #0a0a0a;
+  position: relative;
+}
+
+.steps-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+  margin-top: 3rem;
+  position: relative;
+}
+
+.step {
+  flex: 1;
+  text-align: center;
+  position: relative;
+}
+
+.step-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.step-number {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #00ff87;
+  background: rgba(0, 255, 135, 0.1);
+  border: 1px solid rgba(0, 255, 135, 0.3);
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.step-icon {
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid #222;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #00ff87;
+  transition: all 0.3s ease;
+}
+
+.step-icon svg {
+  width: 40px;
+  height: 40px;
+}
+
+.step:hover .step-icon {
+  border-color: #00ff87;
+  background: rgba(0, 255, 135, 0.1);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(0, 255, 135, 0.2);
+}
+
+.step-content {
+  position: relative;
+  z-index: 1;
+}
+
+.step-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.step-description {
+  color: #ccc;
+  line-height: 1.6;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.step-connector {
+  position: absolute;
+  top: 60px;
+  right: -2rem;
+  width: 4rem;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  z-index: 0;
+}
+
+.step-connector svg {
+  width: 24px;
+  height: 24px;
+}
+
+.step:last-child .step-connector {
+  display: none;
+}
+
+@media (max-width: 968px) {
+  .steps-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 3rem;
+  }
+  
+  .step {
+    max-width: 400px;
+  }
+  
+  .step-connector {
+    position: absolute;
+    top: auto;
+    bottom: -3rem;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%) rotate(90deg);
+    width: 80px;
+    height: 4rem;
+  }
+  
+  .step-description {
+    max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .step-icon {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .step-icon svg {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .step-title {
+    font-size: 1.125rem;
+  }
+}

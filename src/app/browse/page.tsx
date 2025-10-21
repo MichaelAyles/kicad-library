@@ -52,8 +52,10 @@ export default function BrowsePage() {
         <div className="container mx-auto px-4 py-8">
           {/* Page Header */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-2">Browse Circuits</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-5xl font-bold mb-2">
+              <span className="green-gradient-text">Browse Circuits</span>
+            </h1>
+            <p className="text-muted-foreground text-lg">
               Discover reusable schematic subcircuits for your KiCad projects
             </p>
           </div>
@@ -65,10 +67,10 @@ export default function BrowsePage() {
               <input
                 type="text"
                 placeholder="Search circuits..."
-                className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                className="w-full pl-10 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-background transition-all"
               />
             </div>
-            <button className="px-4 py-2 border rounded-md hover:bg-muted/50 transition-colors flex items-center gap-2">
+            <button className="px-4 py-2 border border-border rounded-md hover:border-primary hover:green-glow transition-all flex items-center gap-2">
               <Filter className="w-4 h-4" />
               Filters
             </button>
@@ -79,21 +81,24 @@ export default function BrowsePage() {
             <span className="text-muted-foreground">Sort by:</span>
             <button
               onClick={() => handleSortChange('copies')}
-              className={sortBy === 'copies' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-primary'}
+              className={sortBy === 'copies' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
             >
               Most Copied
+              {sortBy === 'copies' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
             </button>
             <button
               onClick={() => handleSortChange('recent')}
-              className={sortBy === 'recent' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-primary'}
+              className={sortBy === 'recent' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
             >
               Recent
+              {sortBy === 'recent' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
             </button>
             <button
               onClick={() => handleSortChange('favorites')}
-              className={sortBy === 'favorites' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-primary'}
+              className={sortBy === 'favorites' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
             >
               Favorites
+              {sortBy === 'favorites' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
             </button>
           </div>
 
@@ -136,7 +141,7 @@ export default function BrowsePage() {
                   <Link
                     key={circuit.id}
                     href={`/circuit/${circuit.slug}`}
-                    className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
+                    className="bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 hover:shadow-lg green-glow-hover transition-all group"
                   >
                     {/* Circuit Thumbnail */}
                     <div className="aspect-video bg-muted relative overflow-hidden group-hover:bg-muted/80 transition-colors">
@@ -144,7 +149,7 @@ export default function BrowsePage() {
                         <img
                           src={thumbnailUrl}
                           alt={circuit.title}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -155,7 +160,7 @@ export default function BrowsePage() {
 
                   {/* Content */}
                   <div className="p-4">
-                    <h3 className="font-semibold mb-2 group-hover:text-primary transition-colors line-clamp-1">
+                    <h3 className="font-semibold mb-2 group-hover:green-gradient-text transition-all line-clamp-1">
                       {circuit.title}
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
@@ -167,7 +172,7 @@ export default function BrowsePage() {
                       {circuit.tags.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
-                          className="px-2 py-1 text-xs bg-primary/10 text-primary rounded"
+                          className="px-2 py-1 text-xs bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
                         >
                           {tag}
                         </span>
@@ -183,9 +188,9 @@ export default function BrowsePage() {
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span>by @{circuit.user?.username || 'unknown'}</span>
                       <div className="flex items-center gap-3">
-                        <span>📋 {circuit.copy_count}</span>
-                        <span>⭐ {circuit.favorite_count}</span>
-                        <span>💬 {circuit.comment_count}</span>
+                        <span className="group-hover:text-primary transition-colors">📋 {circuit.copy_count}</span>
+                        <span className="group-hover:text-primary transition-colors">⭐ {circuit.favorite_count}</span>
+                        <span className="group-hover:text-primary transition-colors">💬 {circuit.comment_count}</span>
                       </div>
                     </div>
 

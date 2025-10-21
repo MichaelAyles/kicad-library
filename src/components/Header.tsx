@@ -17,20 +17,23 @@ export function Header() {
   };
 
   return (
-    <header className="border-b bg-background sticky top-0 z-50">
+    <header className="border-b border-border bg-background/95 backdrop-blur-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Link href="/" className="text-2xl font-bold text-primary">
+        <Link href="/" className="text-2xl font-bold green-gradient-text hover:opacity-80 transition-opacity">
           CircuitSnips
         </Link>
         <nav className="hidden md:flex items-center gap-6">
-          <Link href="/browse" className="text-sm font-medium hover:text-primary transition-colors">
+          <Link href="/browse" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
             Browse
+            <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
           </Link>
-          <Link href="/search" className="text-sm font-medium hover:text-primary transition-colors">
+          <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
             Search
+            <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
           </Link>
-          <Link href="/upload" className="text-sm font-medium hover:text-primary transition-colors">
+          <Link href="/upload" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
             Upload
+            <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
           </Link>
         </nav>
         <div className="flex items-center gap-4">
@@ -48,10 +51,10 @@ export function Header() {
                   <img
                     src={user.user_metadata.avatar_url}
                     alt={user.user_metadata?.full_name || 'Profile'}
-                    className="w-8 h-8 rounded-full border border-border"
+                    className="w-8 h-8 rounded-full border-2 border-primary/50 hover:border-primary transition-colors"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center border-2 border-primary/50 hover:border-primary transition-colors">
                     <User className="w-4 h-4 text-muted-foreground" />
                   </div>
                 )}
@@ -67,7 +70,7 @@ export function Header() {
           ) : (
             <Link
               href="/login"
-              className="px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 rounded-md transition-colors"
+              className="px-4 py-2 text-sm font-medium green-gradient text-black rounded-md hover:shadow-lg green-glow-hover transition-all"
             >
               Sign In
             </Link>
