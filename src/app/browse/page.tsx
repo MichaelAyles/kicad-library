@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Search, Filter, Loader } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { getCircuits, type Circuit } from '@/lib/circuits';
@@ -12,6 +13,13 @@ export default function BrowsePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites'>('copies');
+  const { theme, systemTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const loadCircuits = async () => {
@@ -116,16 +124,34 @@ export default function BrowsePage() {
           {/* Subcircuit Grid */}
           {!isLoading && circuits.length > 0 && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {circuits.map((circuit) => (
-                <Link
-                  key={circuit.id}
-                  href={`/circuit/${circuit.slug}`}
-                  className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
-                >
-                  {/* Preview Placeholder */}
-                  <div className="aspect-video bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-muted/80 transition-colors">
-                    <span className="text-sm">{circuit.copy_count} copies</span>
-                  </div>
+              {circuits.map((circuit) => {
+                // Determine which thumbnail to show based on theme
+                const currentTheme = theme === 'system' ? systemTheme : theme;
+                const isDark = currentTheme === 'dark';
+                const thumbnailUrl = mounted
+                  ? (isDark ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || circuit.thumbnail_light_url
+                  : circuit.thumbnail_light_url;
+
+                return (
+                  <Link
+                    key={circuit.id}
+                    href={`/circuit/${circuit.slug}`}
+                    className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
+                  >
+                    {/* Circuit Thumbnail */}
+                    <div className="aspect-video bg-muted relative overflow-hidden group-hover:bg-muted/80 transition-colors">
+                      {thumbnailUrl ? (
+                        <img
+                          src={thumbnailUrl}
+                          alt={circuit.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                          <span className="text-sm">No preview</span>
+                        </div>
+                      )}
+                    </div>
 
                   {/* Content */}
                   <div className="p-4">
@@ -169,7 +195,8 @@ export default function BrowsePage() {
                     </div>
                   </div>
                 </Link>
-              ))}
+              );
+              })}
             </div>
           )}
 

@@ -15,6 +15,8 @@ export interface Circuit {
   copy_count: number;
   favorite_count: number;
   comment_count: number;
+  thumbnail_light_url: string | null;
+  thumbnail_dark_url: string | null;
   is_public: boolean;
   is_featured: boolean;
   created_at: string;
