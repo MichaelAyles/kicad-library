@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Loader, X, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Loader, X, Trash2, Camera } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
+import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
+import { createClient } from "@/lib/supabase/client";
+import { wrapSnippetToFullFile, isClipboardSnippet } from "@/lib/kicad-parser";
 
 const LICENSES = [
   "CERN-OHL-S-2.0",
@@ -37,6 +41,7 @@ export default function EditCircuitPage() {
   const router = useRouter();
   const slug = params?.slug as string;
   const { user, isLoading: authLoading } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   const [circuit, setCircuit] = useState<Circuit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +49,12 @@ export default function EditCircuitPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Thumbnail regeneration state
+  const [isRegeneratingThumbnails, setIsRegeneratingThumbnails] = useState(false);
+  const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
 
   // Form fields
   const [title, setTitle] = useState("");
@@ -207,6 +218,97 @@ export default function EditCircuitPage() {
       setError(err instanceof Error ? err.message : "Failed to delete circuit");
       setIsDeleting(false);
       setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleRegenerateThumbnails = async () => {
+    if (!circuit || !user) return;
+
+    setIsRegeneratingThumbnails(true);
+    setError(null);
+
+    try {
+      // Create preview URL from raw sexpr
+      let fullFile = circuit.raw_sexpr;
+      if (isClipboardSnippet(circuit.raw_sexpr)) {
+        fullFile = wrapSnippetToFullFile(circuit.raw_sexpr, {
+          title: circuit.title,
+          uuid: circuit.id
+        });
+      }
+
+      // Store preview in Supabase
+      const supabase = createClient();
+      const previewId = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('previews')
+        .upload(`${previewId}.kicad_sch`, fullFile, {
+          contentType: 'text/plain',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw new Error('Failed to create preview');
+      }
+
+      const newPreviewUrl = `/api/preview/preview.kicad_sch?id=${previewId}`;
+      setPreviewUrl(newPreviewUrl);
+      setShowThumbnailPreview(true);
+
+      // Wait for viewer to load
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Capture thumbnails
+      const kicanvasElement = viewerRef.current;
+      if (!kicanvasElement) {
+        throw new Error('Viewer element not found');
+      }
+
+      const currentTheme = theme === 'dark' ? 'dark' : 'light';
+      const thumbnails = await captureThumbnails(
+        kicanvasElement,
+        currentTheme,
+        (newTheme) => setTheme(newTheme)
+      );
+
+      // Upload new thumbnails
+      const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', thumbnails.light);
+      const darkUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'dark', thumbnails.dark);
+
+      // Update circuit with new thumbnail URLs
+      const response = await fetch(`/api/circuits/${circuit.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          thumbnail_light_url: lightUrl,
+          thumbnail_dark_url: darkUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update thumbnails');
+      }
+
+      // Clean up preview
+      await supabase.storage.from('previews').remove([`${previewId}.kicad_sch`]);
+
+      // Reload circuit to show new thumbnails
+      const updatedCircuit = await getCircuitBySlug(slug);
+      if (updatedCircuit) {
+        setCircuit(updatedCircuit);
+      }
+
+      setShowThumbnailPreview(false);
+      setPreviewUrl(null);
+      alert('Thumbnails regenerated successfully!');
+    } catch (err) {
+      console.error('Failed to regenerate thumbnails:', err);
+      setError(err instanceof Error ? err.message : 'Failed to regenerate thumbnails');
+    } finally {
+      setIsRegeneratingThumbnails(false);
     }
   };
 
@@ -463,6 +565,45 @@ export default function EditCircuitPage() {
               </Link>
             </div>
           </form>
+
+          {/* Regenerate Thumbnails Section */}
+          <div className="mt-8 p-6 border border-primary/30 bg-primary/5 rounded-lg">
+            <h3 className="font-semibold text-primary mb-2">Regenerate Thumbnails</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Update the circuit thumbnails. This will capture new screenshots in both light and dark modes.
+            </p>
+
+            {showThumbnailPreview && previewUrl ? (
+              <div className="mb-4">
+                <p className="text-sm font-medium mb-2">Capturing thumbnails from preview...</p>
+                <div className="bg-background rounded-md overflow-hidden border" style={{ height: '400px' }} ref={viewerRef}>
+                  <kicanvas-embed
+                    src={previewUrl}
+                    controls="basic"
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <button
+              onClick={handleRegenerateThumbnails}
+              disabled={isRegeneratingThumbnails}
+              className="px-4 py-2 border border-primary text-primary rounded-md font-medium hover:bg-primary/10 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isRegeneratingThumbnails ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                <>
+                  <Camera className="w-4 h-4" />
+                  Regenerate Thumbnails
+                </>
+              )}
+            </button>
+          </div>
 
           {/* Delete Circuit Section */}
           <div className="mt-8 p-6 border border-destructive/30 bg-destructive/5 rounded-lg">
