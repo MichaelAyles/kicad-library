@@ -312,15 +312,12 @@ export default function EditCircuitPage() {
       const previewId = previewUrl.split('id=')[1];
       await supabase.storage.from('previews').remove([`${previewId}.kicad_sch`]);
 
-      // Reload circuit to show new thumbnails
-      const updatedCircuit = await getCircuitBySlug(slug);
-      if (updatedCircuit) {
-        setCircuit(updatedCircuit);
-      }
-
       setShowThumbnailPreview(false);
       setPreviewUrl(null);
-      alert('Thumbnails regenerated successfully!');
+
+      // Redirect back to circuit detail page to show new thumbnails
+      // This ensures fresh data is loaded from the database
+      router.push(`/circuit/${slug}`);
     } catch (err) {
       console.error('Failed to capture thumbnails:', err);
       setError(err instanceof Error ? err.message : 'Failed to capture thumbnails');
