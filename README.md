@@ -10,6 +10,10 @@ CircuitSnips lets you share schematic blocks - think voltage regulators, amplifi
 
 Copy circuit in KiCad → Paste on CircuitSnips → Someone else searches → Copies to their project. That's it.
 
+### Upload Flow
+![Upload Process Demo](public/upload.gif)
+
+### Copy Flow
 ![Copy Process Demo](public/copy.gif)
 
 ## Current features
