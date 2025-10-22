@@ -27,6 +27,11 @@ interface Circuit {
   };
 }
 
+interface PopularTag {
+  tag: string;
+  count: number;
+}
+
 function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,6 +40,7 @@ function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [sort, setSort] = useState(searchParams.get('sort') || 'relevance');
+  const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
 
   const performSearch = useCallback(async () => {
     setLoading(true);
@@ -73,6 +79,23 @@ function SearchContent() {
       performSearch();
     }
   }, [searchParams, performSearch]);
+
+  // Fetch popular tags on mount
+  useEffect(() => {
+    const fetchPopularTags = async () => {
+      try {
+        const response = await fetch('/api/tags');
+        const data = await response.json();
+        if (response.ok) {
+          setPopularTags(data.tags || []);
+        }
+      } catch (error) {
+        console.error('Error fetching popular tags:', error);
+      }
+    };
+
+    fetchPopularTags();
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -250,30 +273,20 @@ function SearchContent() {
               <div>
                 <h2 className="text-lg font-semibold mb-4">Popular Tags</h2>
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    "opamp",
-                    "regulator",
-                    "esp32",
-                    "arduino",
-                    "usb-c",
-                    "buck-converter",
-                    "crystal",
-                    "led-driver",
-                    "sensor",
-                    "amplifier",
-                    "power",
-                    "analog",
-                    "digital",
-                    "microcontroller",
-                  ].map((tag) => (
-                    <Link
-                      key={tag}
-                      href={`/search?tag=${tag}`}
-                      className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm hover:bg-primary/20 transition-colors"
-                    >
-                      {tag}
-                    </Link>
-                  ))}
+                  {popularTags.length > 0 ? (
+                    popularTags.map((tagData) => (
+                      <Link
+                        key={tagData.tag}
+                        href={`/search?tag=${tagData.tag}`}
+                        className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm hover:bg-primary/20 transition-colors flex items-center gap-1"
+                      >
+                        <span>{tagData.tag}</span>
+                        <span className="text-xs opacity-60">({tagData.count})</span>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Loading popular tags...</p>
+                  )}
                 </div>
               </div>
             </>
