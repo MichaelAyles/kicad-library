@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Github, Loader } from 'lucide-react';
+import { Github, Loader, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading, signInWithGitHub, error } = useAuth();
+  const { user, isLoading: authLoading, signInWithGitHub, signInWithEmail, error } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -21,8 +24,28 @@ export default function LoginPage() {
 
   const handleGitHubSignIn = async () => {
     setIsLoading(true);
+    setLocalError(null);
     try {
       await signInWithGitHub();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+
+    // Validation
+    if (!email || !password) {
+      setLocalError('Please fill in all fields');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await signInWithEmail(email, password);
+      // Auth hook will redirect automatically on success
     } finally {
       setIsLoading(false);
     }
@@ -36,19 +59,88 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           <div className="bg-card border rounded-lg p-8 shadow-sm">
             <h1 className="text-3xl font-bold mb-2">Sign In</h1>
-            <p className="text-muted-foreground mb-8">Join CircuitSnips to upload and share circuits</p>
+            <p className="text-muted-foreground mb-8">Welcome back to CircuitSnips</p>
 
-            {error && (
+            {(error || localError) && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
-                {error}
+                {error || localError}
               </div>
             )}
+
+            {/* Email Sign In Form */}
+            <form onSubmit={handleEmailSignIn} className="space-y-4 mb-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium mb-2">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading || authLoading}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="password" className="block text-sm font-medium">
+                    Password
+                  </label>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading || authLoading}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || authLoading}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-5 h-5" />
+                    Sign in with Email
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-card text-muted-foreground">Or continue with</span>
+              </div>
+            </div>
 
             {/* GitHub OAuth Button */}
             <button
               onClick={handleGitHubSignIn}
               disabled={isLoading || authLoading}
-              className="w-full py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 bg-secondary text-secondary-foreground rounded-md font-medium hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -66,7 +158,7 @@ export default function LoginPage() {
             <p className="text-center text-sm text-muted-foreground mt-6">
               Don&apos;t have an account?{' '}
               <Link href="/signup" className="text-primary hover:underline font-medium">
-                Sign up with GitHub
+                Sign up
               </Link>
             </p>
           </div>

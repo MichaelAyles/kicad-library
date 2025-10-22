@@ -59,6 +59,74 @@ export function useAuth() {
     }
   };
 
+  const signInWithEmail = async (email: string, password: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Email sign in failed';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string, username?: string) => {
+    setError(null);
+    try {
+      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.mikeayles.com'}/auth/callback`;
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            username: username || email.split('@')[0],
+          },
+        },
+      });
+      if (error) throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Email sign up failed';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    setError(null);
+    try {
+      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.mikeayles.com'}/auth/reset-password`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+      if (error) throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Password reset failed';
+      setError(message);
+      throw err;
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Password update failed';
+      setError(message);
+      throw err;
+    }
+  };
+
   const signOut = async () => {
     setError(null);
     try {
@@ -78,6 +146,10 @@ export function useAuth() {
     isLoading,
     error,
     signInWithGitHub,
+    signInWithEmail,
+    signUpWithEmail,
+    resetPassword,
+    updatePassword,
     signOut,
     isAuthenticated: !!user,
   };
