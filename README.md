@@ -10,6 +10,8 @@ CircuitSnips lets you share schematic blocks - think voltage regulators, amplifi
 
 Copy circuit in KiCad → Paste on CircuitSnips → Someone else searches → Copies to their project. That's it.
 
+![Copy Process Demo](public/copy.gif)
+
 ## Current features
 
 - Interactive preview using KiCanvas
@@ -21,10 +23,11 @@ Copy circuit in KiCad → Paste on CircuitSnips → Someone else searches → Co
 - User profiles
 - Circuit editing (title, description, tags, license, visibility)
 - Delete your account and data
+- Full-text search with filters and sorting
+- Dynamic popular tags by frequency
 
 ## Still working on
 
-- Search (database is ready, just need the UI)
 - Favorites (mostly done, needs hookup)
 - Analytics for copy tracking
 
