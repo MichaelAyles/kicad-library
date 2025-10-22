@@ -87,7 +87,10 @@ export default function SignupPage() {
 
             {successMessage && (
               <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-md text-sm text-green-600 dark:text-green-400">
-                {successMessage}
+                <p className="font-medium">{successMessage}</p>
+                <p className="mt-2 text-xs opacity-90">
+                  The email will come from <strong>Supabase Auth &lt;noreply@mail.app.supabase.io&gt;</strong>
+                </p>
               </div>
             )}
 
