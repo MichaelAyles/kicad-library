@@ -255,6 +255,56 @@ export function addAttribution(fullFile: string, options: {
   return lines.join('\n');
 }
 
+/**
+ * Add GitHub attribution comments to a schematic
+ * Used for batch import to track circuit origins
+ */
+export function addGitHubAttribution(sexpr: string, options: {
+  repoOwner: string;
+  repoName: string;
+  repoUrl: string;
+  filePath: string;
+  license: string;
+  score?: number;
+}): string {
+  // Check if it's a full file or snippet
+  const isSnippet = isClipboardSnippet(sexpr);
+
+  // If snippet, wrap it first
+  const fullFile = isSnippet
+    ? wrapSnippetToFullFile(sexpr, { title: `${options.repoOwner}/${options.repoName}` })
+    : sexpr;
+
+  const lines = fullFile.split('\n');
+  let insertIndex = 0;
+
+  // Find where to insert (after generator, version, or uuid)
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes('(generator') ||
+        lines[i].includes('(version') ||
+        lines[i].includes('(uuid')) {
+      insertIndex = i + 1;
+    }
+    if (lines[i].includes('(paper')) {
+      break;
+    }
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const scoreText = options.score !== undefined ? ` | Quality: ${options.score}/10` : '';
+
+  const attribution = [
+    `  (comment 1 "GitHub: ${options.repoUrl}")`,
+    `  (comment 2 "Source: ${options.repoOwner}/${options.repoName} | ${options.filePath}")`,
+    `  (comment 3 "License: ${options.license}${scoreText}")`,
+    `  (comment 4 "Imported: ${today} | CircuitSnips.com")`,
+    ''
+  ].join('\n');
+
+  lines.splice(insertIndex, 0, attribution);
+  return lines.join('\n');
+}
+
 // ============================================================================
 // PARSING: Tree-based S-expression parser
 // ============================================================================
