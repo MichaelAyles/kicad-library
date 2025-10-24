@@ -131,10 +131,20 @@ export default function AdminDashboard() {
     }
 
     try {
+      // Get the access token from Supabase
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
       const response = await fetch('/api/admin/delete-circuit', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ circuitId }),
       });

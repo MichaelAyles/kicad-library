@@ -8,24 +8,34 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
-import { isAdmin } from '@/lib/admin';
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Verify admin authentication using JWT
-    const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Get the Authorization header with bearer token
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
 
-    if (authError || !user) {
+    if (!token) {
       return NextResponse.json(
-        { error: 'Unauthorized - Not logged in' },
+        { error: 'Unauthorized - No token provided' },
         { status: 401 }
       );
     }
 
-    const adminStatus = await isAdmin(user);
-    if (!adminStatus) {
+    // Use admin client to verify the token and check admin role
+    const adminSupabase = createAdminClient();
+    const { data: { user }, error: authError } = await adminSupabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Invalid token' },
+        { status: 401 }
+      );
+    }
+
+    // Check if user has admin role
+    const userRole = user.user_metadata?.role;
+    if (userRole !== 'admin') {
       return NextResponse.json(
         { error: 'Unauthorized - Admin access required' },
         { status: 403 }
@@ -41,9 +51,6 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Use admin client to bypass RLS
-    const adminSupabase = createAdminClient();
 
     // Delete the circuit (cascades will handle related data)
     const { error } = await adminSupabase
