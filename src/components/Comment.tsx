@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Heart, Reply, Trash2, Edit2, Check, X } from "lucide-react";
+import { Heart, Reply, Trash2, Edit2, Check, X, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Comment as CommentType } from "@/types/comments";
 import { toggleCommentLike, updateComment, deleteComment } from "@/lib/comments";
 import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface CommentProps {
   comment: CommentType;
@@ -22,6 +23,7 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const isOwner = user?.id === comment.user_id;
   const maxDepth = 3; // Maximum nesting depth for replies
@@ -125,35 +127,82 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
           {/* Comment Content */}
           {isEditing ? (
             <div className="space-y-2">
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                rows={3}
-                maxLength={5000}
-                disabled={isSubmitting}
-              />
-              <div className="flex gap-2">
+              {/* Tabs for Write/Preview */}
+              <div className="flex gap-2 border-b">
                 <button
-                  onClick={handleEdit}
-                  disabled={isSubmitting}
-                  className="px-3 py-1 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  type="button"
+                  onClick={() => setShowPreview(false)}
+                  className={`px-3 py-1 text-sm font-medium transition-colors ${
+                    !showPreview
+                      ? "border-b-2 border-primary text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  <Check className="w-4 h-4" />
-                  Save
+                  Write
                 </button>
                 <button
-                  onClick={cancelEdit}
-                  disabled={isSubmitting}
-                  className="px-3 py-1 border rounded-md text-sm hover:bg-muted/50 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  type="button"
+                  onClick={() => setShowPreview(true)}
+                  className={`px-3 py-1 text-sm font-medium transition-colors flex items-center gap-1 ${
+                    showPreview
+                      ? "border-b-2 border-primary text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  <X className="w-4 h-4" />
-                  Cancel
+                  <Eye className="w-4 h-4" />
+                  Preview
                 </button>
+              </div>
+
+              {/* Editor or Preview */}
+              {showPreview ? (
+                <div className="min-h-[80px] px-3 py-2 border rounded-md bg-muted/30">
+                  {editContent.trim() ? (
+                    <MarkdownRenderer content={editContent} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Nothing to preview</p>
+                  )}
+                </div>
+              ) : (
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                  rows={3}
+                  maxLength={5000}
+                  disabled={isSubmitting}
+                  placeholder="Supports **bold**, *italic*, `code`, and [links](url)"
+                />
+              )}
+
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">
+                  {editContent.length}/5000 • Markdown supported
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleEdit}
+                    disabled={isSubmitting}
+                    className="px-3 py-1 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <Check className="w-4 h-4" />
+                    Save
+                  </button>
+                  <button
+                    onClick={cancelEdit}
+                    disabled={isSubmitting}
+                    className="px-3 py-1 border rounded-md text-sm hover:bg-muted/50 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
-            <p className="text-sm whitespace-pre-wrap break-words">{comment.content}</p>
+            <div className="text-sm">
+              <MarkdownRenderer content={comment.content} />
+            </div>
           )}
 
           {/* Actions */}
