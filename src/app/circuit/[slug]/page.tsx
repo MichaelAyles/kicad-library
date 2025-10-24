@@ -3,14 +3,16 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Copy, Heart, Download, ArrowLeft, Check, FileDown, Loader, Edit, Lock } from "lucide-react";
+import { Copy, Heart, Download, ArrowLeft, Check, FileDown, Loader, Edit, Lock, Flag } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnippetFromFullFile, validateSExpression } from "@/lib/kicad-parser";
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { CommentList } from "@/components/CommentList";
+import { FlagCircuitModal } from "@/components/FlagCircuitModal";
 import { formatDate } from "@/lib/utils";
 import { getCircuitBySlug, incrementViewCount, incrementCopyCount, checkIfFavorited, toggleFavorite, type Circuit } from "@/lib/circuits";
+import { hasUserFlaggedCircuit } from "@/lib/flags";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function CircuitDetailPage() {
@@ -28,6 +30,8 @@ export default function CircuitDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<any>(null); // Parsed metadata from S-expression
+  const [isFlagModalOpen, setIsFlagModalOpen] = useState(false);
+  const [hasBeenFlagged, setHasBeenFlagged] = useState(false);
 
   // Load circuit data from database
   useEffect(() => {
@@ -60,6 +64,10 @@ export default function CircuitDetailPage() {
         if (user?.id) {
           const favorited = await checkIfFavorited(circuitData.id, user.id);
           setIsFavorited(favorited);
+
+          // Check if user has flagged this circuit
+          const flagged = await hasUserFlaggedCircuit(circuitData.id);
+          setHasBeenFlagged(flagged);
         }
 
         // Prepare circuit data for copy and preview
@@ -327,6 +335,23 @@ export default function CircuitDetailPage() {
                 Edit
               </Link>
             )}
+
+            {/* Flag button - shown to logged-in users who are not the owner */}
+            {user && circuit.user_id !== user.id && (
+              <button
+                onClick={() => setIsFlagModalOpen(true)}
+                disabled={hasBeenFlagged}
+                className={`px-6 py-3 border rounded-md font-medium transition-colors flex items-center gap-2 ${
+                  hasBeenFlagged
+                    ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
+                    : "hover:bg-muted/50 text-muted-foreground hover:text-destructive"
+                }`}
+                title={hasBeenFlagged ? "You have already flagged this circuit" : "Report this circuit for review"}
+              >
+                <Flag className="w-5 h-5" />
+                {hasBeenFlagged ? "Flagged" : "Flag"}
+              </button>
+            )}
           </div>
 
           {/* Schematic Viewer */}
@@ -459,6 +484,19 @@ export default function CircuitDetailPage() {
       </main>
 
       <Footer />
+
+      {/* Flag Circuit Modal */}
+      {circuit && (
+        <FlagCircuitModal
+          circuitId={circuit.id}
+          circuitTitle={circuit.title}
+          isOpen={isFlagModalOpen}
+          onClose={() => setIsFlagModalOpen(false)}
+          onSuccess={() => {
+            setHasBeenFlagged(true);
+          }}
+        />
+      )}
     </div>
   );
 }

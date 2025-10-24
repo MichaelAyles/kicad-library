@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Send, X } from "lucide-react";
+import { Send, X, Eye } from "lucide-react";
 import { createComment } from "@/lib/comments";
 import { useAuth } from "@/hooks/useAuth";
 import type { CreateCommentInput } from "@/types/comments";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface CommentFormProps {
   circuitId: string;
@@ -26,6 +27,7 @@ export function CommentForm({
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,19 +96,58 @@ export function CommentForm({
 
         {/* Textarea */}
         <div className="flex-1">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder={placeholder}
-            className="w-full px-4 py-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-            rows={parentCommentId ? 2 : 3}
-            maxLength={5000}
-            disabled={isSubmitting}
-            autoFocus={autoFocus}
-          />
+          {/* Tabs for Write/Preview */}
+          <div className="flex gap-2 border-b mb-2">
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              className={`px-3 py-1 text-sm font-medium transition-colors ${
+                !showPreview
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Write
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              className={`px-3 py-1 text-sm font-medium transition-colors flex items-center gap-1 ${
+                showPreview
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Eye className="w-4 h-4" />
+              Preview
+            </button>
+          </div>
+
+          {/* Editor or Preview */}
+          {showPreview ? (
+            <div className="min-h-[80px] px-4 py-3 border rounded-lg bg-muted/30">
+              {content.trim() ? (
+                <MarkdownRenderer content={content} />
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Nothing to preview</p>
+              )}
+            </div>
+          ) : (
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder={placeholder}
+              className="w-full px-4 py-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              rows={parentCommentId ? 2 : 3}
+              maxLength={5000}
+              disabled={isSubmitting}
+              autoFocus={autoFocus}
+            />
+          )}
+
           <div className="flex justify-between items-center mt-2">
             <span className="text-xs text-muted-foreground">
-              {content.length}/5000 characters
+              {content.length}/5000 • Markdown supported
             </span>
             <div className="flex gap-2">
               {onCancel && (

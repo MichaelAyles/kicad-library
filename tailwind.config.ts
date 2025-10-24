@@ -49,9 +49,16 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            maxWidth: 'none',
+          },
+        },
+      },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/typography')],
 }
 
 export default config
