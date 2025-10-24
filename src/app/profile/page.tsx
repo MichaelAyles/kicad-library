@@ -7,6 +7,7 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
+import { isAdmin } from '@/lib/admin';
 import {
   User as UserIcon,
   Mail,
@@ -18,7 +19,8 @@ import {
   Github,
   Loader,
   Eye,
-  Heart
+  Heart,
+  Shield
 } from 'lucide-react';
 
 interface UserStats {
@@ -66,6 +68,7 @@ export default function ProfilePage() {
   const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isLoadingCircuits, setIsLoadingCircuits] = useState(true);
+  const [isUserAdmin, setIsUserAdmin] = useState(false);
   const supabase = createClient();
 
   // Redirect if not logged in
@@ -74,6 +77,17 @@ export default function ProfilePage() {
       router.push('/login');
     }
   }, [user, authLoading, router]);
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user) {
+        const adminStatus = await isAdmin(user);
+        setIsUserAdmin(adminStatus);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
 
   // Load user statistics
   useEffect(() => {
@@ -213,6 +227,15 @@ export default function ProfilePage() {
                   >
                     Upload Circuit
                   </Link>
+                  {isUserAdmin && (
+                    <Link
+                      href="/admin"
+                      className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md font-medium hover:bg-destructive/90 transition-colors flex items-center gap-2"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Admin Portal
+                    </Link>
+                  )}
                   <Link
                     href="/settings"
                     className="px-4 py-2 border rounded-md font-medium hover:bg-muted transition-colors"
