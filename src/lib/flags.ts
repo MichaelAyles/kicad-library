@@ -10,7 +10,7 @@ import type { CreateFlagInput, CircuitFlag } from '@/types/flags';
 /**
  * Create a flag for a circuit
  */
-export async function createCircuitFlag(input: CreateFlagInput): Promise<CircuitFlag> {
+export async function createCircuitFlag(input: CreateFlagInput): Promise<void> {
   const supabase = createClient();
 
   // Get current user first
@@ -21,23 +21,25 @@ export async function createCircuitFlag(input: CreateFlagInput): Promise<Circuit
     throw new Error('You must be logged in to flag circuits');
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('circuit_flags')
     .insert({
       circuit_id: input.circuit_id,
       flagged_by: userData.user.id,
       reason: input.reason,
       details: input.details || null,
-    })
-    .select()
-    .single();
+    });
 
   if (error) {
     console.error('Error creating flag:', error);
+
+    // Check for duplicate flag error
+    if (error.code === '23505') {
+      throw new Error('You have already flagged this circuit');
+    }
+
     throw new Error('Failed to flag circuit');
   }
-
-  return data;
 }
 
 /**
