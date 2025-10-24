@@ -27,7 +27,7 @@ interface FlaggedCircuit {
 }
 
 export default function AdminDashboard() {
-  const { user, loading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [flags, setFlags] = useState<FlaggedCircuit[]>([]);
@@ -37,7 +37,7 @@ export default function AdminDashboard() {
   // Check admin authorization
   useEffect(() => {
     const checkAuth = async () => {
-      if (loading) return;
+      if (authLoading) return;
 
       if (!user) {
         router.push('/login');
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
     };
 
     checkAuth();
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
   // Load flagged circuits
   useEffect(() => {
@@ -100,7 +100,7 @@ export default function AdminDashboard() {
     }
   };
 
-  if (loading || !isAuthorized) {
+  if (authLoading || !isAuthorized) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />

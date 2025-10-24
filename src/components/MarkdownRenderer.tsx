@@ -15,11 +15,11 @@ interface MarkdownRendererProps {
  */
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeSanitize]}
-      className={`prose prose-sm dark:prose-invert max-w-none ${className}`}
-      components={{
+    <div className={`prose prose-sm dark:prose-invert max-w-none ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeSanitize]}
+        components={{
         // Custom styling for markdown elements
         a: ({ node, ...props }) => (
           <a
@@ -29,8 +29,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
             rel="noopener noreferrer"
           />
         ),
-        code: ({ node, inline, ...props }) =>
-          inline ? (
+        code: ({ node, ...props }: any) => {
+          const isInline = !String(props.className).includes('language-');
+          return isInline ? (
             <code
               {...props}
               className="px-1.5 py-0.5 bg-muted rounded text-sm font-mono"
@@ -40,7 +41,8 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               {...props}
               className="block p-3 bg-muted rounded-md text-sm font-mono overflow-x-auto"
             />
-          ),
+          );
+        },
         pre: ({ node, ...props }) => (
           <pre {...props} className="bg-muted p-3 rounded-md overflow-x-auto my-2" />
         ),
@@ -80,8 +82,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           <td {...props} className="border border-border px-3 py-2" />
         ),
       }}
-    >
-      {content}
-    </ReactMarkdown>
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
