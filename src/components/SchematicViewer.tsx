@@ -33,7 +33,9 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
   const [mounted, setMounted] = useState(false);
 
   // Generate API URL from slug - dynamically serves wrapped schematic
-  const schematicUrl = `/api/schematic/${slug}.kicad_sch`;
+  // Strip any existing .kicad_sch extension to avoid double extensions
+  const cleanSlug = slug.replace(/\.kicad_sch$/i, '');
+  const schematicUrl = `/api/schematic/${cleanSlug}.kicad_sch`;
   const viewerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
