@@ -63,10 +63,63 @@ export default function AdminDashboard() {
 
     const loadFlags = async () => {
       setIsLoading(true);
-      // TODO: Implement API endpoint to fetch flags
-      // For now, mock data
-      setFlags([]);
-      setIsLoading(false);
+
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+
+        // Fetch flags with circuit and user info
+        const { data, error } = await supabase
+          .from('circuit_flags')
+          .select(`
+            id,
+            circuit_id,
+            reason,
+            details,
+            status,
+            created_at,
+            circuits:circuit_id (
+              id,
+              slug,
+              title,
+              user_id,
+              profiles:user_id (
+                username
+              )
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching flags:', error);
+          throw error;
+        }
+
+        // Transform the data to match our interface
+        const transformedFlags = (data || []).map((flag: any) => ({
+          id: flag.id,
+          circuit_id: flag.circuit_id,
+          reason: flag.reason,
+          details: flag.details,
+          status: flag.status,
+          created_at: flag.created_at,
+          circuit: flag.circuits ? {
+            id: flag.circuits.id,
+            slug: flag.circuits.slug,
+            title: flag.circuits.title,
+            user: flag.circuits.profiles ? {
+              username: flag.circuits.profiles.username
+            } : null
+          } : null
+        }));
+
+        setFlags(transformedFlags);
+      } catch (error) {
+        console.error('Failed to load flags:', error);
+        setFlags([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadFlags();
