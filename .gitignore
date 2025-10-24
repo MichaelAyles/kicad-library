@@ -190,3 +190,6 @@ temp/
 !/public/uploads/.gitkeep
 /public/previews/*
 !/public/previews/.gitkeep
+
+# Scraper data directory (large files, not in version control)
+/data/
