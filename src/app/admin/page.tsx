@@ -135,21 +135,21 @@ export default function AdminDashboard() {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_KEY}`,
         },
         body: JSON.stringify({ circuitId }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete circuit');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete circuit');
       }
 
       alert('Circuit deleted successfully');
       // Reload flags
       window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting circuit:', error);
-      alert('Failed to delete circuit. Please try again.');
+      alert(error.message || 'Failed to delete circuit. Please try again.');
     }
   };
 

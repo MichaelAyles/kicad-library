@@ -8,16 +8,27 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { verifyAdminKey } from '@/lib/admin-auth';
+import { createClient } from '@/lib/supabase/server';
+import { isAdmin } from '@/lib/admin';
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Verify admin authentication
-    const authHeader = request.headers.get('Authorization');
-    if (!verifyAdminKey(authHeader)) {
+    // Verify admin authentication using JWT
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized - Invalid admin API key' },
+        { error: 'Unauthorized - Not logged in' },
         { status: 401 }
+      );
+    }
+
+    const adminStatus = await isAdmin(user);
+    if (!adminStatus) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
       );
     }
 
@@ -32,10 +43,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Use admin client to bypass RLS
-    const supabase = createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Delete the circuit (cascades will handle related data)
-    const { error } = await supabase
+    const { error } = await adminSupabase
       .from('circuits')
       .delete()
       .eq('id', circuitId);
