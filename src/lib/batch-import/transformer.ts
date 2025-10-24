@@ -72,22 +72,24 @@ export function transformToCircuit(
  * Build description with GitHub attribution
  *
  * Format:
+ * > From GitHub: [owner/repo](url)
+ *
  * {original description}
  *
- * {optional use case}
+ * **Use Case**: {use case}
  *
- * {optional notes}
- *
- * ---
- * **Source**: [owner/repo](url)
- * **File**: `path`
- * **License**: [SPDX](license-url)
- * **Quality Score**: X/10
+ * **Components**: {components}
  */
 function buildDescription(record: ImportRecord): string {
   const { subcircuit, repo_owner, repo_name, repo_url, repo_license, file_path, classification_score } = record;
 
   const parts: string[] = [];
+
+  // GitHub attribution FIRST (most visible)
+  const normalizedLicense = normalizeLicense(repo_license);
+  const licenseText = normalizedLicense || repo_license;
+  parts.push(`> **From GitHub**: [${repo_owner}/${repo_name}](${repo_url}) ([${licenseText} license](${repo_url}/blob/main/LICENSE))`);
+  parts.push('');
 
   // Main description
   parts.push(subcircuit.description.trim());
@@ -98,34 +100,17 @@ function buildDescription(record: ImportRecord): string {
     parts.push(`**Use Case**: ${subcircuit.useCase.trim()}`);
   }
 
+  // Add components list if present
+  if (subcircuit.components && subcircuit.components.trim()) {
+    parts.push('');
+    parts.push(`**Components**: ${subcircuit.components.trim()}`);
+  }
+
   // Add notes if present
   if (subcircuit.notes && subcircuit.notes.trim()) {
     parts.push('');
     parts.push(`**Notes**: ${subcircuit.notes.trim()}`);
   }
-
-  // Add components list if present
-  if (subcircuit.components && subcircuit.components.trim()) {
-    parts.push('');
-    parts.push(`**Key Components**: ${subcircuit.components.trim()}`);
-  }
-
-  // Attribution section
-  parts.push('');
-  parts.push('---');
-  parts.push(`**Source**: [${repo_owner}/${repo_name}](${repo_url})`);
-  parts.push(`**File**: \`${file_path}\``);
-
-  // Link to LICENSE file in repo
-  const licenseUrl = `${repo_url}/blob/main/LICENSE`;
-  const normalizedLicense = normalizeLicense(repo_license);
-  if (normalizedLicense) {
-    parts.push(`**License**: [${normalizedLicense}](${licenseUrl})`);
-  } else {
-    parts.push(`**License**: [${repo_license}](${licenseUrl}) *(using CERN-OHL-S-2.0 as default)*`);
-  }
-
-  parts.push(`**Quality Score**: ${classification_score}/10`);
 
   const fullDescription = parts.join('\n');
 

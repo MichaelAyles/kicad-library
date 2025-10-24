@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyAdminKey } from '@/lib/admin-auth';
 import { validateImportBatch, ImportRecord } from '@/lib/batch-import/validator';
 import { transformToCircuit } from '@/lib/batch-import/transformer';
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Initialize Supabase client
-    const supabase = await createClient();
+    // 5. Initialize Supabase admin client (bypasses RLS)
+    const supabase = createAdminClient();
 
     // 6. Process each record
     const results: ImportResult[] = [];
