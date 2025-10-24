@@ -13,11 +13,19 @@ import type { CreateFlagInput, CircuitFlag } from '@/types/flags';
 export async function createCircuitFlag(input: CreateFlagInput): Promise<CircuitFlag> {
   const supabase = createClient();
 
+  // Get current user first
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    console.error('User not authenticated:', userError);
+    throw new Error('You must be logged in to flag circuits');
+  }
+
   const { data, error } = await supabase
     .from('circuit_flags')
     .insert({
       circuit_id: input.circuit_id,
-      flagged_by: (await supabase.auth.getUser()).data.user?.id,
+      flagged_by: userData.user.id,
       reason: input.reason,
       details: input.details || null,
     })
