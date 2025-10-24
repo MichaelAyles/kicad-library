@@ -9,61 +9,53 @@ import type { CreateFlagInput, CircuitFlag } from '@/types/flags';
 
 /**
  * Create a flag for a circuit
+ * No authentication required - anyone can flag
  */
 export async function createCircuitFlag(input: CreateFlagInput): Promise<void> {
   const supabase = createClient();
 
-  // Get current user first
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    console.error('User not authenticated:', userError);
-    throw new Error('You must be logged in to flag circuits');
-  }
+  // Get current user if logged in (optional)
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id || null;
 
   const { error } = await supabase
     .from('circuit_flags')
     .insert({
       circuit_id: input.circuit_id,
-      flagged_by: userData.user.id,
+      flagged_by: userId, // Can be null for anonymous flags
       reason: input.reason,
       details: input.details || null,
     });
 
   if (error) {
     console.error('Error creating flag:', error);
-
-    // Check for duplicate flag error
-    if (error.code === '23505') {
-      throw new Error('You have already flagged this circuit');
-    }
-
-    throw new Error('Failed to flag circuit');
+    throw new Error('Failed to submit flag');
   }
 }
 
 /**
  * Check if user has already flagged a circuit
+ * Note: With anonymous flagging, we can't reliably prevent duplicate flags
+ * This function is kept for logged-in users only
  */
 export async function hasUserFlaggedCircuit(circuitId: string): Promise<boolean> {
   const supabase = createClient();
 
   const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return false;
+  if (!user.user) {
+    // Anonymous users - can't check, always allow flagging
+    return false;
+  }
 
-  // Direct query instead of RPC to work with RLS policies
+  // Check if this logged-in user has already flagged
   const { data, error } = await supabase
     .from('circuit_flags')
     .select('id')
     .eq('circuit_id', circuitId)
     .eq('flagged_by', user.user.id)
-    .single();
+    .maybeSingle();
 
   if (error) {
-    // PGRST116 means no rows found, which means not flagged
-    if (error.code === 'PGRST116') {
-      return false;
-    }
     console.error('Error checking flag status:', error);
     return false;
   }
