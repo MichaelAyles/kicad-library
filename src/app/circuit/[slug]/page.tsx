@@ -10,6 +10,7 @@ import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnipp
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { CommentList } from "@/components/CommentList";
 import { FlagCircuitModal } from "@/components/FlagCircuitModal";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { formatDate } from "@/lib/utils";
 import { getCircuitBySlug, incrementViewCount, incrementCopyCount, checkIfFavorited, toggleFavorite, type Circuit } from "@/lib/circuits";
 import { hasUserFlaggedCircuit } from "@/lib/flags";
@@ -285,7 +286,9 @@ export default function CircuitDetailPage() {
               <span>{circuit.view_count} views</span>
             </div>
 
-            <p className="text-lg text-muted-foreground max-w-3xl">{circuit.description}</p>
+            <div className="text-base max-w-3xl">
+              <MarkdownRenderer content={circuit.description} />
+            </div>
           </div>
 
           {/* Actions */}
