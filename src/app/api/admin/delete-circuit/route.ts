@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient as createAnonClient } from '@supabase/supabase-js';
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -22,13 +23,24 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Use admin client to verify the token and check admin role
-    const adminSupabase = createAdminClient();
-    const { data: { user }, error: authError } = await adminSupabase.auth.getUser(token);
+    // Create a client with the anon key to verify the token
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+    const supabase = createAnonClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    // Verify the token by getting the user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized - Invalid token' },
+        { error: 'Unauthorized - Invalid token', details: authError?.message },
         { status: 401 }
       );
     }
@@ -41,6 +53,9 @@ export async function DELETE(request: NextRequest) {
         { status: 403 }
       );
     }
+
+    // Use admin client for deletion
+    const adminSupabase = createAdminClient();
 
     // Get circuit ID from request body
     const { circuitId } = await request.json();
