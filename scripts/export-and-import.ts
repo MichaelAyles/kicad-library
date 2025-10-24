@@ -183,9 +183,12 @@ function transformRowToRecords(
   }
 
   // Read schematic file content
-  const schematicPath = path.join(config.dataDir, row.local_path);
+  // Note: local_path in database is already relative to project root (e.g., "data\repos\owner\repo\file.kicad_sch")
+  // We need to construct the absolute path from the current working directory
+  const schematicPath = path.resolve(row.local_path.replace(/\\/g, '/'));
   if (!fs.existsSync(schematicPath)) {
     console.error(`❌ Schematic file not found: ${schematicPath}`);
+    console.error(`   Expected path from database: ${row.local_path}`);
     return [];
   }
 
