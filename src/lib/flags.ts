@@ -51,18 +51,24 @@ export async function hasUserFlaggedCircuit(circuitId: string): Promise<boolean>
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return false;
 
+  // Direct query instead of RPC to work with RLS policies
   const { data, error } = await supabase
-    .rpc('has_user_flagged_circuit', {
-      circuit_uuid: circuitId,
-      user_uuid: user.user.id,
-    });
+    .from('circuit_flags')
+    .select('id')
+    .eq('circuit_id', circuitId)
+    .eq('flagged_by', user.user.id)
+    .single();
 
   if (error) {
+    // PGRST116 means no rows found, which means not flagged
+    if (error.code === 'PGRST116') {
+      return false;
+    }
     console.error('Error checking flag status:', error);
     return false;
   }
 
-  return data || false;
+  return !!data;
 }
 
 /**
