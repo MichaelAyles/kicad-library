@@ -6,8 +6,9 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
-import { AlertTriangle, Trash2, Eye, CheckCircle, XCircle, Loader } from "lucide-react";
+import { AlertTriangle, Trash2, Eye, CheckCircle, XCircle, Loader, Image } from "lucide-react";
 import Link from "next/link";
+import { ThumbnailRegenerator } from "@/components/ThumbnailRegenerator";
 
 interface FlaggedCircuit {
   id: string;
@@ -32,7 +33,8 @@ export default function AdminDashboard() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [flags, setFlags] = useState<FlaggedCircuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
+  const [activeTab, setActiveTab] = useState<'flags' | 'thumbnails'>('flags');
+  const [flagFilter, setFlagFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
 
   // Check admin authorization
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function AdminDashboard() {
 
   // Load flagged circuits
   useEffect(() => {
-    if (!isAuthorized) return;
+    if (!isAuthorized || activeTab !== 'flags') return;
 
     const loadFlags = async () => {
       setIsLoading(true);
@@ -123,7 +125,7 @@ export default function AdminDashboard() {
     };
 
     loadFlags();
-  }, [isAuthorized, filter]);
+  }, [isAuthorized, activeTab, flagFilter]);
 
   const handleDeleteCircuit = async (circuitId: string) => {
     if (!confirm('Are you sure you want to delete this circuit? This action cannot be undone.')) {
@@ -163,6 +165,48 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDismissFlag = async (flagId: string) => {
+    if (!confirm('Mark this flag as dismissed? The circuit will remain published.')) {
+      return;
+    }
+
+    try {
+      // Get the access token from Supabase
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/admin/update-flag', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          flagId,
+          status: 'dismissed',
+          adminNotes: 'Reviewed and dismissed - no action required'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to dismiss flag');
+      }
+
+      alert('Flag dismissed successfully');
+      // Reload flags
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error dismissing flag:', error);
+      alert(error.message || 'Failed to dismiss flag. Please try again.');
+    }
+  };
+
   if (authLoading || !isAuthorized) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -192,12 +236,41 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          {/* Filter tabs */}
-          <div className="flex gap-2 mb-6 border-b">
+          {/* Main Tab Navigation */}
+          <div className="flex gap-2 mb-6 border-b-2">
             <button
-              onClick={() => setFilter('pending')}
+              onClick={() => setActiveTab('flags')}
+              className={`px-6 py-3 font-semibold transition-colors flex items-center gap-2 ${
+                activeTab === 'flags'
+                  ? 'border-b-2 border-primary text-primary -mb-0.5'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Flagged Circuits
+            </button>
+            <button
+              onClick={() => setActiveTab('thumbnails')}
+              className={`px-6 py-3 font-semibold transition-colors flex items-center gap-2 ${
+                activeTab === 'thumbnails'
+                  ? 'border-b-2 border-primary text-primary -mb-0.5'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Image className="w-4 h-4" />
+              Thumbnail Regeneration
+            </button>
+          </div>
+
+          {/* Flags Section */}
+          {activeTab === 'flags' && (
+            <>
+              {/* Flag Filter tabs */}
+              <div className="flex gap-2 mb-6 border-b">
+                <button
+                  onClick={() => setFlagFilter('pending')}
               className={`px-4 py-2 font-medium transition-colors ${
-                filter === 'pending'
+                flagFilter === 'pending'
                   ? 'border-b-2 border-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
@@ -205,9 +278,9 @@ export default function AdminDashboard() {
               Pending ({flags.filter(f => f.status === 'pending').length})
             </button>
             <button
-              onClick={() => setFilter('reviewed')}
+              onClick={() => setFlagFilter('reviewed')}
               className={`px-4 py-2 font-medium transition-colors ${
-                filter === 'reviewed'
+                flagFilter === 'reviewed'
                   ? 'border-b-2 border-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
@@ -215,9 +288,9 @@ export default function AdminDashboard() {
               Reviewed ({flags.filter(f => f.status !== 'pending').length})
             </button>
             <button
-              onClick={() => setFilter('all')}
+              onClick={() => setFlagFilter('all')}
               className={`px-4 py-2 font-medium transition-colors ${
-                filter === 'all'
+                flagFilter === 'all'
                   ? 'border-b-2 border-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
@@ -237,7 +310,7 @@ export default function AdminDashboard() {
               <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
               <h3 className="text-lg font-semibold mb-2">No flags to review</h3>
               <p className="text-muted-foreground">
-                {filter === 'pending'
+                {flagFilter === 'pending'
                   ? 'There are no pending flags at the moment.'
                   : 'No flags found for this filter.'}
               </p>
@@ -246,8 +319,8 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               {flags
                 .filter(flag => {
-                  if (filter === 'pending') return flag.status === 'pending';
-                  if (filter === 'reviewed') return flag.status !== 'pending';
+                  if (flagFilter === 'pending') return flag.status === 'pending';
+                  if (flagFilter === 'reviewed') return flag.status !== 'pending';
                   return true;
                 })
                 .map((flag) => (
@@ -310,6 +383,15 @@ export default function AdminDashboard() {
                             </Link>
 
                             <button
+                              onClick={() => handleDismissFlag(flag.id)}
+                              className="px-3 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors flex items-center gap-2"
+                              title="Dismiss flag - circuit is OK"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Dismiss
+                            </button>
+
+                            <button
                               onClick={() => handleDeleteCircuit(flag.circuit!.id)}
                               className="px-3 py-2 bg-destructive text-destructive-foreground rounded-md text-sm hover:bg-destructive/90 transition-colors flex items-center gap-2"
                               title="Delete circuit"
@@ -324,6 +406,13 @@ export default function AdminDashboard() {
                   </div>
                 ))}
             </div>
+          )}
+            </>
+          )}
+
+          {/* Thumbnails Section */}
+          {activeTab === 'thumbnails' && (
+            <ThumbnailRegenerator />
           )}
         </div>
       </main>
