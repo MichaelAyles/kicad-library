@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
 import { LogOut, User } from 'lucide-react';
+import { SearchAutocomplete } from './SearchAutocomplete';
 
 export function Header() {
   const { user, isLoading, signOut } = useAuth();
@@ -18,25 +19,35 @@ export function Header() {
 
   return (
     <header className="border-b border-border bg-background/95 backdrop-blur-md sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Link href="/" className="text-2xl font-bold green-gradient-text hover:opacity-80 transition-opacity">
-          CircuitSnips
-        </Link>
-        <nav className="hidden md:flex items-center gap-6">
-          <Link href="/browse" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
-            Browse
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
+      <div className="container mx-auto px-4 py-4">
+        {/* Top Row: Logo, Nav, User */}
+        <div className="flex items-center justify-between gap-4">
+          <Link href="/" className="text-2xl font-bold green-gradient-text hover:opacity-80 transition-opacity flex-shrink-0">
+            CircuitSnips
           </Link>
-          <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
-            Search
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
-          </Link>
-          <Link href="/upload" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
-            Upload
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
-          </Link>
-        </nav>
-        <div className="flex items-center gap-4">
+
+          {/* Desktop Nav */}
+          <nav className="hidden lg:flex items-center gap-6">
+            <Link href="/browse" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
+              Browse
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
+            </Link>
+            <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
+              Search
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
+            </Link>
+            <Link href="/upload" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
+              Upload
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
+            </Link>
+          </nav>
+
+          {/* Desktop Search */}
+          <div className="hidden md:block flex-1 max-w-xl mx-4">
+            <SearchAutocomplete />
+          </div>
+
+          <div className="flex items-center gap-4 flex-shrink-0">
           <ThemeToggle />
           {isLoading ? (
             <div className="px-4 py-2 text-sm text-muted-foreground">Loading...</div>
@@ -75,6 +86,12 @@ export function Header() {
               Sign In
             </Link>
           )}
+          </div>
+        </div>
+
+        {/* Mobile Search Row */}
+        <div className="md:hidden mt-4">
+          <SearchAutocomplete />
         </div>
       </div>
     </header>

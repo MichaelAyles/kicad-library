@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     const tag = searchParams.get('tag') || '';
     const license = searchParams.get('license') || '';
     const sort = searchParams.get('sort') || 'relevance';
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
 
     let supabaseQuery = supabase
       .from('circuits')
@@ -76,8 +77,8 @@ export async function GET(request: NextRequest) {
         supabaseQuery = supabaseQuery.order('copy_count', { ascending: false });
     }
 
-    // Limit to 50 results
-    supabaseQuery = supabaseQuery.limit(50);
+    // Limit results (max 100 for safety)
+    supabaseQuery = supabaseQuery.limit(Math.min(limit, 100));
 
     const { data: circuits, error } = await supabaseQuery;
 
