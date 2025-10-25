@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Search as SearchIcon, Filter, SortDesc } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { SearchAutocomplete } from "@/components/SearchAutocomplete";
 
 interface Circuit {
   id: string;
@@ -35,7 +36,6 @@ interface PopularTag {
 function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [query, setQuery] = useState(searchParams.get('q') || '');
   const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -47,12 +47,8 @@ function SearchContent() {
     setSearched(true);
 
     try {
-      const params = new URLSearchParams();
-
-      if (query) params.append('q', query);
-      if (searchParams.get('category')) params.append('category', searchParams.get('category')!);
-      if (searchParams.get('tag')) params.append('tag', searchParams.get('tag')!);
-      if (sort) params.append('sort', sort);
+      const params = new URLSearchParams(searchParams.toString());
+      if (sort) params.set('sort', sort);
 
       const response = await fetch(`/api/search?${params.toString()}`);
       const data = await response.json();
@@ -67,7 +63,7 @@ function SearchContent() {
     } finally {
       setLoading(false);
     }
-  }, [query, searchParams, sort]);
+  }, [searchParams, sort]);
 
   useEffect(() => {
     const q = searchParams.get('q');
@@ -75,7 +71,6 @@ function SearchContent() {
     const tag = searchParams.get('tag');
 
     if (q || category || tag) {
-      setQuery(q || '');
       performSearch();
     }
   }, [searchParams, performSearch]);
@@ -96,15 +91,6 @@ function SearchContent() {
 
     fetchPopularTags();
   }, []);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const params = new URLSearchParams();
-    if (query) params.append('q', query);
-    if (sort) params.append('sort', sort);
-    router.push(`/search?${params.toString()}`);
-    performSearch();
-  };
 
   const handleSortChange = (newSort: string) => {
     setSort(newSort);
@@ -129,23 +115,10 @@ function SearchContent() {
             </p>
           </div>
 
-          {/* Search Input */}
-          <form onSubmit={handleSearch} className="relative mb-8">
-            <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-6 h-6" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by title, description, components, or tags..."
-              className="w-full pl-14 pr-32 py-4 text-lg border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-background"
-            />
-            <button
-              type="submit"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-6 py-2 green-gradient text-black rounded-md font-semibold hover:shadow-lg green-glow-hover transition-all"
-            >
-              Search
-            </button>
-          </form>
+          {/* Search Input with Autocomplete */}
+          <div className="mb-8 max-w-3xl mx-auto">
+            <SearchAutocomplete />
+          </div>
 
           {/* Sort Options */}
           {searched && (

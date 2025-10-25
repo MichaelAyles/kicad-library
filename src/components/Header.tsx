@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
 import { LogOut, User } from 'lucide-react';
@@ -8,6 +9,8 @@ import { SearchAutocomplete } from './SearchAutocomplete';
 
 export function Header() {
   const { user, isLoading, signOut } = useAuth();
+  const pathname = usePathname();
+  const isSearchPage = pathname === '/search';
 
   const handleSignOut = async () => {
     try {
@@ -42,10 +45,12 @@ export function Header() {
             </Link>
           </nav>
 
-          {/* Desktop Search */}
-          <div className="hidden md:block flex-1 max-w-xl mx-4">
-            <SearchAutocomplete />
-          </div>
+          {/* Desktop Search - Hide on search page */}
+          {!isSearchPage && (
+            <div className="hidden md:block flex-1 max-w-xl mx-4">
+              <SearchAutocomplete />
+            </div>
+          )}
 
           <div className="flex items-center gap-4 flex-shrink-0">
           <ThemeToggle />
@@ -89,10 +94,12 @@ export function Header() {
           </div>
         </div>
 
-        {/* Mobile Search Row */}
-        <div className="md:hidden mt-4">
-          <SearchAutocomplete />
-        </div>
+        {/* Mobile Search Row - Hide on search page */}
+        {!isSearchPage && (
+          <div className="md:hidden mt-4">
+            <SearchAutocomplete />
+          </div>
+        )}
       </div>
     </header>
   );
