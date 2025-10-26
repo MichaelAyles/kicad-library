@@ -59,6 +59,11 @@ async function captureElement(element: HTMLElement): Promise<string> {
       overlay.style.display = originalDisplay;
     }
 
+    // Validate canvas dimensions
+    if (canvas.width === 0 || canvas.height === 0) {
+      throw new Error(`Canvas has invalid dimensions: ${canvas.width}x${canvas.height}. Element may not be visible or rendered.`);
+    }
+
     // Resize canvas to thumbnail dimensions while maintaining aspect ratio
     const resizedCanvas = document.createElement('canvas');
     resizedCanvas.width = THUMBNAIL_WIDTH;

@@ -85,8 +85,8 @@ export function ThumbnailRegenerator() {
     ));
 
     try {
-      // Wait for KiCanvas to fully render
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait for KiCanvas to fully render and stabilize
+      await new Promise(resolve => setTimeout(resolve, 3500));
 
       const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
       if (!kicanvasElement) {
@@ -331,14 +331,15 @@ export function ThumbnailRegenerator() {
         </div>
       </div>
 
-      {/* Hidden KiCanvas Renderer */}
+      {/* Hidden KiCanvas Renderer - Uses opacity instead of display:none to maintain dimensions */}
       {isProcessing && currentIndex < circuits.length && (
-        <div className="hidden">
-          <div ref={kicanvasRef}>
+        <div className="fixed -top-[9999px] -left-[9999px] opacity-0 pointer-events-none" style={{ width: '800px', height: '600px' }}>
+          <div ref={kicanvasRef} style={{ width: '100%', height: '100%' }}>
             <kicanvas-embed
               id="thumbnail-kicanvas"
               controls="basic"
               src={`data:application/x-kicad-schematic;base64,${btoa(circuits[currentIndex].raw_sexpr)}`}
+              style={{ width: '100%', height: '100%' }}
             />
           </div>
         </div>
