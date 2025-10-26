@@ -64,9 +64,8 @@ export default function HomePage() {
 
       {/* Hero Section - Green Theme */}
       <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden py-20 px-4">
-        {/* Animated Circuit Background */}
+        {/* Subtle Background Gradient */}
         <div className="absolute inset-0 -z-10">
-          <div className="circuit-pattern animate-circuit absolute inset-0 opacity-30" />
           <div className="absolute inset-0 bg-gradient-radial from-primary/10 via-transparent to-transparent" style={{
             background: 'radial-gradient(ellipse at center, rgba(0, 255, 135, 0.1) 0%, transparent 70%)'
           }} />
