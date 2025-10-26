@@ -3,6 +3,23 @@ import { isClipboardSnippet, wrapSnippetToFullFile } from '@/lib/kicad-parser';
 import { getCircuitBySlug } from '@/lib/circuits';
 
 /**
+ * Remove hierarchical sheet instances from schematic
+ * This prevents KiCanvas from trying to load non-existent nested sheet files
+ */
+function removeHierarchicalSheets(sexpr: string): string {
+  // Remove (sheet_instances ...) blocks which contain references to other sheets
+  const sheetInstancesRegex = /\(sheet_instances[^)]*(?:\([^)]*\)[^)]*)*\)/g;
+  let result = sexpr.replace(sheetInstancesRegex, '');
+
+  // Remove individual (sheet ...) elements (hierarchical sheet symbols on schematic)
+  // Match (sheet ... ) including nested parentheses
+  const sheetRegex = /\(sheet\s+[^(]*(?:\([^)]*\)[^(]*)*\)/g;
+  result = result.replace(sheetRegex, '');
+
+  return result;
+}
+
+/**
  * API endpoint to serve schematic files for KiCanvas viewer
  * Fetches circuit from database and serves the raw S-expression as a .kicad_sch file
  */
@@ -105,6 +122,9 @@ export async function GET(
       // It's already a full file - use as-is
       schematicFile = rawData;
     }
+
+    // Remove hierarchical sheet references to prevent KiCanvas from trying to load non-existent files
+    schematicFile = removeHierarchicalSheets(schematicFile);
 
     // Return with proper content type
     return new NextResponse(schematicFile, {
