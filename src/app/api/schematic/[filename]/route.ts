@@ -18,10 +18,24 @@ export async function GET(
     const circuit = await getCircuitBySlug(slug);
 
     if (!circuit) {
-      return NextResponse.json(
-        { error: 'Circuit not found' },
-        { status: 404 }
-      );
+      // Return an empty schematic stub instead of 404 JSON error
+      // This handles hierarchical sheet references that don't exist in our database
+      // KiCanvas will load an empty sheet instead of crashing
+      const emptySchematic = `(kicad_sch (version 20230121) (generator "CircuitSnips")
+  (uuid 00000000-0000-0000-0000-000000000000)
+  (paper "A4")
+  (title_block
+    (title "Sheet Not Found")
+    (comment 1 "This hierarchical sheet is not available")
+  )
+)`;
+      return new NextResponse(emptySchematic, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `inline; filename="${params.filename}"`,
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
     }
 
     // Get raw S-expression from database
