@@ -34,6 +34,27 @@ interface ProcessingResult {
   darkUrl?: string;
 }
 
+/**
+ * UTF-8 safe base64 encoding
+ * Handles Unicode characters that btoa() cannot process
+ */
+function utf8ToBase64(str: string): string {
+  try {
+    // Convert string to UTF-8 bytes
+    const utf8Bytes = new TextEncoder().encode(str);
+    // Convert bytes to binary string
+    let binaryString = '';
+    utf8Bytes.forEach(byte => {
+      binaryString += String.fromCharCode(byte);
+    });
+    // Encode to base64
+    return btoa(binaryString);
+  } catch (error) {
+    console.error('Error encoding to base64:', error);
+    throw new Error('Failed to encode circuit data');
+  }
+}
+
 export function ThumbnailRegenerator() {
   const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,12 +106,25 @@ export function ThumbnailRegenerator() {
     ));
 
     try {
+      // Validate the circuit data can be encoded
+      try {
+        utf8ToBase64(circuit.raw_sexpr);
+      } catch (encodeError) {
+        throw new Error('Circuit contains invalid characters for encoding');
+      }
+
       // Wait for KiCanvas to fully render and stabilize
       await new Promise(resolve => setTimeout(resolve, 3500));
 
       const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
       if (!kicanvasElement) {
-        throw new Error('KiCanvas element not found');
+        throw new Error('KiCanvas element not found - viewer may not have loaded');
+      }
+
+      // Check if KiCanvas has actually rendered content
+      const kicanvasContent = kicanvasElement.shadowRoot;
+      if (!kicanvasContent) {
+        throw new Error('KiCanvas shadow DOM not initialized');
       }
 
       // Capture thumbnails in both themes
@@ -338,7 +372,7 @@ export function ThumbnailRegenerator() {
             <kicanvas-embed
               id="thumbnail-kicanvas"
               controls="basic"
-              src={`data:application/x-kicad-schematic;base64,${btoa(circuits[currentIndex].raw_sexpr)}`}
+              src={`data:application/x-kicad-schematic;base64,${utf8ToBase64(circuits[currentIndex].raw_sexpr)}`}
               style={{ width: '100%', height: '100%' }}
             />
           </div>
