@@ -129,6 +129,19 @@ export function ThumbnailRegenerator() {
     ));
 
     try {
+      // Validate the circuit data is a valid KiCad S-expression
+      const trimmedData = circuit.raw_sexpr.trim();
+
+      // Check if it starts with HTML (corrupted data)
+      if (trimmedData.startsWith('<!DOCTYPE') || trimmedData.startsWith('<html') || trimmedData.startsWith('<?xml')) {
+        throw new Error('Circuit contains corrupted data (HTML/XML instead of schematic)');
+      }
+
+      // Check if it starts with a valid S-expression
+      if (!trimmedData.startsWith('(kicad_sch') && !trimmedData.startsWith('(')) {
+        throw new Error('Circuit data is not a valid KiCad S-expression');
+      }
+
       // Validate the circuit data can be encoded
       try {
         utf8ToBase64(circuit.raw_sexpr);
@@ -151,11 +164,20 @@ export function ThumbnailRegenerator() {
       }
 
       // Capture thumbnails in both themes
-      const thumbnailResult = await captureThumbnails(
-        kicanvasElement,
-        theme,
-        setTheme
-      );
+      let thumbnailResult;
+      try {
+        thumbnailResult = await captureThumbnails(
+          kicanvasElement,
+          theme,
+          setTheme
+        );
+      } catch (captureError: any) {
+        // Check if it's a KiCanvas parsing error
+        if (captureError.message?.includes('Unexpected character')) {
+          throw new Error('KiCanvas failed to parse circuit data - data may be corrupted');
+        }
+        throw captureError;
+      }
 
       if (!thumbnailResult.light || !thumbnailResult.dark) {
         throw new Error('Failed to capture thumbnails');
