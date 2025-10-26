@@ -448,13 +448,13 @@ export function ThumbnailRegenerator() {
                   <h4 className="text-sm font-semibold mb-2">Circuit Preview</h4>
                   <div className="rounded-md overflow-hidden border-2 border-muted bg-background" style={{ height: '400px' }}>
                     <kicanvas-embed
-                      src={`data:application/x-kicad-schematic;base64,${utf8ToBase64(removeHierarchicalSheets(circuits[index].raw_sexpr))}`}
+                      src={`/api/schematic/${circuits[index].slug}.kicad_sch`}
                       controls="full"
                       style={{ width: '100%', height: '100%', display: 'block' }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    This is the same view that will be captured for the thumbnail.
+                    This preview uses the API endpoint (same as circuit detail page). The thumbnail capture uses inline data.
                   </p>
                 </div>
               )}
