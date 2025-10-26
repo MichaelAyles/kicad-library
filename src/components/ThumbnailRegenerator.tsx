@@ -23,6 +23,8 @@ interface Circuit {
   title: string;
   user_id: string;
   raw_sexpr: string;
+  thumbnail_light_url: string | null;
+  thumbnail_dark_url: string | null;
 }
 
 interface ProcessingResult {
@@ -65,17 +67,38 @@ export function ThumbnailRegenerator() {
   const [selectedCircuits, setSelectedCircuits] = useState<Set<string>>(new Set());
   const kicanvasRef = useRef<HTMLDivElement>(null);
 
-  // Fetch circuits without thumbnails
+  // Fetch all circuits from circuitsnips-importer user
   useEffect(() => {
     const fetchCircuits = async () => {
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
 
+        // First, get the circuitsnips-importer user ID
+        const { data: importerUser, error: userError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', 'circuitsnips-importer')
+          .single();
+
+        if (userError) {
+          console.error('Error fetching importer user:', userError);
+          throw userError;
+        }
+
+        if (!importerUser) {
+          console.log('No circuitsnips-importer user found');
+          setCircuits([]);
+          setResults([]);
+          setIsLoading(false);
+          return;
+        }
+
+        // Fetch all circuits from circuitsnips-importer
         const { data, error } = await supabase
           .from('circuits')
-          .select('id, slug, title, user_id, raw_sexpr')
-          .or('thumbnail_light_url.is.null,thumbnail_dark_url.is.null')
+          .select('id, slug, title, user_id, raw_sexpr, thumbnail_light_url, thumbnail_dark_url')
+          .eq('user_id', importerUser.id)
           .order('created_at', { ascending: false });
 
         if (error) {
@@ -246,9 +269,9 @@ export function ThumbnailRegenerator() {
     return (
       <div className="text-center py-12 bg-card border rounded-lg">
         <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
-        <h3 className="text-lg font-semibold mb-2">All circuits have thumbnails</h3>
+        <h3 className="text-lg font-semibold mb-2">No circuits found</h3>
         <p className="text-muted-foreground">
-          There are no circuits requiring thumbnail regeneration.
+          No circuits found from circuitsnips-importer user.
         </p>
       </div>
     );
@@ -257,17 +280,30 @@ export function ThumbnailRegenerator() {
   const successCount = results.filter(r => r.status === 'success').length;
   const errorCount = results.filter(r => r.status === 'error').length;
   const pendingCount = results.filter(r => r.status === 'pending').length;
+  const withThumbnails = circuits.filter(c => c.thumbnail_light_url && c.thumbnail_dark_url).length;
+  const withoutThumbnails = circuits.length - withThumbnails;
 
   return (
     <div className="space-y-6">
       {/* Stats Card */}
       <div className="bg-card border rounded-lg p-6">
         <h2 className="text-2xl font-bold mb-4">Thumbnail Regeneration</h2>
+        <p className="text-sm text-muted-foreground mb-6">
+          Showing all circuits from @circuitsnips-importer
+        </p>
 
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <div>
             <p className="text-sm text-muted-foreground">Total</p>
             <p className="text-2xl font-bold">{circuits.length}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">With Thumbnails</p>
+            <p className="text-2xl font-bold text-blue-500">{withThumbnails}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Missing</p>
+            <p className="text-2xl font-bold text-orange-500">{withoutThumbnails}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Pending</p>
@@ -348,9 +384,20 @@ export function ThumbnailRegenerator() {
                 )}
               </div>
 
-              {/* Title and Error */}
+              {/* Title, Error, and Thumbnail Status */}
               <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{result.title}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium truncate">{result.title}</p>
+                  {circuits[index] && circuits[index].thumbnail_light_url && circuits[index].thumbnail_dark_url ? (
+                    <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-500 rounded flex-shrink-0">
+                      Has Thumbnails
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 text-xs bg-orange-500/10 text-orange-500 rounded flex-shrink-0">
+                      Missing
+                    </span>
+                  )}
+                </div>
                 {result.error && (
                   <p className="text-xs text-red-500 mt-1">{result.error}</p>
                 )}
