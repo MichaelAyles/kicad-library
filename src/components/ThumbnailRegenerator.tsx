@@ -41,6 +41,7 @@ export function ThumbnailRegenerator() {
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [selectedCircuits, setSelectedCircuits] = useState<Set<string>>(new Set());
   const kicanvasRef = useRef<HTMLDivElement>(null);
 
   // Fetch circuits without thumbnails
@@ -157,15 +158,45 @@ export function ThumbnailRegenerator() {
   };
 
   const startBatchProcessing = async () => {
+    const circuitsToProcess = selectedCircuits.size > 0
+      ? circuits.filter(c => selectedCircuits.has(c.id))
+      : circuits;
+
+    if (circuitsToProcess.length === 0) {
+      alert('Please select circuits to process');
+      return;
+    }
+
     setIsProcessing(true);
     setCurrentIndex(0);
 
     for (let i = 0; i < circuits.length; i++) {
+      if (selectedCircuits.size > 0 && !selectedCircuits.has(circuits[i].id)) {
+        continue; // Skip unselected circuits
+      }
       setCurrentIndex(i);
       await processCircuit(circuits[i], i);
     }
 
     setIsProcessing(false);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCircuits.size === circuits.length) {
+      setSelectedCircuits(new Set());
+    } else {
+      setSelectedCircuits(new Set(circuits.map(c => c.id)));
+    }
+  };
+
+  const toggleSelectCircuit = (circuitId: string) => {
+    const newSelected = new Set(selectedCircuits);
+    if (newSelected.has(circuitId)) {
+      newSelected.delete(circuitId);
+    } else {
+      newSelected.add(circuitId);
+    }
+    setSelectedCircuits(newSelected);
   };
 
   if (isLoading) {
@@ -218,6 +249,21 @@ export function ThumbnailRegenerator() {
           </div>
         </div>
 
+        {/* Select All Checkbox */}
+        <div className="flex items-center gap-3 mb-4 p-3 bg-muted/30 rounded-md border">
+          <input
+            type="checkbox"
+            checked={selectedCircuits.size === circuits.length && circuits.length > 0}
+            onChange={toggleSelectAll}
+            className="w-5 h-5 rounded border-2 border-primary cursor-pointer"
+          />
+          <span className="font-medium">
+            {selectedCircuits.size === 0
+              ? 'Select All'
+              : `${selectedCircuits.size} of ${circuits.length} selected`}
+          </span>
+        </div>
+
         <button
           onClick={startBatchProcessing}
           disabled={isProcessing}
@@ -225,7 +271,9 @@ export function ThumbnailRegenerator() {
         >
           {isProcessing
             ? `Processing ${currentIndex + 1} of ${circuits.length}...`
-            : 'Start Batch Processing'}
+            : selectedCircuits.size > 0
+            ? `Process ${selectedCircuits.size} Selected Circuit${selectedCircuits.size > 1 ? 's' : ''}`
+            : 'Process All Circuits'}
         </button>
       </div>
 
@@ -237,33 +285,45 @@ export function ThumbnailRegenerator() {
           {results.map((result, index) => (
             <div
               key={result.circuitId}
-              className={`flex items-center justify-between p-3 rounded-md border ${
+              className={`flex items-center gap-3 p-3 rounded-md border ${
                 index === currentIndex && isProcessing ? 'bg-primary/10 border-primary' : ''
               }`}
             >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              {/* Checkbox */}
+              <input
+                type="checkbox"
+                checked={selectedCircuits.has(result.circuitId)}
+                onChange={() => toggleSelectCircuit(result.circuitId)}
+                disabled={isProcessing}
+                className="w-5 h-5 rounded border-2 border-primary cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+
+              {/* Status Icon */}
+              <div className="flex-shrink-0">
                 {result.status === 'pending' && (
-                  <div className="w-5 h-5 rounded-full border-2 border-muted flex-shrink-0" />
+                  <div className="w-5 h-5 rounded-full border-2 border-muted" />
                 )}
                 {result.status === 'processing' && (
-                  <Loader className="w-5 h-5 animate-spin text-primary flex-shrink-0" />
+                  <Loader className="w-5 h-5 animate-spin text-primary" />
                 )}
                 {result.status === 'success' && (
-                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-green-500" />
                 )}
                 {result.status === 'error' && (
-                  <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <XCircle className="w-5 h-5 text-red-500" />
                 )}
-
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{result.title}</p>
-                  {result.error && (
-                    <p className="text-xs text-red-500 mt-1">{result.error}</p>
-                  )}
-                </div>
               </div>
 
-              <span className="text-sm text-muted-foreground ml-2 flex-shrink-0">
+              {/* Title and Error */}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{result.title}</p>
+                {result.error && (
+                  <p className="text-xs text-red-500 mt-1">{result.error}</p>
+                )}
+              </div>
+
+              {/* Index */}
+              <span className="text-sm text-muted-foreground flex-shrink-0">
                 {index + 1}/{results.length}
               </span>
             </div>

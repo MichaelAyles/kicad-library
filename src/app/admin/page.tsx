@@ -35,6 +35,8 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'flags' | 'thumbnails'>('flags');
   const [flagFilter, setFlagFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
+  const [selectedFlags, setSelectedFlags] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   // Check admin authorization
   useEffect(() => {
@@ -207,6 +209,147 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleBulkDismiss = async () => {
+    if (selectedFlags.size === 0) {
+      alert('Please select flags to dismiss');
+      return;
+    }
+
+    if (!confirm(`Dismiss ${selectedFlags.size} selected flag(s)? The circuits will remain published.`)) {
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      for (const flagId of Array.from(selectedFlags)) {
+        try {
+          const response = await fetch('/api/admin/update-flag', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              flagId,
+              status: 'dismissed',
+              adminNotes: 'Bulk dismissed - no action required'
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Error dismissing flag ${flagId}:`, error);
+        }
+      }
+
+      alert(`Dismissed ${successCount} flag(s). ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Bulk dismiss error:', error);
+      alert(error.message || 'Failed to dismiss flags');
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedFlags.size === 0) {
+      alert('Please select flags to delete');
+      return;
+    }
+
+    if (!confirm(`Delete ${selectedFlags.size} circuit(s)? This action cannot be undone!`)) {
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      for (const flagId of Array.from(selectedFlags)) {
+        const flag = flags.find(f => f.id === flagId);
+        if (!flag?.circuit) continue;
+
+        try {
+          const response = await fetch('/api/admin/delete-circuit', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ circuitId: flag.circuit.id }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Error deleting circuit ${flag.circuit.id}:`, error);
+        }
+      }
+
+      alert(`Deleted ${successCount} circuit(s). ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Bulk delete error:', error);
+      alert(error.message || 'Failed to delete circuits');
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    const filteredFlags = flags.filter(flag => {
+      if (flagFilter === 'pending') return flag.status === 'pending';
+      if (flagFilter === 'reviewed') return flag.status !== 'pending';
+      return true;
+    });
+
+    if (selectedFlags.size === filteredFlags.length) {
+      setSelectedFlags(new Set());
+    } else {
+      setSelectedFlags(new Set(filteredFlags.map(f => f.id)));
+    }
+  };
+
+  const toggleSelectFlag = (flagId: string) => {
+    const newSelected = new Set(selectedFlags);
+    if (newSelected.has(flagId)) {
+      newSelected.delete(flagId);
+    } else {
+      newSelected.add(flagId);
+    }
+    setSelectedFlags(newSelected);
+  };
+
   if (authLoading || !isAuthorized) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -299,6 +442,48 @@ export default function AdminDashboard() {
             </button>
           </div>
 
+          {/* Bulk Actions Bar */}
+          {!isLoading && flags.length > 0 && (
+            <div className="flex items-center justify-between gap-4 mb-4 p-4 bg-muted/30 rounded-lg border">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedFlags.size === flags.filter(flag => {
+                    if (flagFilter === 'pending') return flag.status === 'pending';
+                    if (flagFilter === 'reviewed') return flag.status !== 'pending';
+                    return true;
+                  }).length && flags.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-5 h-5 rounded border-2 border-primary cursor-pointer"
+                />
+                <span className="font-medium">
+                  {selectedFlags.size === 0 ? 'Select All' : `${selectedFlags.size} selected`}
+                </span>
+              </div>
+
+              {selectedFlags.size > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleBulkDismiss}
+                    disabled={isBulkProcessing}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isBulkProcessing ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    Dismiss Selected
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={isBulkProcessing}
+                    className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isBulkProcessing ? <Loader className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Delete Selected
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Flags list */}
           {isLoading ? (
             <div className="text-center py-12">
@@ -328,7 +513,16 @@ export default function AdminDashboard() {
                     key={flag.id}
                     className="bg-card border rounded-lg p-6 hover:shadow-md transition-shadow"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      {/* Checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={selectedFlags.has(flag.id)}
+                        onChange={() => toggleSelectFlag(flag.id)}
+                        className="mt-1 w-5 h-5 rounded border-2 border-primary cursor-pointer flex-shrink-0"
+                      />
+
+                      <div className="flex items-start justify-between gap-4 flex-1">
                       <div className="flex-1">
                         {/* Circuit info */}
                         {flag.circuit && (
@@ -402,6 +596,7 @@ export default function AdminDashboard() {
                           </>
                         )}
                       </div>
+                    </div>
                     </div>
                   </div>
                 ))}
