@@ -16,6 +16,18 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const excludeImported = searchParams.get('excludeImported') === 'true';
 
+    // If excluding imported circuits, first get the importer user's ID
+    let importerUserId: string | null = null;
+    if (excludeImported) {
+      const { data: importerUser } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', 'circuitsnips-importer')
+        .single();
+
+      importerUserId = importerUser?.id || null;
+    }
+
     let supabaseQuery = supabase
       .from('circuits')
       .select(`
@@ -60,8 +72,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Exclude bulk-imported circuits if requested
-    if (excludeImported) {
-      supabaseQuery = supabaseQuery.not('profiles.username', 'eq', 'circuitsnips-importer');
+    if (excludeImported && importerUserId) {
+      supabaseQuery = supabaseQuery.neq('user_id', importerUserId);
     }
 
     // Sorting
