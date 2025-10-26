@@ -72,21 +72,21 @@ export default function HomePage() {
         </div>
 
         <div className="container mx-auto max-w-7xl">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left Content */}
-            <div className="text-center lg:text-left">
+          <div className="flex flex-col items-center">
+            {/* Hero Content */}
+            <div className="text-center max-w-4xl">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
                 <span className="text-foreground">Copy-Paste </span>
                 <span className="green-gradient-text">Circuits</span>
                 <br />
                 <span className="text-foreground">for KiCad</span>
               </h1>
-              <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto lg:mx-0">
+              <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
                 Share and discover reusable schematic subcircuits. Built by makers, for makers.
               </p>
 
               {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
                 <Link
                   href="/browse"
                   className="px-8 py-3 green-gradient text-black rounded-md font-semibold hover:shadow-lg green-glow-hover transition-all inline-flex items-center justify-center gap-2"
@@ -104,7 +104,7 @@ export default function HomePage() {
               </div>
 
               {/* Stats */}
-              <div className="flex gap-8 justify-center lg:justify-start">
+              <div className="flex gap-8 justify-center">
                 <div className="flex flex-col">
                   <span className="text-3xl font-bold green-gradient-text">
                     {stats.circuits > 0 ? `${stats.circuits}` : '...'}
@@ -126,100 +126,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right Visual - PCB Preview */}
-            <div className="flex justify-center lg:justify-end">
-              <div className="relative w-full max-w-md aspect-[4/3] perspective-1000">
-                <div className="pcb-green-bg rounded-xl p-8 shadow-2xl green-glow relative overflow-hidden h-full pcb-3d">
-                  {/* Main IC Chip */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-zinc-800 rounded border-2 border-zinc-600 shadow-lg">
-                    <div className="grid grid-cols-3 gap-1 p-2 h-full">
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0s' }} />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0.2s' }} />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0.4s' }} />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '0.6s' }} />
-                      <div className="w-full h-full bg-primary/30 rounded-sm chip-process" style={{ animationDelay: '0.8s' }} />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1s' }} />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1.2s' }} />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1.4s' }} />
-                      <div className="w-full h-full bg-zinc-700 rounded-sm chip-process" style={{ animationDelay: '1.6s' }} />
-                    </div>
-                  </div>
-
-                  {/* Resistors */}
-                  <div className="absolute top-16 left-12 w-12 h-3 bg-amber-900 rounded-full border border-amber-700 flex items-center justify-center">
-                    <div className="w-1 h-full bg-amber-700" />
-                    <div className="w-1 h-full bg-zinc-300 mx-0.5" />
-                    <div className="w-1 h-full bg-amber-700" />
-                  </div>
-                  <div className="absolute top-28 right-16 w-12 h-3 bg-amber-900 rounded-full border border-amber-700 flex items-center justify-center">
-                    <div className="w-1 h-full bg-red-600" />
-                    <div className="w-1 h-full bg-amber-700 mx-0.5" />
-                    <div className="w-1 h-full bg-zinc-300" />
-                  </div>
-
-                  {/* Capacitors */}
-                  <div className="absolute bottom-16 left-16 flex gap-0.5">
-                    <div className="w-2 h-6 bg-yellow-600 rounded-sm" />
-                    <div className="w-2 h-6 bg-yellow-700 rounded-sm" />
-                  </div>
-                  <div className="absolute top-20 right-12 flex gap-0.5">
-                    <div className="w-2 h-6 bg-blue-600 rounded-sm" />
-                    <div className="w-2 h-6 bg-blue-700 rounded-sm" />
-                  </div>
-
-                  {/* LEDs with dynamic blinking */}
-                  <div className="absolute bottom-12 right-16 w-3 h-3 rounded-full bg-red-500 led-blink" style={{ animationDelay: '0s' }} />
-                  <div className="absolute top-12 left-1/3 w-3 h-3 rounded-full bg-green-400 led-blink" style={{ animationDelay: '0.75s' }} />
-                  <div className="absolute top-1/3 right-12 w-3 h-3 rounded-full bg-yellow-400 led-blink" style={{ animationDelay: '1.5s' }} />
-
-                  {/* Animated Circuit Traces with Data Pulses */}
-                  {/* Horizontal traces with flowing data */}
-                  <div className="absolute top-1/2 left-8 w-16 h-0.5 bg-primary/60 trace-glow overflow-hidden">
-                    <div className="data-pulse-h" style={{ animationDelay: '0s' }} />
-                  </div>
-                  <div className="absolute top-1/2 right-8 w-20 h-0.5 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.3s' }}>
-                    <div className="data-pulse-h" style={{ animationDelay: '0.7s' }} />
-                  </div>
-                  <div className="absolute bottom-20 left-12 w-24 h-0.5 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.6s' }}>
-                    <div className="data-pulse-h" style={{ animationDelay: '1.4s' }} />
-                  </div>
-                  <div className="absolute top-16 right-16 w-16 h-0.5 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.9s' }}>
-                    <div className="data-pulse-h" style={{ animationDelay: '0.3s' }} />
-                  </div>
-                  <div className="absolute bottom-1/3 left-1/4 w-20 h-0.5 bg-primary/60 trace-glow overflow-hidden">
-                    <div className="data-pulse-h" style={{ animationDelay: '1s' }} />
-                  </div>
-
-                  {/* Vertical traces with flowing data */}
-                  <div className="absolute top-16 left-16 w-0.5 h-20 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.2s' }}>
-                    <div className="data-pulse-v" style={{ animationDelay: '0.5s' }} />
-                  </div>
-                  <div className="absolute top-20 right-20 w-0.5 h-16 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.5s' }}>
-                    <div className="data-pulse-v" style={{ animationDelay: '1.2s' }} />
-                  </div>
-                  <div className="absolute bottom-12 left-24 w-0.5 h-12 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '0.8s' }}>
-                    <div className="data-pulse-v" style={{ animationDelay: '0.9s' }} />
-                  </div>
-                  <div className="absolute top-24 left-1/2 w-0.5 h-16 bg-primary/60 trace-glow overflow-hidden" style={{ animationDelay: '1.1s' }}>
-                    <div className="data-pulse-v" style={{ animationDelay: '0.2s' }} />
-                  </div>
-                  <div className="absolute top-1/3 right-1/3 w-0.5 h-14 bg-primary/60 trace-glow overflow-hidden">
-                    <div className="data-pulse-v" style={{ animationDelay: '1.6s' }} />
-                  </div>
-
-                  {/* Connection Nodes */}
-                  <div className="absolute top-1/2 left-24 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" />
-                  <div className="absolute top-1/2 right-28 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" style={{ animationDelay: '0.5s' }} />
-                  <div className="absolute top-20 left-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" style={{ animationDelay: '1s' }} />
-                  <div className="absolute bottom-20 left-1/3 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(0,255,135,0.8)] animate-pulse" style={{ animationDelay: '1.5s' }} />
-
-                  {/* Via holes */}
-                  <div className="absolute top-12 left-20 w-2 h-2 rounded-full border-2 border-primary/40 bg-zinc-900" />
-                  <div className="absolute bottom-16 right-20 w-2 h-2 rounded-full border-2 border-primary/40 bg-zinc-900" />
-                  <div className="absolute top-32 right-1/3 w-2 h-2 rounded-full border-2 border-primary/40 bg-zinc-900" />
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
