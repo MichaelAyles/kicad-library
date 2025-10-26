@@ -13,6 +13,7 @@ export default function BrowsePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites'>('copies');
+  const [hideImported, setHideImported] = useState(false);
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -26,7 +27,7 @@ export default function BrowsePage() {
       setIsLoading(true);
       setError(null);
       try {
-        const { circuits: data } = await getCircuits(12, 0, sortBy);
+        const { circuits: data } = await getCircuits(12, 0, sortBy, hideImported);
         setCircuits(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load circuits');
@@ -37,7 +38,7 @@ export default function BrowsePage() {
     };
 
     loadCircuits();
-  }, [sortBy]);
+  }, [sortBy, hideImported]);
 
   const handleSortChange = (newSort: 'copies' | 'recent' | 'favorites') => {
     setSortBy(newSort);
@@ -76,30 +77,49 @@ export default function BrowsePage() {
             </button>
           </div>
 
-          {/* Sort Options */}
-          <div className="flex items-center gap-4 mb-6 text-sm">
-            <span className="text-muted-foreground">Sort by:</span>
-            <button
-              onClick={() => handleSortChange('copies')}
-              className={sortBy === 'copies' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
-            >
-              Most Copied
-              {sortBy === 'copies' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
-            </button>
-            <button
-              onClick={() => handleSortChange('recent')}
-              className={sortBy === 'recent' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
-            >
-              Recent
-              {sortBy === 'recent' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
-            </button>
-            <button
-              onClick={() => handleSortChange('favorites')}
-              className={sortBy === 'favorites' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
-            >
-              Favorites
-              {sortBy === 'favorites' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
-            </button>
+          {/* Sort Options and Filter Toggle */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-muted-foreground">Sort by:</span>
+              <button
+                onClick={() => handleSortChange('copies')}
+                className={sortBy === 'copies' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
+              >
+                Most Copied
+                {sortBy === 'copies' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
+              </button>
+              <button
+                onClick={() => handleSortChange('recent')}
+                className={sortBy === 'recent' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
+              >
+                Recent
+                {sortBy === 'recent' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
+              </button>
+              <button
+                onClick={() => handleSortChange('favorites')}
+                className={sortBy === 'favorites' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
+              >
+                Favorites
+                {sortBy === 'favorites' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
+              </button>
+            </div>
+
+            {/* Hide Imported Toggle */}
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                Hide bulk-imported circuits
+              </span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={hideImported}
+                  onChange={(e) => setHideImported(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-14 h-7 bg-muted rounded-full peer peer-checked:bg-primary transition-colors border-2 border-border peer-checked:border-primary"></div>
+                <div className="absolute left-1 top-1 w-5 h-5 bg-background rounded-full transition-transform peer-checked:translate-x-7 shadow-md"></div>
+              </div>
+            </label>
           </div>
 
           {/* Error State */}

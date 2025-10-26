@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const license = searchParams.get('license') || '';
     const sort = searchParams.get('sort') || 'relevance';
     const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const excludeImported = searchParams.get('excludeImported') === 'true';
 
     let supabaseQuery = supabase
       .from('circuits')
@@ -56,6 +57,11 @@ export async function GET(request: NextRequest) {
     // License filter
     if (license) {
       supabaseQuery = supabaseQuery.eq('license', license);
+    }
+
+    // Exclude bulk-imported circuits if requested
+    if (excludeImported) {
+      supabaseQuery = supabaseQuery.not('profiles.username', 'eq', 'circuitsnips-importer');
     }
 
     // Sorting

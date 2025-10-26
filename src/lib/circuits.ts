@@ -38,7 +38,8 @@ const supabase = createClient();
 export async function getCircuits(
   limit = 12,
   offset = 0,
-  sortBy: 'copies' | 'recent' | 'favorites' = 'copies'
+  sortBy: 'copies' | 'recent' | 'favorites' = 'copies',
+  excludeImported = false
 ): Promise<CircuitsResponse> {
   try {
     let query = supabase
@@ -51,6 +52,11 @@ export async function getCircuits(
       .eq('is_public', true)
       .limit(limit)
       .range(offset, offset + limit - 1);
+
+    // Exclude circuits from @circuitsnips-importer if requested
+    if (excludeImported) {
+      query = query.not('user.username', 'eq', 'circuitsnips-importer');
+    }
 
     // Apply sorting
     if (sortBy === 'copies') {

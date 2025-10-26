@@ -40,6 +40,7 @@ function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [sort, setSort] = useState(searchParams.get('sort') || 'relevance');
+  const [hideImported, setHideImported] = useState(false);
   const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
 
   const performSearch = useCallback(async () => {
@@ -49,6 +50,7 @@ function SearchContent() {
     try {
       const params = new URLSearchParams(searchParams.toString());
       if (sort) params.set('sort', sort);
+      if (hideImported) params.set('excludeImported', 'true');
 
       const response = await fetch(`/api/search?${params.toString()}`);
       const data = await response.json();
@@ -63,7 +65,7 @@ function SearchContent() {
     } finally {
       setLoading(false);
     }
-  }, [searchParams, sort]);
+  }, [searchParams, sort, hideImported]);
 
   useEffect(() => {
     const q = searchParams.get('q');
@@ -120,25 +122,44 @@ function SearchContent() {
             <SearchAutocomplete />
           </div>
 
-          {/* Sort Options */}
+          {/* Sort Options and Filter Toggle */}
           {searched && (
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
               <p className="text-muted-foreground">
                 {circuits.length} {circuits.length === 1 ? 'result' : 'results'} found
               </p>
-              <div className="flex items-center gap-2">
-                <SortDesc className="w-4 h-4 text-muted-foreground" />
-                <select
-                  value={sort}
-                  onChange={(e) => handleSortChange(e.target.value)}
-                  className="px-3 py-1 border rounded-md bg-background text-sm"
-                >
-                  <option value="relevance">Relevance</option>
-                  <option value="recent">Most Recent</option>
-                  <option value="popular">Most Copied</option>
-                  <option value="views">Most Viewed</option>
-                  <option value="favorites">Most Favorited</option>
-                </select>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <SortDesc className="w-4 h-4 text-muted-foreground" />
+                  <select
+                    value={sort}
+                    onChange={(e) => handleSortChange(e.target.value)}
+                    className="px-3 py-1 border rounded-md bg-background text-sm"
+                  >
+                    <option value="relevance">Relevance</option>
+                    <option value="recent">Most Recent</option>
+                    <option value="popular">Most Copied</option>
+                    <option value="views">Most Viewed</option>
+                    <option value="favorites">Most Favorited</option>
+                  </select>
+                </div>
+
+                {/* Hide Imported Toggle */}
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                    Hide bulk-imported
+                  </span>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={hideImported}
+                      onChange={(e) => setHideImported(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-14 h-7 bg-muted rounded-full peer peer-checked:bg-primary transition-colors border-2 border-border peer-checked:border-primary"></div>
+                    <div className="absolute left-1 top-1 w-5 h-5 bg-background rounded-full transition-transform peer-checked:translate-x-7 shadow-md"></div>
+                  </div>
+                </label>
               </div>
             </div>
           )}
