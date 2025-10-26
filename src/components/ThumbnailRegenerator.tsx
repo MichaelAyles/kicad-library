@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Loader, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { captureThumbnails } from "@/lib/thumbnail";
-import { removeHierarchicalSheets } from "@/lib/kicad-parser";
 
 // Declare the kicanvas-embed custom element for TypeScript
 declare global {
@@ -37,26 +36,6 @@ interface ProcessingResult {
   darkUrl?: string;
 }
 
-/**
- * UTF-8 safe base64 encoding
- * Handles Unicode characters that btoa() cannot process
- */
-function utf8ToBase64(str: string): string {
-  try {
-    // Convert string to UTF-8 bytes
-    const utf8Bytes = new TextEncoder().encode(str);
-    // Convert bytes to binary string
-    let binaryString = '';
-    utf8Bytes.forEach(byte => {
-      binaryString += String.fromCharCode(byte);
-    });
-    // Encode to base64
-    return btoa(binaryString);
-  } catch (error) {
-    console.error('Error encoding to base64:', error);
-    throw new Error('Failed to encode circuit data');
-  }
-}
 
 export function ThumbnailRegenerator() {
   const [circuits, setCircuits] = useState<Circuit[]>([]);
@@ -142,13 +121,6 @@ export function ThumbnailRegenerator() {
       // Check if it starts with a valid S-expression
       if (!trimmedData.startsWith('(kicad_sch') && !trimmedData.startsWith('(')) {
         throw new Error('Circuit data is not a valid KiCad S-expression');
-      }
-
-      // Validate the circuit data can be encoded
-      try {
-        utf8ToBase64(circuit.raw_sexpr);
-      } catch (encodeError) {
-        throw new Error('Circuit contains invalid characters for encoding');
       }
 
       // Wait for KiCanvas to fully render and stabilize
@@ -470,7 +442,7 @@ export function ThumbnailRegenerator() {
             <kicanvas-embed
               id="thumbnail-kicanvas"
               controls="basic"
-              src={`data:application/x-kicad-schematic;base64,${utf8ToBase64(removeHierarchicalSheets(circuits[currentIndex].raw_sexpr))}`}
+              src={`/api/schematic/${circuits[currentIndex].slug}.kicad_sch`}
               style={{ width: '100%', height: '100%' }}
             />
           </div>
