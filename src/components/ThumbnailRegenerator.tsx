@@ -66,6 +66,7 @@ export function ThumbnailRegenerator() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [selectedCircuits, setSelectedCircuits] = useState<Set<string>>(new Set());
+  const [previewCircuitId, setPreviewCircuitId] = useState<string | null>(null);
   const kicanvasRef = useRef<HTMLDivElement>(null);
 
   // Fetch all circuits from circuitsnips-importer user
@@ -141,11 +142,6 @@ export function ThumbnailRegenerator() {
       // Check if it starts with a valid S-expression
       if (!trimmedData.startsWith('(kicad_sch') && !trimmedData.startsWith('(')) {
         throw new Error('Circuit data is not a valid KiCad S-expression');
-      }
-
-      // Check if it's a hierarchical schematic (contains sheet instances or sheet symbols)
-      if (trimmedData.includes('(sheet_instances') || trimmedData.includes('(sheet (at')) {
-        throw new Error('Hierarchical schematics are not supported for thumbnail generation');
       }
 
       // Validate the circuit data can be encoded
@@ -381,12 +377,12 @@ export function ThumbnailRegenerator() {
 
         <div className="space-y-2 max-h-[500px] overflow-y-auto">
           {results.map((result, index) => (
-            <div
-              key={result.circuitId}
-              className={`flex items-center gap-3 p-3 rounded-md border ${
-                index === currentIndex && isProcessing ? 'bg-primary/10 border-primary' : ''
-              }`}
-            >
+            <div key={result.circuitId} className="space-y-0">
+              <div
+                className={`flex items-center gap-3 p-3 rounded-md border ${
+                  index === currentIndex && isProcessing ? 'bg-primary/10 border-primary' : ''
+                }`}
+              >
               {/* Checkbox */}
               <input
                 type="checkbox"
@@ -431,10 +427,37 @@ export function ThumbnailRegenerator() {
                 )}
               </div>
 
-              {/* Index */}
-              <span className="text-sm text-muted-foreground flex-shrink-0">
-                {index + 1}/{results.length}
-              </span>
+              {/* Preview and Index */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => setPreviewCircuitId(previewCircuitId === result.circuitId ? null : result.circuitId)}
+                  disabled={isProcessing}
+                  className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {previewCircuitId === result.circuitId ? 'Hide' : 'Preview'}
+                </button>
+                <span className="text-sm text-muted-foreground">
+                  {index + 1}/{results.length}
+                </span>
+              </div>
+              </div>
+
+              {/* Preview Panel */}
+              {previewCircuitId === result.circuitId && (
+                <div className="mt-3 p-4 border-t bg-muted/20">
+                  <h4 className="text-sm font-semibold mb-2">Circuit Preview</h4>
+                  <div className="rounded-md overflow-hidden border-2 border-muted bg-background" style={{ height: '400px' }}>
+                    <kicanvas-embed
+                      src={`data:application/x-kicad-schematic;base64,${utf8ToBase64(removeHierarchicalSheets(circuits[index].raw_sexpr))}`}
+                      controls="full"
+                      style={{ width: '100%', height: '100%', display: 'block' }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    This is the same view that will be captured for the thumbnail.
+                  </p>
+                </div>
+              )}
             </div>
           ))}
         </div>
