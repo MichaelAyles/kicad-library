@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
+import { KiCanvas } from "@/components/KiCanvas";
 import {
   validateSExpression,
   generateSlug,
@@ -18,19 +19,6 @@ import {
 } from "@/lib/kicad-parser";
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
-
-// Declare the kicanvas-embed custom element for TypeScript
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string;
-        controls?: 'none' | 'basic' | 'full';
-        theme?: 'kicad' | 'witchhazel';
-      }, HTMLElement>;
-    }
-  }
-}
 
 type UploadStep = 'paste' | 'preview' | 'metadata' | 'thumbnails' | 'uploading' | 'success';
 
@@ -503,11 +491,12 @@ export default function UploadPage() {
                       </div>
                     </div>
                   ) : previewUrl ? (
-                    <kicanvas-embed
+                    <KiCanvas
                       key={`preview-viewer-${previewUrl}`}
                       src={previewUrl}
                       controls="basic"
-                      style={{ width: '100%', height: '100%' }}
+                      height="100%"
+                      width="100%"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-muted/20">
@@ -825,11 +814,12 @@ export default function UploadPage() {
                         </div>
                       </div>
                     ) : previewUrl ? (
-                      <kicanvas-embed
+                      <KiCanvas
                         key={`thumbnail-viewer-${previewUrl}`}
                         src={previewUrl}
                         controls="basic"
-                        style={{ width: '100%', height: '100%' }}
+                        height="100%"
+                        width="100%"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-muted/20">

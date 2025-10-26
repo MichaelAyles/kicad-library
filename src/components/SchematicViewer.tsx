@@ -1,24 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { KiCanvasCard } from "@/components/KiCanvas";
 
 interface SchematicViewerProps {
   sexpr: string;
   title?: string;
   slug: string;
-}
-
-// Declare the kicanvas-embed custom element for TypeScript
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string;
-        controls?: 'none' | 'basic' | 'full';
-        theme?: 'kicad' | 'witchhazel';
-      }, HTMLElement>;
-    }
-  }
 }
 
 /**
@@ -30,26 +18,19 @@ declare global {
 export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [componentCount, setComponentCount] = useState(0);
-  const [mounted, setMounted] = useState(false);
 
-  // Generate API URL from slug - dynamically serves wrapped schematic
   // Strip any existing .kicad_sch extension to avoid double extensions
   const cleanSlug = slug.replace(/\.kicad_sch$/i, '');
-  const schematicUrl = `/api/schematic/${cleanSlug}.kicad_sch`;
   const viewerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     // Count symbol instances in the S-expression
     const symbolMatches = sexpr.match(/\(symbol \(lib_id/g);
     setComponentCount(symbolMatches ? symbolMatches.length : 0);
 
-    console.log('Loading KiCanvas with file:', schematicUrl);
+    console.log('Loading KiCanvas with slug:', cleanSlug);
     console.log('S-expression preview:', sexpr.substring(0, 100));
-  }, [sexpr, schematicUrl]);
+  }, [sexpr, cleanSlug]);
 
   return (
     <div className="bg-card border rounded-lg overflow-hidden">
@@ -73,17 +54,11 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
 
       {/* Main Viewer Area */}
       <div className="p-8" ref={viewerRef}>
-        <div className="rounded-md overflow-hidden border-2 border-muted" style={{ minHeight: '500px' }}>
-          {mounted ? (
-            <kicanvas-embed
-              src={schematicUrl}
-              controls="full"
-              style={{ width: '100%', height: '500px', display: 'block' }}
-            />
-          ) : (
-            <div className="w-full h-[500px] bg-muted animate-pulse" />
-          )}
-        </div>
+        <KiCanvasCard
+          slug={cleanSlug}
+          controls="full"
+          height="500px"
+        />
       </div>
 
       {/* Expandable S-Expression View */}

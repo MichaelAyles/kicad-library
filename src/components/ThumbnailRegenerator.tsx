@@ -3,19 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Loader, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { captureThumbnails } from "@/lib/thumbnail";
-
-// Declare the kicanvas-embed custom element for TypeScript
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string;
-        controls?: 'none' | 'basic' | 'full';
-        theme?: 'kicad' | 'witchhazel';
-      }, HTMLElement>;
-    }
-  }
-}
+import { KiCanvas, KiCanvasCard } from "@/components/KiCanvas";
 
 interface Circuit {
   id: string;
@@ -418,15 +406,13 @@ export function ThumbnailRegenerator() {
               {previewCircuitId === result.circuitId && (
                 <div className="mt-3 p-4 border-t bg-muted/20">
                   <h4 className="text-sm font-semibold mb-2">Circuit Preview</h4>
-                  <div className="rounded-md overflow-hidden border-2 border-muted bg-background" style={{ height: '400px' }}>
-                    <kicanvas-embed
-                      src={`/api/schematic/${circuits[index].slug}.kicad_sch`}
-                      controls="full"
-                      style={{ width: '100%', height: '100%', display: 'block' }}
-                    />
-                  </div>
+                  <KiCanvasCard
+                    slug={circuits[index].slug}
+                    controls="full"
+                    height="400px"
+                  />
                   <p className="text-xs text-muted-foreground mt-2">
-                    This preview uses the API endpoint (same as circuit detail page). The thumbnail capture uses inline data.
+                    This is the same view that will be captured for the thumbnail.
                   </p>
                 </div>
               )}
@@ -439,11 +425,11 @@ export function ThumbnailRegenerator() {
       {isProcessing && currentIndex < circuits.length && (
         <div className="fixed -top-[9999px] -left-[9999px] opacity-0 pointer-events-none" style={{ width: '800px', height: '600px' }}>
           <div ref={kicanvasRef} style={{ width: '100%', height: '100%' }}>
-            <kicanvas-embed
-              id="thumbnail-kicanvas"
+            <KiCanvas
+              slug={circuits[currentIndex].slug}
               controls="basic"
-              src={`/api/schematic/${circuits[currentIndex].slug}.kicad_sch`}
-              style={{ width: '100%', height: '100%' }}
+              height="100%"
+              width="100%"
             />
           </div>
         </div>
