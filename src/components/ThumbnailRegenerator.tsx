@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Loader, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { captureThumbnails } from "@/lib/thumbnail";
+import { removeHierarchicalSheets } from "@/lib/kicad-parser";
 
 // Declare the kicanvas-embed custom element for TypeScript
 declare global {
@@ -441,7 +442,7 @@ export function ThumbnailRegenerator() {
             <kicanvas-embed
               id="thumbnail-kicanvas"
               controls="basic"
-              src={`data:application/x-kicad-schematic;base64,${utf8ToBase64(circuits[currentIndex].raw_sexpr)}`}
+              src={`data:application/x-kicad-schematic;base64,${utf8ToBase64(removeHierarchicalSheets(circuits[currentIndex].raw_sexpr))}`}
               style={{ width: '100%', height: '100%' }}
             />
           </div>
