@@ -143,26 +143,28 @@ function SearchContent() {
                     <option value="favorites">Most Favorited</option>
                   </select>
                 </div>
-
-                {/* Hide Imported Toggle */}
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                    Hide bulk-imported
-                  </span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={hideImported}
-                      onChange={(e) => setHideImported(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-14 h-7 bg-muted rounded-full peer peer-checked:bg-primary transition-colors border-2 border-border peer-checked:border-primary"></div>
-                    <div className="absolute left-1 top-1 w-5 h-5 bg-background rounded-full transition-transform peer-checked:translate-x-7 shadow-md"></div>
-                  </div>
-                </label>
               </div>
             </div>
           )}
+
+          {/* Hide Imported Toggle - Always visible */}
+          <div className="flex justify-end mb-6">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                Hide bulk-imported
+              </span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={hideImported}
+                  onChange={(e) => setHideImported(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-14 h-7 bg-muted rounded-full peer peer-checked:bg-primary transition-colors border-2 border-border peer-checked:border-primary"></div>
+                <div className="absolute left-1 top-1 w-5 h-5 bg-background rounded-full transition-transform peer-checked:translate-x-7 shadow-md"></div>
+              </div>
+            </label>
+          </div>
 
           {/* Loading State */}
           {loading && (
