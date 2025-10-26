@@ -143,6 +143,11 @@ export function ThumbnailRegenerator() {
         throw new Error('Circuit data is not a valid KiCad S-expression');
       }
 
+      // Check if it's a hierarchical schematic (contains sheet instances or sheet symbols)
+      if (trimmedData.includes('(sheet_instances') || trimmedData.includes('(sheet (at')) {
+        throw new Error('Hierarchical schematics are not supported for thumbnail generation');
+      }
+
       // Validate the circuit data can be encoded
       try {
         utf8ToBase64(circuit.raw_sexpr);
