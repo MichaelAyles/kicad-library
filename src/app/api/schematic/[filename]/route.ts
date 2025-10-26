@@ -48,6 +48,51 @@ export async function GET(
       );
     }
 
+    // Validate the circuit data is a valid KiCad S-expression
+    const trimmedData = rawData.trim();
+
+    // Check if it starts with HTML/XML (corrupted data)
+    if (trimmedData.startsWith('<!DOCTYPE') || trimmedData.startsWith('<html') || trimmedData.startsWith('<?xml')) {
+      console.error(`Circuit ${slug} contains corrupted data (HTML/XML instead of schematic)`);
+      // Return empty schematic stub for corrupted data
+      const emptySchematic = `(kicad_sch (version 20230121) (generator "CircuitSnips")
+  (uuid 00000000-0000-0000-0000-000000000000)
+  (paper "A4")
+  (title_block
+    (title "Corrupted Data")
+    (comment 1 "This circuit contains invalid data and cannot be displayed")
+  )
+)`;
+      return new NextResponse(emptySchematic, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `inline; filename="${params.filename}"`,
+          'Cache-Control': 'no-cache', // Don't cache corrupted data
+        },
+      });
+    }
+
+    // Check if it starts with a valid S-expression
+    if (!trimmedData.startsWith('(kicad_sch') && !trimmedData.startsWith('(')) {
+      console.error(`Circuit ${slug} data is not a valid KiCad S-expression`);
+      // Return empty schematic stub for invalid data
+      const emptySchematic = `(kicad_sch (version 20230121) (generator "CircuitSnips")
+  (uuid 00000000-0000-0000-0000-000000000000)
+  (paper "A4")
+  (title_block
+    (title "Invalid Data")
+    (comment 1 "This circuit contains invalid data and cannot be displayed")
+  )
+)`;
+      return new NextResponse(emptySchematic, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `inline; filename="${params.filename}"`,
+          'Cache-Control': 'no-cache',
+        },
+      });
+    }
+
     // Check if raw data is a snippet or full file, and prepare accordingly
     let schematicFile: string;
     if (isClipboardSnippet(rawData)) {
