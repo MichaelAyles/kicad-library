@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Search, Filter, Loader } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Header } from '@/components/Header';
@@ -9,11 +10,13 @@ import { Footer } from '@/components/Footer';
 import { getCircuits, type Circuit } from '@/lib/circuits';
 
 export default function BrowsePage() {
+  const router = useRouter();
   const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites'>('copies');
   const [hideImported, setHideImported] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -44,6 +47,18 @@ export default function BrowsePage() {
     setSortBy(newSort);
   };
 
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
@@ -68,12 +83,18 @@ export default function BrowsePage() {
               <input
                 type="text"
                 placeholder="Search circuits..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full pl-10 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-background transition-all"
               />
             </div>
-            <button className="px-4 py-2 border border-border rounded-md hover:border-primary hover:green-glow transition-all flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              Filters
+            <button
+              onClick={handleSearch}
+              className="px-4 py-2 border border-border rounded-md hover:border-primary hover:green-glow transition-all flex items-center gap-2"
+            >
+              <Search className="w-4 h-4" />
+              Search
             </button>
           </div>
 
