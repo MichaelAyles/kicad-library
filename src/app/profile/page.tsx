@@ -326,17 +326,19 @@ export default function ProfilePage() {
                     >
                       <div className="flex gap-4">
                         {/* Thumbnail */}
-                        {thumbnailUrl ? (
-                          <img
-                            src={thumbnailUrl}
-                            alt={circuit.title}
-                            className="w-32 h-24 object-cover rounded border flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-32 h-24 bg-muted rounded border flex items-center justify-center flex-shrink-0">
-                            <Activity className="w-8 h-8 text-muted-foreground" />
-                          </div>
-                        )}
+                        <div className="w-32 h-24 rounded border flex-shrink-0 overflow-hidden">
+                          {thumbnailUrl ? (
+                            <img
+                              src={thumbnailUrl}
+                              alt={circuit.title}
+                              className="w-full h-full object-cover scale-110"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-muted flex items-center justify-center">
+                              <Activity className="w-8 h-8 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">

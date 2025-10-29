@@ -223,7 +223,7 @@ export default function HomePage() {
                         <img
                           src={thumbnailUrl}
                           alt={circuit.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          className="w-full h-full object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground">
