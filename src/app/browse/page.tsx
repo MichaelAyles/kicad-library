@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Filter, Loader } from 'lucide-react';
@@ -9,29 +9,36 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { getCircuits, type Circuit } from '@/lib/circuits';
 
+const CIRCUITS_PER_PAGE = 12;
+
 export default function BrowsePage() {
   const router = useRouter();
   const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites'>('copies');
   const [hideImported, setHideImported] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hasMore, setHasMore] = useState(true);
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
   // Prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Load initial circuits when sort or filter changes
   useEffect(() => {
     const loadCircuits = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { circuits: data } = await getCircuits(12, 0, sortBy, hideImported);
+        const { circuits: data } = await getCircuits(CIRCUITS_PER_PAGE, 0, sortBy, hideImported);
         setCircuits(data);
+        setHasMore(data.length === CIRCUITS_PER_PAGE);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load circuits');
         console.error('Error loading circuits:', err);
@@ -42,6 +49,51 @@ export default function BrowsePage() {
 
     loadCircuits();
   }, [sortBy, hideImported]);
+
+  // Load more circuits for infinite scroll
+  const loadMoreCircuits = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    setIsLoadingMore(true);
+    try {
+      const newOffset = circuits.length;
+      const { circuits: data } = await getCircuits(CIRCUITS_PER_PAGE, newOffset, sortBy, hideImported);
+
+      if (data.length === 0) {
+        setHasMore(false);
+      } else {
+        setCircuits(prev => [...prev, ...data]);
+        setHasMore(data.length === CIRCUITS_PER_PAGE);
+      }
+    } catch (err) {
+      console.error('Error loading more circuits:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [circuits.length, sortBy, hideImported, hasMore, isLoadingMore]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isLoading) {
+          loadMoreCircuits();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [hasMore, isLoadingMore, isLoading, loadMoreCircuits]);
 
   const handleSortChange = (newSort: 'copies' | 'recent' | 'favorites') => {
     setSortBy(newSort);
@@ -246,12 +298,23 @@ export default function BrowsePage() {
             </div>
           )}
 
-          {/* Load More */}
+          {/* Infinite Scroll Trigger & Loading Indicator */}
           {!isLoading && circuits.length > 0 && (
-            <div className="mt-12 text-center">
-              <button className="px-6 py-3 border rounded-md hover:bg-muted/50 transition-colors">
-                Load More Circuits
-              </button>
+            <div className="mt-12">
+              {/* Sentinel element for intersection observer */}
+              <div ref={observerTarget} className="h-20 flex items-center justify-center">
+                {isLoadingMore && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader className="w-5 h-5 animate-spin" />
+                    <span>Loading more circuits...</span>
+                  </div>
+                )}
+                {!hasMore && circuits.length > 0 && (
+                  <p className="text-muted-foreground text-sm">
+                    You&apos;ve reached the end! 🎉
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>
