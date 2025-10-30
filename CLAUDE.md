@@ -277,11 +277,11 @@ Read these for context before implementing features.
 **Core Infrastructure**
 - [x] Next.js 14 project setup with TypeScript + Tailwind CSS
 - [x] Supabase database schema implementation (`supabase/schema.sql`)
-- [x] Database migrations (`supabase/migration-add-is-public.sql`)
+- [x] Database migrations (is_public, batch import tracking, search weights)
 - [x] GitHub OAuth with Supabase Auth
 - [x] Dark mode support with theme persistence
 - [x] Responsive design (mobile & desktop)
-- [x] Live deployment on Vercel
+- [x] Live deployment on Vercel (https://circuitsnips.mikeayles.com)
 
 **S-Expression Parser** (`src/lib/kicad-parser.ts`)
 - [x] Parse KiCad S-expression format
@@ -291,6 +291,7 @@ Read these for context before implementing features.
 - [x] Validate S-expression structure
 - [x] Extract metadata (components, nets, stats)
 - [x] Add attribution to schematics
+- [x] Strip hierarchical sheet references
 
 **Upload Flow** (`src/app/upload/page.tsx`)
 - [x] Step 1: Paste & validate schematic
@@ -302,10 +303,12 @@ Read these for context before implementing features.
 
 **KiCanvas Integration**
 - [x] KiCanvas viewer component (`src/components/SchematicViewer.tsx`)
+- [x] Unified KiCanvas component for consistent rendering
 - [x] Preview API endpoint (`/api/preview/[filename]/route.ts`)
 - [x] Dynamic schematic serving (`/api/schematic/[filename]/route.ts`)
 - [x] Thumbnail capture utility (`src/lib/thumbnail.ts`)
 - [x] Theme synchronization (light/dark modes)
+- [x] Pillarboxing removal with 110% zoom on display
 
 **Circuit Detail Page** (`src/app/circuit/[slug]/page.tsx`)
 - [x] Interactive KiCanvas viewer with full controls
@@ -316,17 +319,31 @@ Read these for context before implementing features.
 - [x] License information with attribution
 - [x] Copy to clipboard (with embedded attribution)
 - [x] Download as .kicad_sch file
-- [x] Favorite button (UI ready, analytics pending)
+- [x] Favorite button (fully functional with database integration)
 - [x] View count tracking (increments on page view)
 
 **User Interface**
 - [x] Header with authentication state
 - [x] Footer with links
-- [x] Homepage with hero section
-- [x] Browse page with circuit grid
+- [x] Homepage with hero section and force reload on logo click
+- [x] Browse page with circuit grid and integrated search
+- [x] Categories page showing popular tags by frequency
 - [x] Login/Signup pages
 - [x] User profile page with avatar and circuits display
 - [x] Settings page for profile editing
+- [x] About, Terms, Privacy, Docs pages
+
+**Search & Discovery** (`src/lib/search.ts`)
+- [x] Weighted full-text search (tags > title > description)
+- [x] Hybrid search (full-text + pattern matching)
+- [x] Search autocomplete with live preview dropdown
+- [x] Browse page with integrated weighted search
+- [x] Categories page showing popular tags by frequency
+- [x] Active filter pills with remove buttons
+- [x] Advanced filtering (tags, category, license, hide bulk imports)
+- [x] Sort options (relevance, recent, most copied, favorites)
+- [x] Partial tag matching (e.g., "atsamd" finds "atsamd21")
+- [x] Centralized search utility module
 
 **Comments System** (`src/components/Comment*.tsx`, `src/lib/comments.ts`)
 - [x] Threaded comments (up to 3 levels deep)
@@ -339,29 +356,33 @@ Read these for context before implementing features.
 - [x] Authentication checks
 - [x] Relative timestamps ("2 hours ago")
 
-### 🔄 IN PROGRESS / PLANNED
+**User Features**
+- [x] Edit uploaded circuits (title, description, tags, license, visibility)
+- [x] Delete circuits (with cascade delete)
+- [x] Private/public circuits (is_public flag)
+- [x] Delete account with full data removal
+- [x] Favorites functionality (database + UI fully implemented)
 
-**Search & Discovery**
-- [ ] Full-text search with PostgreSQL (schema ready)
-- [ ] Advanced filtering (tags, category, license)
-- [ ] Sort options (relevance, recent, popular)
+**Admin Features**
+- [x] Batch import API (`/api/admin/batch-import`)
+- [x] Thumbnail regeneration tool with pagination
+- [x] Preview and direct links to circuits in admin panel
+- [x] Bulk processing for circuits without thumbnails
+- [x] Import tracking (batches and records)
+
+### 🔄 PLANNED ENHANCEMENTS
 
 **Analytics & Tracking**
-- [ ] Favorites functionality (database schema complete, UI ready)
-- [ ] Copy event tracking (database schema complete)
+- [ ] Copy event tracking API integration
 - [ ] User engagement metrics dashboard
+- [ ] Circuit popularity analytics
 
 **Community Features (Thingiverse-inspired)**
 - [ ] Multi-image upload by circuit authors
 - [ ] "I Built This" section - user-submitted build photos
 - [ ] Related/similar circuits recommendations
-- [ ] Collections/playlists
-- [ ] Activity feed
-
-**User Features**
-- [ ] Edit uploaded circuits
-- [ ] Delete circuits
-- [ ] Private circuits (is_public flag ready)
+- [ ] Collections/playlists for organizing circuits
+- [ ] Activity feed for following users
 
 **Future Enhancements**
 - [ ] @mentions in comments with notifications
@@ -369,8 +390,9 @@ Read these for context before implementing features.
 - [ ] Version history and forking
 - [ ] Remix/derivative tracking
 - [ ] Multi-language support
-- [ ] API for third-party integrations
+- [ ] Public API for third-party integrations
 - [ ] Bill of Materials (BOM) generator
+- [ ] Circuit complexity analysis and warnings
 
 ## Design Variants
 
@@ -402,12 +424,12 @@ Each branch automatically deploys to Vercel:
 ## Key Constraints & Decisions
 
 1. **KiCad 6+ Only**: No support for legacy `.sch` format (pre-v6)
-2. **Single-Sheet Only (MVP)**: No hierarchical sheets initially
+2. **Single-Sheet Only**: Hierarchical sheet references are stripped during upload
 3. **No PCB Layout**: Schematics only, PCB data is separate
 4. **GitHub OAuth Required**: No email/password auth
-5. **Public by Default**: All uploads are public (private circuits in Phase 2)
-6. **License Required**: Users must choose license on upload
-7. **No Editing**: Once uploaded, circuits are immutable (versioning in Phase 2)
+5. **Public or Private**: Users can choose circuit visibility (is_public flag)
+6. **License Required**: Users must choose license on upload from 8 supported OSHW licenses
+7. **Full CRUD**: Users can create, read, update, and delete their own circuits
 
 ## Testing Strategy (To Be Implemented)
 

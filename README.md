@@ -18,24 +18,52 @@ Copy circuit in KiCad → Paste on CircuitSnips → Someone else searches → Co
 ![Upload Process Demo](public/upload.gif)
 
 
-## Current features
+## Features
 
-- Interactive preview using KiCanvas
-- Copy to clipboard with attribution
-- GitHub login
-- 8 open hardware licenses
-- Comments with threading
-- Light/dark mode with thumbnails for both
-- User profiles
-- Circuit editing (title, description, tags, license, visibility)
-- Delete your account and data
-- Full-text search with filters and sorting
-- Dynamic popular tags by frequency
+**Core Functionality**
+- Interactive schematic preview using KiCanvas (WebGL viewer)
+- Copy to clipboard with embedded attribution
+- Download as .kicad_sch file
+- GitHub OAuth authentication
+- 8 open hardware licenses (CERN-OHL-S-2.0, MIT, Apache-2.0, GPL-3.0, etc.)
 
-## Still working on
+**Discovery & Search**
+- Weighted full-text search (prioritizes tags > title > description)
+- Search autocomplete with live preview
+- Browse by popular tags/categories
+- Filter by license, component count, quality score
+- Sort by relevance, most copied, recent, or favorites
 
-- Favorites (mostly done, needs hookup)
-- Analytics for copy tracking
+**Community Features**
+- Threaded comments with up to 3 levels of replies
+- Like/unlike comments
+- Edit and delete your own comments
+- Favorite circuits to save for later
+- User profiles with bio, website, and avatar
+- View count and copy count tracking
+
+**Circuit Management**
+- Upload circuits via paste or file
+- Edit circuit metadata (title, description, tags, license, visibility)
+- Delete your own circuits
+- Private/public visibility toggle
+- Automatic thumbnail generation (light and dark themes)
+
+**Platform Features**
+- Full light/dark mode support with theme-specific thumbnails
+- Responsive design (mobile and desktop)
+- Account deletion with full data removal
+- Admin panel with thumbnail regeneration tools
+- Batch import API for external circuit databases
+
+## Roadmap
+
+- Analytics dashboard (copy tracking, engagement metrics)
+- Email notifications for comments and replies
+- Circuit versioning and revision history
+- "I Built This" section for user-submitted build photos
+- Collections/playlists for organizing circuits
+- Related/similar circuits recommendations
 
 ## Tech
 
