@@ -36,9 +36,39 @@ export function ThumbnailRegenerator() {
   const [selectedCircuits, setSelectedCircuits] = useState<Set<string>>(new Set());
   const [previewCircuitId, setPreviewCircuitId] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
+  const [withThumbnailsCount, setWithThumbnailsCount] = useState(0);
+  const [withoutThumbnailsCount, setWithoutThumbnailsCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 100;
   const kicanvasRef = useRef<HTMLDivElement>(null);
+
+  // Fetch thumbnail statistics from database
+  const fetchThumbnailStats = async (importerUserId: string) => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+
+      // Get count with thumbnails
+      const { count: withThumbsCount } = await supabase
+        .from('circuits')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', importerUserId)
+        .not('thumbnail_light_url', 'is', null)
+        .not('thumbnail_dark_url', 'is', null);
+
+      // Get count without thumbnails
+      const { count: withoutThumbsCount } = await supabase
+        .from('circuits')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', importerUserId)
+        .or('thumbnail_light_url.is.null,thumbnail_dark_url.is.null');
+
+      setWithThumbnailsCount(withThumbsCount || 0);
+      setWithoutThumbnailsCount(withoutThumbsCount || 0);
+    } catch (error) {
+      console.error('Error fetching thumbnail stats:', error);
+    }
+  };
 
   // Fetch circuits from circuitsnips-importer user (paginated, without raw_sexpr)
   useEffect(() => {
@@ -78,6 +108,9 @@ export function ThumbnailRegenerator() {
         } else {
           setTotalCount(count || 0);
         }
+
+        // Fetch thumbnail statistics
+        await fetchThumbnailStats(importerUser.id);
 
         // Fetch first page of circuits WITHOUT raw_sexpr (much lighter)
         const { data, error } = await supabase
@@ -324,6 +357,19 @@ export function ThumbnailRegenerator() {
 
     setIsProcessing(false);
     alert(`Processing complete!\n✅ Success: ${successCount}\n❌ Failed: ${errorCount}\n📊 Total: ${processed}`);
+
+    // Refresh thumbnail statistics from database
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    const { data: importerUser } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', 'circuitsnips-importer')
+      .single();
+
+    if (importerUser) {
+      await fetchThumbnailStats(importerUser.id);
+    }
   };
 
   const startProcessAllWithoutThumbnails = async () => {
@@ -518,6 +564,11 @@ export function ThumbnailRegenerator() {
 
       alert(`Processing complete!\nSuccess: ${successCount}\nFailed: ${errorCount}`);
 
+      // Refresh thumbnail statistics from database (reuse existing importerUser from line 387)
+      if (importerUser) {
+        await fetchThumbnailStats(importerUser.id);
+      }
+
     } catch (error: any) {
       console.error('Error in batch processing:', error);
       alert(`Error: ${error.message}`);
@@ -575,8 +626,9 @@ export function ThumbnailRegenerator() {
   const successCount = results.filter(r => r.status === 'success').length;
   const errorCount = results.filter(r => r.status === 'error').length;
   const pendingCount = results.filter(r => r.status === 'pending').length;
-  const withThumbnails = circuits.filter(c => c.thumbnail_light_url && c.thumbnail_dark_url).length;
-  const withoutThumbnails = circuits.length - withThumbnails;
+  // Use database counts for accurate statistics (not just loaded circuits)
+  const withThumbnails = withThumbnailsCount;
+  const withoutThumbnails = withoutThumbnailsCount;
 
   return (
     <div className="space-y-6">
