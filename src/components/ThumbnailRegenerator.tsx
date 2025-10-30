@@ -315,6 +315,206 @@ export function ThumbnailRegenerator() {
     setIsProcessing(false);
   };
 
+  const startProcessAllWithoutThumbnails = async () => {
+    if (!confirm('This will process ALL circuits without thumbnails from the database. This may take a long time. Continue?')) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+
+      // Get the importer user ID
+      const { data: importerUser } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', 'circuitsnips-importer')
+        .single();
+
+      if (!importerUser) {
+        alert('Could not find circuitsnips-importer user');
+        return;
+      }
+
+      // Fetch ALL circuits without thumbnails (just metadata, no raw_sexpr)
+      const { data: circuitsWithoutThumbs, error } = await supabase
+        .from('circuits')
+        .select('id, slug, title, user_id')
+        .eq('user_id', importerUser.id)
+        .or('thumbnail_light_url.is.null,thumbnail_dark_url.is.null')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching circuits:', error);
+        alert('Failed to fetch circuits without thumbnails');
+        return;
+      }
+
+      const allCircuits = circuitsWithoutThumbs || [];
+
+      if (allCircuits.length === 0) {
+        alert('No circuits without thumbnails found!');
+        setIsProcessing(false);
+        return;
+      }
+
+      alert(`Found ${allCircuits.length} circuits without thumbnails. Starting processing...`);
+
+      // Process each circuit
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < allCircuits.length; i++) {
+        const circuit = allCircuits[i];
+
+        // Update current index for UI
+        setCurrentIndex(i);
+
+        // Add to results if not already there
+        setResults(prev => {
+          const exists = prev.find(r => r.circuitId === circuit.id);
+          if (exists) return prev;
+          return [...prev, {
+            circuitId: circuit.id,
+            title: circuit.title,
+            status: 'pending'
+          }];
+        });
+
+        // Find the index in results
+        const resultIndex = i;
+
+        // Update status to processing
+        setResults(prev => prev.map((r, idx) =>
+          r.circuitId === circuit.id ? { ...r, status: 'processing' } : r
+        ));
+
+        try {
+          // Fetch the raw_sexpr for this circuit
+          const { data: circuitData, error: fetchError } = await supabase
+            .from('circuits')
+            .select('raw_sexpr')
+            .eq('id', circuit.id)
+            .single();
+
+          if (fetchError || !circuitData || !circuitData.raw_sexpr) {
+            throw new Error('Failed to load circuit data');
+          }
+
+          const raw_sexpr = circuitData.raw_sexpr;
+
+          // Create a temporary circuit object for processing
+          const tempCircuit: Circuit = {
+            ...circuit,
+            raw_sexpr,
+            thumbnail_light_url: null,
+            thumbnail_dark_url: null
+          };
+
+          // Add to circuits state temporarily for KiCanvas rendering
+          setCircuits(prev => {
+            const exists = prev.find(c => c.id === circuit.id);
+            if (exists) return prev;
+            return [...prev, tempCircuit];
+          });
+
+          // Validate the circuit data
+          const trimmedData = raw_sexpr.trim();
+          if (trimmedData.startsWith('<!DOCTYPE') || trimmedData.startsWith('<html') || trimmedData.startsWith('<?xml')) {
+            throw new Error('Circuit contains corrupted data (HTML/XML instead of schematic)');
+          }
+          if (!trimmedData.startsWith('(kicad_sch') && !trimmedData.startsWith('(')) {
+            throw new Error('Circuit data is not a valid KiCad S-expression');
+          }
+
+          // Wait for KiCanvas to render
+          await new Promise(resolve => setTimeout(resolve, 3500));
+
+          const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
+          if (!kicanvasElement) {
+            throw new Error('KiCanvas element not found');
+          }
+
+          const kicanvasContent = kicanvasElement.shadowRoot;
+          if (!kicanvasContent) {
+            throw new Error('KiCanvas shadow DOM not initialized');
+          }
+
+          // Capture thumbnails
+          const thumbnailResult = await captureThumbnails(
+            kicanvasElement,
+            theme,
+            setTheme
+          );
+
+          if (!thumbnailResult.light || !thumbnailResult.dark) {
+            throw new Error('Failed to capture thumbnails');
+          }
+
+          // Upload thumbnails
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            throw new Error('Not authenticated');
+          }
+
+          const response = await fetch('/api/admin/regenerate-thumbnail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              circuitId: circuit.id,
+              userId: circuit.user_id,
+              lightThumbBase64: thumbnailResult.light,
+              darkThumbBase64: thumbnailResult.dark,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to upload thumbnails');
+          }
+
+          const result = await response.json();
+
+          // Update status to success
+          setResults(prev => prev.map(r =>
+            r.circuitId === circuit.id ? {
+              ...r,
+              status: 'success',
+              lightUrl: result.lightUrl,
+              darkUrl: result.darkUrl
+            } : r
+          ));
+
+          successCount++;
+
+        } catch (error: any) {
+          console.error(`Error processing circuit ${circuit.id}:`, error);
+          setResults(prev => prev.map(r =>
+            r.circuitId === circuit.id ? {
+              ...r,
+              status: 'error',
+              error: error.message || 'Unknown error'
+            } : r
+          ));
+          errorCount++;
+        }
+      }
+
+      alert(`Processing complete!\nSuccess: ${successCount}\nFailed: ${errorCount}`);
+
+    } catch (error: any) {
+      console.error('Error in batch processing:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const toggleSelectAll = () => {
     if (selectedCircuits.size === circuits.length) {
       setSelectedCircuits(new Set());
@@ -443,17 +643,41 @@ export function ThumbnailRegenerator() {
           </div>
         </div>
 
-        <button
-          onClick={startBatchProcessing}
-          disabled={isProcessing}
-          className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isProcessing
-            ? `Processing ${currentIndex + 1} of ${circuits.length}...`
-            : selectedCircuits.size > 0
-            ? `Process ${selectedCircuits.size} Selected Circuit${selectedCircuits.size > 1 ? 's' : ''}`
-            : 'Process All Circuits'}
-        </button>
+        <div className="space-y-3">
+          <button
+            onClick={startProcessAllWithoutThumbnails}
+            disabled={isProcessing}
+            className="w-full px-6 py-3 bg-orange-600 text-white rounded-md font-bold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isProcessing ? (
+              <>
+                <Loader className="w-5 h-5 animate-spin" />
+                Processing {currentIndex + 1}...
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="w-5 h-5" />
+                Process ALL Without Thumbnails (From Entire Database)
+              </>
+            )}
+          </button>
+
+          <div className="text-center text-xs text-muted-foreground">
+            OR process only loaded circuits below:
+          </div>
+
+          <button
+            onClick={startBatchProcessing}
+            disabled={isProcessing}
+            className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isProcessing
+              ? `Processing ${currentIndex + 1} of ${circuits.length}...`
+              : selectedCircuits.size > 0
+              ? `Process ${selectedCircuits.size} Selected Circuit${selectedCircuits.size > 1 ? 's' : ''} (Loaded Only)`
+              : `Process All ${circuits.length} Loaded Circuits`}
+          </button>
+        </div>
       </div>
 
       {/* Progress List */}
