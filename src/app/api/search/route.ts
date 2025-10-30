@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const license = searchParams.get('license') || '';
     const sort = searchParams.get('sort') || 'relevance';
     const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const offset = parseInt(searchParams.get('offset') || '0', 10);
     const excludeImported = searchParams.get('excludeImported') === 'true';
 
     // If excluding imported circuits, first get the importer user's ID
@@ -44,7 +45,8 @@ export async function GET(request: NextRequest) {
         filter_tag: tag || null,
         filter_license: license || null,
         exclude_user_id: importerUserId,
-        result_limit: Math.min(limit, 100)
+        result_limit: Math.min(limit, 100),
+        result_offset: offset
       });
 
       if (error) {
@@ -81,7 +83,7 @@ export async function GET(request: NextRequest) {
           fallbackQuery = fallbackQuery.neq('user_id', importerUserId);
         }
 
-        fallbackQuery = fallbackQuery.limit(Math.min(limit, 100));
+        fallbackQuery = fallbackQuery.range(offset, offset + Math.min(limit, 100) - 1);
 
         const fallbackResult = await fallbackQuery;
         circuits = fallbackResult.data || [];
@@ -120,7 +122,7 @@ export async function GET(request: NextRequest) {
         supabaseQuery = supabaseQuery.neq('user_id', importerUserId);
       }
 
-      supabaseQuery = supabaseQuery.limit(Math.min(limit, 100));
+      supabaseQuery = supabaseQuery.range(offset, offset + Math.min(limit, 100) - 1);
 
       const { data } = await supabaseQuery;
       circuits = data || [];

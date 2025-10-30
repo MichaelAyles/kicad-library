@@ -663,7 +663,8 @@ CREATE OR REPLACE FUNCTION search_circuits_weighted(
   filter_tag TEXT DEFAULT NULL,
   filter_license TEXT DEFAULT NULL,
   exclude_user_id UUID DEFAULT NULL,
-  result_limit INT DEFAULT 50
+  result_limit INT DEFAULT 50,
+  result_offset INT DEFAULT 0
 )
 RETURNS TABLE (
   id UUID,
@@ -750,7 +751,8 @@ BEGIN
     ts_rank(c.search_vector, plainto_tsquery('english', search_query)) DESC,
     -- 6. Copy count as tiebreaker
     c.copy_count DESC NULLS LAST
-  LIMIT result_limit;
+  LIMIT result_limit
+  OFFSET result_offset;
 END;
 $$ LANGUAGE plpgsql STABLE;
 
