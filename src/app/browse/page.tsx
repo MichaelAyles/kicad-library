@@ -7,6 +7,7 @@ import { Search, Filter, Loader, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { SearchAutocomplete } from '@/components/SearchAutocomplete';
 import { getCircuits, type Circuit } from '@/lib/circuits';
 import { searchCircuits, type SearchCircuit } from '@/lib/search';
 
@@ -20,7 +21,6 @@ function BrowsePageContent() {
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites' | 'relevance'>('copies');
   const [hideImported, setHideImported] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState(''); // The query being used for results
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const { theme, systemTheme } = useTheme();
@@ -37,7 +37,6 @@ function BrowsePageContent() {
     const query = searchParams.get('q') || '';
     const category = searchParams.get('category') || null;
 
-    setSearchQuery(query);
     setActiveQuery(query);
     setActiveCategory(category);
     setIsSearchMode(!!query || !!category);
@@ -97,33 +96,11 @@ function BrowsePageContent() {
     setSortBy(newSort);
   };
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      const params = new URLSearchParams();
-      params.set('q', searchQuery.trim());
-      if (activeCategory) params.set('category', activeCategory);
-      router.push(`/browse?${params.toString()}`);
-    }
-  };
-
   const handleClearSearch = () => {
-    setSearchQuery('');
     setActiveQuery('');
     setActiveCategory(null);
     setIsSearchMode(false);
     router.push('/browse');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    } else if (e.key === 'Escape') {
-      if (searchQuery) {
-        setSearchQuery('');
-      } else {
-        handleClearSearch();
-      }
-    }
   };
 
   return (
@@ -190,35 +167,9 @@ function BrowsePageContent() {
             </div>
           )}
 
-          {/* Search & Filter Bar */}
-          <div className="flex flex-col md:flex-row gap-4 mb-8">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search circuits by title, tags, or description..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="w-full pl-10 pr-10 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-background transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            <button
-              onClick={handleSearch}
-              disabled={!searchQuery.trim()}
-              className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Search className="w-4 h-4" />
-              Search
-            </button>
+          {/* Search with Autocomplete */}
+          <div className="mb-8 max-w-3xl mx-auto">
+            <SearchAutocomplete />
           </div>
 
           {/* Sort Options and Filter Toggle */}
