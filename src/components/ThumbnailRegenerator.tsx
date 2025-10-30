@@ -736,8 +736,34 @@ export function ThumbnailRegenerator() {
                 )}
               </div>
 
-              {/* Preview and Index */}
+              {/* Actions and Index */}
               <div className="flex items-center gap-2 flex-shrink-0">
+                {/* View Thumbnail button - only show if thumbnails exist */}
+                {circuits[index] && circuits[index].thumbnail_light_url && circuits[index].thumbnail_dark_url && (
+                  <a
+                    href={circuits[index].thumbnail_light_url || ''}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors bg-blue-500/10 border-blue-500/50 text-blue-600 dark:text-blue-400"
+                    title="View thumbnail in new tab"
+                  >
+                    View Thumb
+                  </a>
+                )}
+
+                {/* Go to Circuit link */}
+                {circuits[index] && (
+                  <a
+                    href={`/circuit/${circuits[index].slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors"
+                    title="Open circuit page in new tab"
+                  >
+                    Go to Circuit
+                  </a>
+                )}
+
                 <button
                   onClick={() => setPreviewCircuitId(previewCircuitId === result.circuitId ? null : result.circuitId)}
                   disabled={isProcessing}

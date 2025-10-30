@@ -705,16 +705,24 @@ BEGIN
   LEFT JOIN public.profiles p ON c.user_id = p.id
   WHERE
     c.is_public = true
-    -- Full-text search on weighted search_vector OR pattern matching for exact matches
+    -- Full-text search on weighted search_vector OR pattern matching for exact/partial matches
     AND (
       -- Full-text search using weighted vector
       c.search_vector @@ plainto_tsquery('english', search_query)
       OR
-      -- Pattern matching fallback for exact title/tag matches
+      -- Pattern matching for title
       c.title ILIKE '%' || search_query || '%'
       OR
+      -- Exact tag match
       search_query = ANY(c.tags)
       OR
+      -- Partial tag match (e.g., "atsamd" matches "atsamd21")
+      EXISTS (
+        SELECT 1 FROM unnest(c.tags) AS tag
+        WHERE tag ILIKE '%' || search_query || '%'
+      )
+      OR
+      -- Pattern matching for description
       c.description ILIKE '%' || search_query || '%'
     )
     -- Category filter
@@ -729,13 +737,18 @@ BEGIN
     -- Custom weighted ranking:
     -- 1. Exact tag match (highest priority)
     CASE WHEN search_query = ANY(c.tags) THEN 1000 ELSE 0 END DESC,
-    -- 2. Exact title match
+    -- 2. Partial tag match (e.g., "atsamd" in "atsamd21")
+    CASE WHEN EXISTS (
+      SELECT 1 FROM unnest(c.tags) AS tag
+      WHERE tag ILIKE '%' || search_query || '%'
+    ) THEN 800 ELSE 0 END DESC,
+    -- 3. Exact title match
     CASE WHEN c.title ILIKE search_query THEN 500 ELSE 0 END DESC,
-    -- 3. Title contains query
+    -- 4. Title contains query
     CASE WHEN c.title ILIKE '%' || search_query || '%' THEN 250 ELSE 0 END DESC,
-    -- 4. Full-text search rank (uses weighted search_vector: tags=A, title=B, description=C)
+    -- 5. Full-text search rank (uses weighted search_vector: tags=A, title=B, description=C)
     ts_rank(c.search_vector, plainto_tsquery('english', search_query)) DESC,
-    -- 5. Copy count as tiebreaker
+    -- 6. Copy count as tiebreaker
     c.copy_count DESC NULLS LAST
   LIMIT result_limit;
 END;
