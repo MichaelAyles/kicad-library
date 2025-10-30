@@ -205,7 +205,7 @@ export function ThumbnailRegenerator() {
       }
 
       // Wait for KiCanvas to fully render and stabilize
-      await new Promise(resolve => setTimeout(resolve, 3500));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
       if (!kicanvasElement) {
@@ -304,15 +304,26 @@ export function ThumbnailRegenerator() {
     setIsProcessing(true);
     setCurrentIndex(0);
 
+    let processed = 0;
+    let successCount = 0;
+    let errorCount = 0;
+
     for (let i = 0; i < circuits.length; i++) {
       if (selectedCircuits.size > 0 && !selectedCircuits.has(circuits[i].id)) {
         continue; // Skip unselected circuits
       }
       setCurrentIndex(i);
       await processCircuit(circuits[i], i);
+      processed++;
+
+      // Track results
+      const result = results[i];
+      if (result?.status === 'success') successCount++;
+      if (result?.status === 'error') errorCount++;
     }
 
     setIsProcessing(false);
+    alert(`Processing complete!\n✅ Success: ${successCount}\n❌ Failed: ${errorCount}\n📊 Total: ${processed}`);
   };
 
   const startProcessAllWithoutThumbnails = async () => {
@@ -430,7 +441,7 @@ export function ThumbnailRegenerator() {
           }
 
           // Wait for KiCanvas to render
-          await new Promise(resolve => setTimeout(resolve, 3500));
+          await new Promise(resolve => setTimeout(resolve, 2000));
 
           const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
           if (!kicanvasElement) {

@@ -19,7 +19,7 @@ export interface ThumbnailResult {
 /**
  * Wait for theme to apply and KiCanvas to re-render
  */
-function waitForTheme(ms: number = 500): Promise<void> {
+function waitForTheme(ms: number = 300): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -128,7 +128,7 @@ export async function captureThumbnails(
       // Switch to dark mode
       console.log('Switching to dark mode...');
       setTheme('dark');
-      await waitForTheme(800); // Wait for theme transition
+      await waitForTheme(400); // Wait for theme transition
 
       // Capture dark mode
       console.log('Capturing dark mode thumbnail...');
@@ -137,7 +137,7 @@ export async function captureThumbnails(
       // Switch back to light
       console.log('Switching back to light mode...');
       setTheme('light');
-      await waitForTheme(500);
+      await waitForTheme(300);
     } else {
       // Currently in dark mode
       // Capture dark mode first
@@ -147,7 +147,7 @@ export async function captureThumbnails(
       // Switch to light mode
       console.log('Switching to light mode...');
       setTheme('light');
-      await waitForTheme(800);
+      await waitForTheme(400);
 
       // Capture light mode
       console.log('Capturing light mode thumbnail...');
@@ -156,7 +156,7 @@ export async function captureThumbnails(
       // Switch back to dark
       console.log('Switching back to dark mode...');
       setTheme('dark');
-      await waitForTheme(500);
+      await waitForTheme(300);
     }
 
     console.log('Thumbnail capture complete!');
