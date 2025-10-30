@@ -4,23 +4,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Loader, ArrowRight } from "lucide-react";
 import { useTheme } from "next-themes";
-
-interface Circuit {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  tags: string[];
-  thumbnail_light_url: string;
-  thumbnail_dark_url: string;
-  profiles: {
-    username: string;
-  };
-}
+import { quickSearch, type SearchCircuit } from "@/lib/search";
 
 export function SearchAutocomplete() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Circuit[]>([]);
+  const [results, setResults] = useState<SearchCircuit[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -29,20 +17,18 @@ export function SearchAutocomplete() {
   const router = useRouter();
   const { theme } = useTheme();
 
-  // Debounced search
+  // Debounced search using centralized search utility
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (query.trim().length >= 2) {
         setIsLoading(true);
         try {
-          const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=5`);
-          const data = await response.json();
-          if (response.ok) {
-            setResults(data.circuits || []);
-            setIsOpen(true);
-          }
+          const circuits = await quickSearch(query, 5);
+          setResults(circuits);
+          setIsOpen(true);
         } catch (error) {
           console.error("Search error:", error);
+          setResults([]);
         } finally {
           setIsLoading(false);
         }
@@ -162,9 +148,9 @@ export function SearchAutocomplete() {
                 {(circuit.thumbnail_light_url || circuit.thumbnail_dark_url) && (
                   <img
                     src={
-                      theme === "dark"
+                      (theme === "dark"
                         ? circuit.thumbnail_dark_url || circuit.thumbnail_light_url
-                        : circuit.thumbnail_light_url || circuit.thumbnail_dark_url
+                        : circuit.thumbnail_light_url || circuit.thumbnail_dark_url) || ''
                     }
                     alt={circuit.title}
                     className="w-16 h-16 rounded object-cover flex-shrink-0 bg-muted"

@@ -121,32 +121,28 @@ export async function getCircuitBySlug(slug: string): Promise<Circuit | null> {
   }
 }
 
+/**
+ * @deprecated Use searchCircuits from '@/lib/search' instead for weighted search
+ * This function now uses the centralized search API with weighted ranking
+ */
 export async function searchCircuits(
   query: string,
   limit = 12,
   offset = 0
 ): Promise<CircuitsResponse> {
   try {
-    const { data, error, count } = await supabase
-      .from('circuits')
-      .select(
-        `*,
-        user:profiles(id, username, avatar_url)`,
-        { count: 'exact' }
-      )
-      .eq('is_public', true)
-      .or(
-        `title.ilike.%${query}%,description.ilike.%${query}%`
-      )
-      .order('copy_count', { ascending: false })
-      .limit(limit)
-      .range(offset, offset + limit - 1);
+    // Import dynamically to avoid circular dependency
+    const { searchCircuits: centralizedSearch } = await import('@/lib/search');
 
-    if (error) throw error;
+    const { circuits: results } = await centralizedSearch({
+      query,
+      limit,
+      sort: 'relevance',
+    });
 
     return {
-      circuits: (data || []) as Circuit[],
-      total: count || 0,
+      circuits: results as unknown as Circuit[],
+      total: results.length,
     };
   } catch (error) {
     console.error('Error searching circuits:', error);

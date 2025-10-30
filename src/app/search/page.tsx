@@ -7,26 +7,7 @@ import { Search as SearchIcon, Filter, SortDesc } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SearchAutocomplete } from "@/components/SearchAutocomplete";
-
-interface Circuit {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  tags: string[];
-  category: string;
-  license: string;
-  thumbnail_light_url: string;
-  thumbnail_dark_url: string;
-  view_count: number;
-  copy_count: number;
-  favorite_count: number;
-  created_at: string;
-  profiles: {
-    username: string;
-    avatar_url: string;
-  };
-}
+import { searchCircuits, type SearchCircuit } from "@/lib/search";
 
 interface PopularTag {
   tag: string;
@@ -36,10 +17,12 @@ interface PopularTag {
 function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [circuits, setCircuits] = useState<Circuit[]>([]);
+  const [circuits, setCircuits] = useState<SearchCircuit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [sort, setSort] = useState(searchParams.get('sort') || 'relevance');
+  const [sort, setSort] = useState<'relevance' | 'recent' | 'popular' | 'views' | 'favorites'>(
+    (searchParams.get('sort') as any) || 'relevance'
+  );
   const [hideImported, setHideImported] = useState(false);
   const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
 
@@ -48,20 +31,19 @@ function SearchContent() {
     setSearched(true);
 
     try {
-      const params = new URLSearchParams(searchParams.toString());
-      if (sort) params.set('sort', sort);
-      if (hideImported) params.set('excludeImported', 'true');
+      const { circuits: results } = await searchCircuits({
+        query: searchParams.get('q') || undefined,
+        category: searchParams.get('category') || undefined,
+        tag: searchParams.get('tag') || undefined,
+        license: searchParams.get('license') || undefined,
+        sort,
+        excludeImported: hideImported,
+      });
 
-      const response = await fetch(`/api/search?${params.toString()}`);
-      const data = await response.json();
-
-      if (response.ok) {
-        setCircuits(data.circuits || []);
-      } else {
-        console.error('Search failed:', data.error);
-      }
+      setCircuits(results);
     } catch (error) {
       console.error('Search error:', error);
+      setCircuits([]);
     } finally {
       setLoading(false);
     }
@@ -94,7 +76,7 @@ function SearchContent() {
     fetchPopularTags();
   }, []);
 
-  const handleSortChange = (newSort: string) => {
+  const handleSortChange = (newSort: 'relevance' | 'recent' | 'popular' | 'views' | 'favorites') => {
     setSort(newSort);
     const params = new URLSearchParams(searchParams.toString());
     params.set('sort', newSort);
@@ -133,7 +115,7 @@ function SearchContent() {
                   <SortDesc className="w-4 h-4 text-muted-foreground" />
                   <select
                     value={sort}
-                    onChange={(e) => handleSortChange(e.target.value)}
+                    onChange={(e) => handleSortChange(e.target.value as 'relevance' | 'recent' | 'popular' | 'views' | 'favorites')}
                     className="px-3 py-1 border rounded-md bg-background text-sm"
                   >
                     <option value="relevance">Relevance</option>
