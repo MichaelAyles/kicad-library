@@ -10,7 +10,7 @@ interface Circuit {
   slug: string;
   title: string;
   user_id: string;
-  raw_sexpr: string;
+  raw_sexpr?: string; // Make optional, load lazily
   thumbnail_light_url: string | null;
   thumbnail_dark_url: string | null;
 }
@@ -28,17 +28,21 @@ interface ProcessingResult {
 export function ThumbnailRegenerator() {
   const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [selectedCircuits, setSelectedCircuits] = useState<Set<string>>(new Set());
   const [previewCircuitId, setPreviewCircuitId] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 100;
   const kicanvasRef = useRef<HTMLDivElement>(null);
 
-  // Fetch all circuits from circuitsnips-importer user
+  // Fetch circuits from circuitsnips-importer user (paginated, without raw_sexpr)
   useEffect(() => {
-    const fetchCircuits = async () => {
+    const fetchInitialCircuits = async () => {
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
@@ -63,24 +67,39 @@ export function ThumbnailRegenerator() {
           return;
         }
 
-        // Fetch all circuits from circuitsnips-importer
+        // Get total count
+        const { count, error: countError } = await supabase
+          .from('circuits')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', importerUser.id);
+
+        if (countError) {
+          console.error('Error getting count:', countError);
+        } else {
+          setTotalCount(count || 0);
+        }
+
+        // Fetch first page of circuits WITHOUT raw_sexpr (much lighter)
         const { data, error } = await supabase
           .from('circuits')
-          .select('id, slug, title, user_id, raw_sexpr, thumbnail_light_url, thumbnail_dark_url')
+          .select('id, slug, title, user_id, thumbnail_light_url, thumbnail_dark_url')
           .eq('user_id', importerUser.id)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .range(0, PAGE_SIZE - 1);
 
         if (error) {
           console.error('Error fetching circuits:', error);
           throw error;
         }
 
-        setCircuits(data || []);
-        setResults((data || []).map(c => ({
+        const circuits = data || [];
+        setCircuits(circuits);
+        setResults(circuits.map(c => ({
           circuitId: c.id,
           title: c.title,
           status: 'pending'
         })));
+        setHasMore(circuits.length === PAGE_SIZE);
       } catch (error) {
         console.error('Failed to fetch circuits:', error);
       } finally {
@@ -88,8 +107,57 @@ export function ThumbnailRegenerator() {
       }
     };
 
-    fetchCircuits();
+    fetchInitialCircuits();
   }, []);
+
+  // Load more circuits
+  const loadMoreCircuits = async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    setIsLoadingMore(true);
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+
+      // Get the importer user ID
+      const { data: importerUser } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', 'circuitsnips-importer')
+        .single();
+
+      if (!importerUser) return;
+
+      // Fetch next page
+      const { data, error } = await supabase
+        .from('circuits')
+        .select('id, slug, title, user_id, thumbnail_light_url, thumbnail_dark_url')
+        .eq('user_id', importerUser.id)
+        .order('created_at', { ascending: false })
+        .range(circuits.length, circuits.length + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error('Error loading more circuits:', error);
+        throw error;
+      }
+
+      const newCircuits = data || [];
+      setCircuits(prev => [...prev, ...newCircuits]);
+      setResults(prev => [
+        ...prev,
+        ...newCircuits.map(c => ({
+          circuitId: c.id,
+          title: c.title,
+          status: 'pending' as const
+        }))
+      ]);
+      setHasMore(newCircuits.length === PAGE_SIZE);
+    } catch (error) {
+      console.error('Failed to load more circuits:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const processCircuit = async (circuit: Circuit, index: number) => {
     // Update status to processing
@@ -98,8 +166,33 @@ export function ThumbnailRegenerator() {
     ));
 
     try {
+      // Lazy load raw_sexpr if not already loaded
+      let raw_sexpr = circuit.raw_sexpr;
+      if (!raw_sexpr) {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('circuits')
+          .select('raw_sexpr')
+          .eq('id', circuit.id)
+          .single();
+
+        if (error || !data || !data.raw_sexpr) {
+          throw new Error('Failed to load circuit data');
+        }
+        raw_sexpr = data.raw_sexpr;
+        // Update the circuit in state
+        setCircuits(prev => prev.map((c, i) =>
+          i === index ? { ...c, raw_sexpr } : c
+        ));
+      }
+
+      if (!raw_sexpr) {
+        throw new Error('Circuit data is missing');
+      }
+
       // Validate the circuit data is a valid KiCad S-expression
-      const trimmedData = circuit.raw_sexpr.trim();
+      const trimmedData = raw_sexpr.trim();
 
       // Check if it starts with HTML (corrupted data)
       if (trimmedData.startsWith('<!DOCTYPE') || trimmedData.startsWith('<html') || trimmedData.startsWith('<?xml')) {
@@ -230,6 +323,13 @@ export function ThumbnailRegenerator() {
     }
   };
 
+  const toggleSelectWithoutThumbnails = () => {
+    const withoutThumbnails = circuits.filter(
+      c => !c.thumbnail_light_url || !c.thumbnail_dark_url
+    );
+    setSelectedCircuits(new Set(withoutThumbnails.map(c => c.id)));
+  };
+
   const toggleSelectCircuit = (circuitId: string) => {
     const newSelected = new Set(selectedCircuits);
     if (newSelected.has(circuitId)) {
@@ -273,13 +373,15 @@ export function ThumbnailRegenerator() {
       <div className="bg-card border rounded-lg p-6">
         <h2 className="text-2xl font-bold mb-4">Thumbnail Regeneration</h2>
         <p className="text-sm text-muted-foreground mb-6">
-          Showing all circuits from @circuitsnips-importer
+          {totalCount > 0
+            ? `Loaded ${circuits.length} of ${totalCount} circuits from @circuitsnips-importer`
+            : 'Showing all circuits from @circuitsnips-importer'}
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <div>
             <p className="text-sm text-muted-foreground">Total</p>
-            <p className="text-2xl font-bold">{circuits.length}</p>
+            <p className="text-2xl font-bold">{totalCount || circuits.length}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">With Thumbnails</p>
@@ -303,19 +405,42 @@ export function ThumbnailRegenerator() {
           </div>
         </div>
 
-        {/* Select All Checkbox */}
-        <div className="flex items-center gap-3 mb-4 p-3 bg-muted/30 rounded-md border">
-          <input
-            type="checkbox"
-            checked={selectedCircuits.size === circuits.length && circuits.length > 0}
-            onChange={toggleSelectAll}
-            className="w-5 h-5 rounded border-2 border-primary cursor-pointer"
-          />
-          <span className="font-medium">
-            {selectedCircuits.size === 0
-              ? 'Select All'
-              : `${selectedCircuits.size} of ${circuits.length} selected`}
-          </span>
+        {/* Selection Controls */}
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-md border">
+            <input
+              type="checkbox"
+              checked={selectedCircuits.size === circuits.length && circuits.length > 0}
+              onChange={toggleSelectAll}
+              className="w-5 h-5 rounded border-2 border-primary cursor-pointer"
+            />
+            <span className="font-medium">
+              {selectedCircuits.size === 0
+                ? 'Select All'
+                : `${selectedCircuits.size} of ${circuits.length} selected`}
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={toggleSelectAll}
+              className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50 transition-colors"
+            >
+              Select All
+            </button>
+            <button
+              onClick={toggleSelectWithoutThumbnails}
+              className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50 transition-colors bg-orange-500/10 border-orange-500/50 text-orange-600 dark:text-orange-400"
+            >
+              Select Without Thumbnails ({withoutThumbnails})
+            </button>
+            <button
+              onClick={() => setSelectedCircuits(new Set())}
+              className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50 transition-colors"
+            >
+              Clear Selection
+            </button>
+          </div>
         </div>
 
         <button
@@ -419,6 +544,26 @@ export function ThumbnailRegenerator() {
             </div>
           ))}
         </div>
+
+        {/* Load More Button */}
+        {hasMore && !isProcessing && (
+          <div className="mt-4 text-center">
+            <button
+              onClick={loadMoreCircuits}
+              disabled={isLoadingMore}
+              className="px-6 py-3 bg-muted border rounded-md hover:bg-muted/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin inline mr-2" />
+                  Loading...
+                </>
+              ) : (
+                `Load More (${totalCount - circuits.length} remaining)`
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Hidden KiCanvas Renderer - Uses opacity instead of display:none to maintain dimensions */}
