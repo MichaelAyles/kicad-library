@@ -78,7 +78,7 @@ export function SearchAutocomplete() {
           e.preventDefault();
           if (selectedIndex === -1 || selectedIndex === results.length) {
             // View all results
-            router.push(`/search?q=${encodeURIComponent(query)}`);
+            router.push(`/browse?q=${encodeURIComponent(query)}`);
             setIsOpen(false);
             inputRef.current?.blur();
           } else if (selectedIndex >= 0 && selectedIndex < results.length) {
@@ -104,7 +104,7 @@ export function SearchAutocomplete() {
   };
 
   const handleViewAll = () => {
-    router.push(`/search?q=${encodeURIComponent(query)}`);
+    router.push(`/browse?q=${encodeURIComponent(query)}`);
     setIsOpen(false);
   };
 

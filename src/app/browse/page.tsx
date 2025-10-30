@@ -1,44 +1,87 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Search, Filter, Loader } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Search, Filter, Loader, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { getCircuits, type Circuit } from '@/lib/circuits';
+import { searchCircuits, type SearchCircuit } from '@/lib/search';
 
-const CIRCUITS_PER_PAGE = 12;
+const CIRCUITS_PER_PAGE = 50;
 
-export default function BrowsePage() {
+function BrowsePageContent() {
   const router = useRouter();
-  const [circuits, setCircuits] = useState<Circuit[]>([]);
+  const searchParams = useSearchParams();
+  const [circuits, setCircuits] = useState<(Circuit | SearchCircuit)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites'>('copies');
+  const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites' | 'relevance'>('copies');
   const [hideImported, setHideImported] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [hasMore, setHasMore] = useState(true);
+  const [activeQuery, setActiveQuery] = useState(''); // The query being used for results
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const observerTarget = useRef<HTMLDivElement>(null);
+  const [isSearchMode, setIsSearchMode] = useState(false);
 
   // Prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Load initial circuits when sort or filter changes
+  // Initialize from URL params
+  useEffect(() => {
+    const query = searchParams.get('q') || '';
+    const category = searchParams.get('category') || null;
+
+    setSearchQuery(query);
+    setActiveQuery(query);
+    setActiveCategory(category);
+    setIsSearchMode(!!query || !!category);
+
+    if (query || category) {
+      setSortBy('relevance');
+    }
+  }, [searchParams]);
+
+  // Load circuits when filters/sort/search changes
   useEffect(() => {
     const loadCircuits = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { circuits: data } = await getCircuits(CIRCUITS_PER_PAGE, 0, sortBy, hideImported);
-        setCircuits(data);
-        setHasMore(data.length === CIRCUITS_PER_PAGE);
+        if (activeQuery || activeCategory) {
+          // Use weighted search
+          const sortMap: Record<string, 'relevance' | 'recent' | 'popular' | 'views' | 'favorites'> = {
+            copies: 'popular',
+            recent: 'recent',
+            favorites: 'favorites',
+            relevance: 'relevance'
+          };
+
+          const { circuits: data } = await searchCircuits({
+            query: activeQuery || undefined,
+            category: activeCategory || undefined,
+            sort: sortMap[sortBy],
+            limit: CIRCUITS_PER_PAGE,
+            excludeImported: hideImported,
+          });
+          setCircuits(data);
+        } else {
+          // Browse all circuits
+          const sortMap: Record<string, 'copies' | 'recent' | 'favorites'> = {
+            copies: 'copies',
+            recent: 'recent',
+            favorites: 'favorites',
+            relevance: 'copies' // fallback
+          };
+
+          const { circuits: data } = await getCircuits(CIRCUITS_PER_PAGE, 0, sortMap[sortBy], hideImported);
+          setCircuits(data);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load circuits');
         console.error('Error loading circuits:', err);
@@ -48,66 +91,38 @@ export default function BrowsePage() {
     };
 
     loadCircuits();
-  }, [sortBy, hideImported]);
+  }, [sortBy, hideImported, activeQuery, activeCategory]);
 
-  // Load more circuits for infinite scroll
-  const loadMoreCircuits = useCallback(async () => {
-    if (isLoadingMore || !hasMore) return;
-
-    setIsLoadingMore(true);
-    try {
-      const newOffset = circuits.length;
-      const { circuits: data } = await getCircuits(CIRCUITS_PER_PAGE, newOffset, sortBy, hideImported);
-
-      if (data.length === 0) {
-        setHasMore(false);
-      } else {
-        setCircuits(prev => [...prev, ...data]);
-        setHasMore(data.length === CIRCUITS_PER_PAGE);
-      }
-    } catch (err) {
-      console.error('Error loading more circuits:', err);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [circuits.length, sortBy, hideImported, hasMore, isLoadingMore]);
-
-  // Intersection Observer for infinite scroll
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isLoading) {
-          loadMoreCircuits();
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    const currentTarget = observerTarget.current;
-    if (currentTarget) {
-      observer.observe(currentTarget);
-    }
-
-    return () => {
-      if (currentTarget) {
-        observer.unobserve(currentTarget);
-      }
-    };
-  }, [hasMore, isLoadingMore, isLoading, loadMoreCircuits]);
-
-  const handleSortChange = (newSort: 'copies' | 'recent' | 'favorites') => {
+  const handleSortChange = (newSort: 'copies' | 'recent' | 'favorites' | 'relevance') => {
     setSortBy(newSort);
   };
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      const params = new URLSearchParams();
+      params.set('q', searchQuery.trim());
+      if (activeCategory) params.set('category', activeCategory);
+      router.push(`/browse?${params.toString()}`);
     }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setActiveQuery('');
+    setActiveCategory(null);
+    setIsSearchMode(false);
+    router.push('/browse');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleSearch();
+    } else if (e.key === 'Escape') {
+      if (searchQuery) {
+        setSearchQuery('');
+      } else {
+        handleClearSearch();
+      }
     }
   };
 
@@ -121,12 +136,59 @@ export default function BrowsePage() {
           {/* Page Header */}
           <div className="mb-8">
             <h1 className="text-5xl font-bold mb-2">
-              <span className="green-gradient-text">Browse Circuits</span>
+              <span className="green-gradient-text">
+                {isSearchMode ? 'Search Results' : 'Browse Circuits'}
+              </span>
             </h1>
             <p className="text-muted-foreground text-lg">
-              Discover reusable schematic subcircuits for your KiCad projects
+              {isSearchMode
+                ? `Found ${circuits.length} circuit${circuits.length !== 1 ? 's' : ''}`
+                : 'Discover reusable schematic subcircuits for your KiCad projects'}
             </p>
           </div>
+
+          {/* Active Filters */}
+          {(activeQuery || activeCategory) && (
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Active filters:</span>
+              {activeQuery && (
+                <div className="flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
+                  <span>Search: &quot;{activeQuery}&quot;</span>
+                  <button
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (activeCategory) params.set('category', activeCategory);
+                      router.push(params.toString() ? `/browse?${params.toString()}` : '/browse');
+                    }}
+                    className="ml-1 hover:text-primary/70"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {activeCategory && (
+                <div className="flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
+                  <span>Category: {activeCategory}</span>
+                  <button
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (activeQuery) params.set('q', activeQuery);
+                      router.push(params.toString() ? `/browse?${params.toString()}` : '/browse');
+                    }}
+                    className="ml-1 hover:text-primary/70"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={handleClearSearch}
+                className="text-sm text-muted-foreground hover:text-foreground underline"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
 
           {/* Search & Filter Bar */}
           <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -134,16 +196,25 @@ export default function BrowsePage() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search circuits..."
+                placeholder="Search circuits by title, tags, or description..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="w-full pl-10 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-background transition-all"
+                className="w-full pl-10 pr-10 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-background transition-all"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
             <button
               onClick={handleSearch}
-              className="px-4 py-2 border border-border rounded-md hover:border-primary hover:green-glow transition-all flex items-center gap-2"
+              disabled={!searchQuery.trim()}
+              className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Search className="w-4 h-4" />
               Search
@@ -154,6 +225,15 @@ export default function BrowsePage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-4 text-sm">
               <span className="text-muted-foreground">Sort by:</span>
+              {isSearchMode && (
+                <button
+                  onClick={() => handleSortChange('relevance')}
+                  className={sortBy === 'relevance' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
+                >
+                  Relevance
+                  {sortBy === 'relevance' && <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />}
+                </button>
+              )}
               <button
                 onClick={() => handleSortChange('copies')}
                 className={sortBy === 'copies' ? 'text-primary font-semibold relative' : 'text-muted-foreground hover:text-primary transition-colors'}
@@ -279,11 +359,19 @@ export default function BrowsePage() {
 
                     {/* Footer */}
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>by @{circuit.user?.username || 'unknown'}</span>
+                      <span>
+                        by @{('user' in circuit
+                          ? circuit.user?.username
+                          : 'profiles' in circuit
+                            ? circuit.profiles?.username
+                            : 'unknown') || 'unknown'}
+                      </span>
                       <div className="flex items-center gap-3">
                         <span className="group-hover:text-primary transition-colors">📋 {circuit.copy_count}</span>
                         <span className="group-hover:text-primary transition-colors">⭐ {circuit.favorite_count}</span>
-                        <span className="group-hover:text-primary transition-colors">💬 {circuit.comment_count}</span>
+                        {'comment_count' in circuit && (
+                          <span className="group-hover:text-primary transition-colors">💬 {circuit.comment_count}</span>
+                        )}
                       </div>
                     </div>
 
@@ -298,23 +386,12 @@ export default function BrowsePage() {
             </div>
           )}
 
-          {/* Infinite Scroll Trigger & Loading Indicator */}
-          {!isLoading && circuits.length > 0 && (
-            <div className="mt-12">
-              {/* Sentinel element for intersection observer */}
-              <div ref={observerTarget} className="h-20 flex items-center justify-center">
-                {isLoadingMore && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader className="w-5 h-5 animate-spin" />
-                    <span>Loading more circuits...</span>
-                  </div>
-                )}
-                {!hasMore && circuits.length > 0 && (
-                  <p className="text-muted-foreground text-sm">
-                    You&apos;ve reached the end! 🎉
-                  </p>
-                )}
-              </div>
+          {/* Results Info */}
+          {!isLoading && circuits.length > 0 && circuits.length >= CIRCUITS_PER_PAGE && (
+            <div className="mt-12 text-center">
+              <p className="text-muted-foreground text-sm">
+                Showing top {CIRCUITS_PER_PAGE} results. {isSearchMode ? 'Refine your search for more specific results.' : ''}
+              </p>
             </div>
           )}
         </div>
@@ -322,5 +399,21 @@ export default function BrowsePage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function BrowsePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader className="w-8 h-8 animate-spin text-primary" />
+        </main>
+        <Footer />
+      </div>
+    }>
+      <BrowsePageContent />
+    </Suspense>
   );
 }
