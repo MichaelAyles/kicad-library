@@ -748,7 +748,11 @@ export function ThumbnailRegenerator() {
         <h3 className="text-lg font-semibold mb-4">Processing Queue</h3>
 
         <div className="space-y-2 max-h-[500px] overflow-y-auto">
-          {results.map((result, index) => (
+          {results.map((result, index) => {
+            // Find the matching circuit by ID instead of using index
+            const circuit = circuits.find(c => c.id === result.circuitId);
+
+            return (
             <div key={result.circuitId} className="space-y-0">
               <div
                 className={`flex items-center gap-3 p-3 rounded-md border ${
@@ -784,7 +788,7 @@ export function ThumbnailRegenerator() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="font-medium truncate">{result.title}</p>
-                  {circuits[index] && circuits[index].thumbnail_light_url && circuits[index].thumbnail_dark_url ? (
+                  {circuit && circuit.thumbnail_light_url && circuit.thumbnail_dark_url ? (
                     <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-500 rounded flex-shrink-0">
                       Has Thumbnails
                     </span>
@@ -802,9 +806,9 @@ export function ThumbnailRegenerator() {
               {/* Actions and Index */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 {/* View Thumbnail button - only show if thumbnails exist */}
-                {circuits[index] && circuits[index].thumbnail_light_url && circuits[index].thumbnail_dark_url && (
+                {circuit && circuit.thumbnail_light_url && circuit.thumbnail_dark_url && (
                   <a
-                    href={circuits[index].thumbnail_light_url || ''}
+                    href={circuit.thumbnail_light_url || ''}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors bg-blue-500/10 border-blue-500/50 text-blue-600 dark:text-blue-400"
@@ -815,9 +819,9 @@ export function ThumbnailRegenerator() {
                 )}
 
                 {/* Go to Circuit link */}
-                {circuits[index] && (
+                {circuit && (
                   <a
-                    href={`/circuit/${circuits[index].slug}`}
+                    href={`/circuit/${circuit.slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors"
@@ -841,11 +845,11 @@ export function ThumbnailRegenerator() {
               </div>
 
               {/* Preview Panel */}
-              {previewCircuitId === result.circuitId && (
+              {previewCircuitId === result.circuitId && circuit && (
                 <div className="mt-3 p-4 border-t bg-muted/20">
                   <h4 className="text-sm font-semibold mb-2">Circuit Preview</h4>
                   <KiCanvasCard
-                    slug={circuits[index].slug}
+                    slug={circuit.slug}
                     controls="full"
                     height="400px"
                   />
@@ -855,7 +859,8 @@ export function ThumbnailRegenerator() {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Load More Button */}
