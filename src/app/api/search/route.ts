@@ -28,91 +28,121 @@ export async function GET(request: NextRequest) {
       importerUserId = importerUser?.id || null;
     }
 
-    let supabaseQuery = supabase
-      .from('circuits')
-      .select(`
-        id,
-        slug,
-        title,
-        description,
-        tags,
-        category,
-        license,
-        thumbnail_light_url,
-        thumbnail_dark_url,
-        view_count,
-        copy_count,
-        favorite_count,
-        created_at,
-        profiles!circuits_user_id_fkey (
-          username,
-          avatar_url
-        )
-      `)
-      .eq('is_public', true);
+    // Build base query
+    let circuits: any[] = [];
 
-    // Full-text search using weighted search_vector (tags > title > description)
     if (query) {
-      // Use textSearch for full-text search on the search_vector column
-      supabaseQuery = supabaseQuery.textSearch('search_vector', query.trim());
-    }
+      // Use hybrid search: combine full-text search with pattern matching
+      // This ensures we catch exact matches while still using weighted search_vector
+      const searchQuery = query.trim();
 
-    // Category filter
-    if (category) {
-      supabaseQuery = supabaseQuery.eq('category', category);
-    }
+      // Search with weights: tags (highest), title (medium), description (lowest)
+      // Using custom SQL to leverage ts_rank with weighted search_vector
+      const { data, error } = await supabase.rpc('search_circuits_weighted', {
+        search_query: searchQuery,
+        filter_category: category || null,
+        filter_tag: tag || null,
+        filter_license: license || null,
+        exclude_user_id: importerUserId,
+        result_limit: Math.min(limit, 100)
+      });
 
-    // Tag filter (array contains)
-    if (tag) {
-      supabaseQuery = supabaseQuery.contains('tags', [tag]);
-    }
+      if (error) {
+        console.error('Weighted search error, falling back to simple search:', error);
+        // Fallback to simple pattern matching if RPC fails
+        let fallbackQuery = supabase
+          .from('circuits')
+          .select(`
+            id,
+            slug,
+            title,
+            description,
+            tags,
+            category,
+            license,
+            thumbnail_light_url,
+            thumbnail_dark_url,
+            view_count,
+            copy_count,
+            favorite_count,
+            created_at,
+            profiles!circuits_user_id_fkey (
+              username,
+              avatar_url
+            )
+          `)
+          .eq('is_public', true)
+          .or(`tags.cs.{${searchQuery}},title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
 
-    // License filter
-    if (license) {
-      supabaseQuery = supabaseQuery.eq('license', license);
-    }
-
-    // Exclude bulk-imported circuits if requested
-    if (excludeImported && importerUserId) {
-      supabaseQuery = supabaseQuery.neq('user_id', importerUserId);
-    }
-
-    // Sorting
-    switch (sort) {
-      case 'recent':
-        supabaseQuery = supabaseQuery.order('created_at', { ascending: false });
-        break;
-      case 'popular':
-        supabaseQuery = supabaseQuery.order('copy_count', { ascending: false });
-        break;
-      case 'views':
-        supabaseQuery = supabaseQuery.order('view_count', { ascending: false });
-        break;
-      case 'favorites':
-        supabaseQuery = supabaseQuery.order('favorite_count', { ascending: false });
-        break;
-      default:
-        // For relevance with full-text search, PostgreSQL automatically ranks by weighted search_vector
-        // (tags=A/highest, title=B/medium, description=C/lowest)
-        // Use copy_count as secondary sort for non-search queries or tiebreaker
-        if (query) {
-          // When using textSearch, results are automatically ranked by relevance
-          // Add copy_count as tiebreaker for equal relevance scores
-          supabaseQuery = supabaseQuery.order('copy_count', { ascending: false });
-        } else {
-          // No search query, just show popular circuits
-          supabaseQuery = supabaseQuery.order('copy_count', { ascending: false });
+        if (category) fallbackQuery = fallbackQuery.eq('category', category);
+        if (tag) fallbackQuery = fallbackQuery.contains('tags', [tag]);
+        if (license) fallbackQuery = fallbackQuery.eq('license', license);
+        if (importerUserId && excludeImported) {
+          fallbackQuery = fallbackQuery.neq('user_id', importerUserId);
         }
+
+        fallbackQuery = fallbackQuery.limit(Math.min(limit, 100));
+
+        const fallbackResult = await fallbackQuery;
+        circuits = fallbackResult.data || [];
+      } else {
+        circuits = data || [];
+      }
+    } else {
+      // No search query - just apply filters
+      let supabaseQuery = supabase
+        .from('circuits')
+        .select(`
+          id,
+          slug,
+          title,
+          description,
+          tags,
+          category,
+          license,
+          thumbnail_light_url,
+          thumbnail_dark_url,
+          view_count,
+          copy_count,
+          favorite_count,
+          created_at,
+          profiles!circuits_user_id_fkey (
+            username,
+            avatar_url
+          )
+        `)
+        .eq('is_public', true);
+
+      if (category) supabaseQuery = supabaseQuery.eq('category', category);
+      if (tag) supabaseQuery = supabaseQuery.contains('tags', [tag]);
+      if (license) supabaseQuery = supabaseQuery.eq('license', license);
+      if (importerUserId && excludeImported) {
+        supabaseQuery = supabaseQuery.neq('user_id', importerUserId);
+      }
+
+      supabaseQuery = supabaseQuery.limit(Math.min(limit, 100));
+
+      const { data } = await supabaseQuery;
+      circuits = data || [];
     }
 
-    // Limit results (max 100 for safety)
-    supabaseQuery = supabaseQuery.limit(Math.min(limit, 100));
-
-    const { data: circuits, error } = await supabaseQuery;
-
-    if (error) {
-      console.error('Search error:', error);
-      throw error;
+    // Apply sorting (only for non-search queries, search results are pre-sorted by relevance)
+    if (!query || sort !== 'relevance') {
+      circuits = circuits.sort((a, b) => {
+        switch (sort) {
+          case 'recent':
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          case 'popular':
+            return (b.copy_count || 0) - (a.copy_count || 0);
+          case 'views':
+            return (b.view_count || 0) - (a.view_count || 0);
+          case 'favorites':
+            return (b.favorite_count || 0) - (a.favorite_count || 0);
+          default:
+            // For relevance, results are already sorted by weighted search
+            return 0;
+        }
+      });
     }
 
     return NextResponse.json({
