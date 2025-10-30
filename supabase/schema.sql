@@ -180,13 +180,14 @@ END $$;
 CREATE INDEX IF NOT EXISTS circuits_search_idx ON public.circuits USING GIN(search_vector);
 
 -- Function to update search vector
+-- Weights: Tags (A - highest), Title (B - medium), Description (C - lowest)
 CREATE OR REPLACE FUNCTION update_circuit_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.search_vector :=
-    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(NEW.description, '')), 'B') ||
-    setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'C');
+    setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'B') ||
+    setweight(to_tsvector('english', coalesce(NEW.description, '')), 'C');
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

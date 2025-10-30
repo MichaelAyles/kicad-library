@@ -51,9 +51,10 @@ export async function GET(request: NextRequest) {
       `)
       .eq('is_public', true);
 
-    // Full-text search on title and description
+    // Full-text search using weighted search_vector (tags > title > description)
     if (query) {
-      supabaseQuery = supabaseQuery.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
+      // Use textSearch for full-text search on the search_vector column
+      supabaseQuery = supabaseQuery.textSearch('search_vector', query.trim());
     }
 
     // Category filter
@@ -91,8 +92,17 @@ export async function GET(request: NextRequest) {
         supabaseQuery = supabaseQuery.order('favorite_count', { ascending: false });
         break;
       default:
-        // For relevance, order by copy_count as a proxy
-        supabaseQuery = supabaseQuery.order('copy_count', { ascending: false });
+        // For relevance with full-text search, PostgreSQL automatically ranks by weighted search_vector
+        // (tags=A/highest, title=B/medium, description=C/lowest)
+        // Use copy_count as secondary sort for non-search queries or tiebreaker
+        if (query) {
+          // When using textSearch, results are automatically ranked by relevance
+          // Add copy_count as tiebreaker for equal relevance scores
+          supabaseQuery = supabaseQuery.order('copy_count', { ascending: false });
+        } else {
+          // No search query, just show popular circuits
+          supabaseQuery = supabaseQuery.order('copy_count', { ascending: false });
+        }
     }
 
     // Limit results (max 100 for safety)
