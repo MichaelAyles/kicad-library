@@ -2,60 +2,40 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Grid, TrendingUp } from 'lucide-react';
+import { Grid, TrendingUp, Tag } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
-import { searchCircuits } from '@/lib/search';
 
-interface Category {
-  name: string;
+interface PopularTag {
+  tag: string;
   count: number;
-  description: string;
 }
 
-const CATEGORIES: Category[] = [
-  { name: 'Power Supply', count: 0, description: 'Voltage regulators, DC-DC converters, and power management circuits' },
-  { name: 'Amplifier', count: 0, description: 'Op-amp circuits, audio amplifiers, and signal amplification' },
-  { name: 'Microcontroller', count: 0, description: 'MCU circuits, Arduino, ESP32, STM32, and embedded systems' },
-  { name: 'Sensor', count: 0, description: 'Temperature, pressure, motion, and environmental sensors' },
-  { name: 'Communication', count: 0, description: 'UART, SPI, I2C, wireless, and networking interfaces' },
-  { name: 'Display', count: 0, description: 'LED drivers, LCD controllers, and display interfaces' },
-  { name: 'Motor Driver', count: 0, description: 'DC motor, stepper motor, and servo control circuits' },
-  { name: 'Audio', count: 0, description: 'Audio processing, filters, and sound generation' },
-  { name: 'RF', count: 0, description: 'Radio frequency, antenna matching, and wireless transmission' },
-  { name: 'Digital Logic', count: 0, description: 'Logic gates, counters, and digital circuits' },
-  { name: 'Analog', count: 0, description: 'Analog signal processing and conditioning' },
-  { name: 'Interface', count: 0, description: 'Level shifters, buffers, and signal conversion' },
-];
-
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>(CATEGORIES);
+  const [tags, setTags] = useState<PopularTag[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch circuit counts for each category
+  // Fetch popular tags
   useEffect(() => {
-    const fetchCategoryCounts = async () => {
+    const fetchTags = async () => {
       setLoading(true);
       try {
-        const countsPromises = CATEGORIES.map(async (category) => {
-          try {
-            const { count } = await searchCircuits({ category: category.name, limit: 1 });
-            return { ...category, count };
-          } catch {
-            return category;
-          }
-        });
+        const response = await fetch('/api/tags');
+        const data = await response.json();
 
-        const updatedCategories = await Promise.all(countsPromises);
-        setCategories(updatedCategories);
+        if (response.ok) {
+          setTags(data.tags || []);
+        } else {
+          console.error('Error fetching tags:', data.error);
+        }
       } catch (error) {
-        console.error('Error fetching category counts:', error);
+        console.error('Error fetching tags:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCategoryCounts();
+    fetchTags();
   }, []);
 
   return (
@@ -67,44 +47,44 @@ export default function CategoriesPage() {
           {/* Header */}
           <div className="text-center mb-12">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <Grid className="w-10 h-10 text-primary" />
+              <Tag className="w-10 h-10 text-primary" />
               <h1 className="text-4xl font-bold green-gradient bg-clip-text text-transparent">
-                Circuit Categories
+                Popular Tags
               </h1>
             </div>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Browse circuits organized by category. Find power supplies, amplifiers, microcontroller circuits, and more.
+              Browse circuits by the most popular tags. Explore components, projects, and circuit types used by the community.
             </p>
           </div>
 
-          {/* Categories Grid */}
+          {/* Tags Grid */}
           {loading ? (
             <div className="text-center py-12">
               <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-              <p className="mt-4 text-muted-foreground">Loading categories...</p>
+              <p className="mt-4 text-muted-foreground">Loading tags...</p>
+            </div>
+          ) : tags.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No tags found yet.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {categories.map((category) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {tags.map((tagData) => (
                 <Link
-                  key={category.name}
-                  href={`/browse?category=${encodeURIComponent(category.name)}`}
-                  className="group p-6 border rounded-lg hover:shadow-lg hover:border-primary/50 transition-all bg-card"
+                  key={tagData.tag}
+                  href={`/browse?q=${encodeURIComponent(tagData.tag)}`}
+                  className="group p-4 border rounded-lg hover:shadow-lg hover:border-primary/50 transition-all bg-card flex flex-col items-center justify-center text-center min-h-[100px]"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="text-xl font-semibold group-hover:text-primary transition-colors">
-                      {category.name}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Tag className="w-4 h-4 text-primary" />
+                    <h3 className="text-lg font-semibold group-hover:text-primary transition-colors capitalize">
+                      {tagData.tag}
                     </h3>
-                    {category.count > 0 && (
-                      <div className="flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
-                        <TrendingUp className="w-3 h-3" />
-                        {category.count}
-                      </div>
-                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {category.description}
-                  </p>
+                  <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                    <TrendingUp className="w-3 h-3" />
+                    {tagData.count} {tagData.count === 1 ? 'circuit' : 'circuits'}
+                  </div>
                 </Link>
               ))}
             </div>

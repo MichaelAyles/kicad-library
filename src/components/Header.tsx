@@ -10,7 +10,7 @@ import { SearchAutocomplete } from './SearchAutocomplete';
 export function Header() {
   const { user, isLoading, signOut } = useAuth();
   const pathname = usePathname();
-  const isSearchPage = pathname === '/search';
+  const isCategoriesPage = pathname === '/categories';
 
   const handleSignOut = async () => {
     try {
@@ -44,8 +44,8 @@ export function Header() {
               Browse
               <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
             </Link>
-            <Link href="/search" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
-              Search
+            <Link href="/categories" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
+              Categories
               <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
             </Link>
             <Link href="/upload" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group">
@@ -54,8 +54,8 @@ export function Header() {
             </Link>
           </nav>
 
-          {/* Desktop Search - Hide on search page */}
-          {!isSearchPage && (
+          {/* Desktop Search - Hide on categories page */}
+          {!isCategoriesPage && (
             <div className="hidden md:block flex-1 max-w-xl mx-4">
               <SearchAutocomplete />
             </div>
@@ -103,8 +103,8 @@ export function Header() {
           </div>
         </div>
 
-        {/* Mobile Search Row - Hide on search page */}
-        {!isSearchPage && (
+        {/* Mobile Search Row - Hide on categories page */}
+        {!isCategoriesPage && (
           <div className="md:hidden mt-4">
             <SearchAutocomplete />
           </div>
