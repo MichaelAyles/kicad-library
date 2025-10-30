@@ -18,6 +18,7 @@ function BrowsePageContent() {
   const searchParams = useSearchParams();
   const [circuits, setCircuits] = useState<(Circuit | SearchCircuit)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'copies' | 'recent' | 'favorites' | 'relevance'>('copies');
   const [hideImported, setHideImported] = useState(false);
@@ -26,6 +27,9 @@ function BrowsePageContent() {
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+  const observerRef = useRef<HTMLDivElement>(null);
 
   // Prevent hydration mismatch
   useEffect(() => {
@@ -46,11 +50,12 @@ function BrowsePageContent() {
     }
   }, [searchParams]);
 
-  // Load circuits when filters/sort/search changes
+  // Load circuits when filters/sort/search changes (reset to page 0)
   useEffect(() => {
     const loadCircuits = async () => {
       setIsLoading(true);
       setError(null);
+      setPage(0);
       try {
         if (activeQuery || activeCategory) {
           // Use weighted search
@@ -66,9 +71,11 @@ function BrowsePageContent() {
             category: activeCategory || undefined,
             sort: sortMap[sortBy],
             limit: CIRCUITS_PER_PAGE,
+            offset: 0,
             excludeImported: hideImported,
           });
           setCircuits(data);
+          setHasMore(data.length === CIRCUITS_PER_PAGE);
         } else {
           // Browse all circuits
           const sortMap: Record<string, 'copies' | 'recent' | 'favorites'> = {
@@ -80,6 +87,7 @@ function BrowsePageContent() {
 
           const { circuits: data } = await getCircuits(CIRCUITS_PER_PAGE, 0, sortMap[sortBy], hideImported);
           setCircuits(data);
+          setHasMore(data.length === CIRCUITS_PER_PAGE);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load circuits');
@@ -91,6 +99,84 @@ function BrowsePageContent() {
 
     loadCircuits();
   }, [sortBy, hideImported, activeQuery, activeCategory]);
+
+  // Load more circuits for infinite scrolling
+  const loadMoreCircuits = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    setIsLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const offset = nextPage * CIRCUITS_PER_PAGE;
+
+      if (activeQuery || activeCategory) {
+        // Use weighted search
+        const sortMap: Record<string, 'relevance' | 'recent' | 'popular' | 'views' | 'favorites'> = {
+          copies: 'popular',
+          recent: 'recent',
+          favorites: 'favorites',
+          relevance: 'relevance'
+        };
+
+        const { circuits: data } = await searchCircuits({
+          query: activeQuery || undefined,
+          category: activeCategory || undefined,
+          sort: sortMap[sortBy],
+          limit: CIRCUITS_PER_PAGE,
+          offset,
+          excludeImported: hideImported,
+        });
+
+        if (data.length > 0) {
+          setCircuits(prev => [...prev, ...data]);
+          setPage(nextPage);
+          setHasMore(data.length === CIRCUITS_PER_PAGE);
+        } else {
+          setHasMore(false);
+        }
+      } else {
+        // Browse all circuits
+        const sortMap: Record<string, 'copies' | 'recent' | 'favorites'> = {
+          copies: 'copies',
+          recent: 'recent',
+          favorites: 'favorites',
+          relevance: 'copies' // fallback
+        };
+
+        const { circuits: data } = await getCircuits(CIRCUITS_PER_PAGE, offset, sortMap[sortBy], hideImported);
+
+        if (data.length > 0) {
+          setCircuits(prev => [...prev, ...data]);
+          setPage(nextPage);
+          setHasMore(data.length === CIRCUITS_PER_PAGE);
+        } else {
+          setHasMore(false);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more circuits:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMore, page, activeQuery, activeCategory, sortBy, hideImported]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+          loadMoreCircuits();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerRef.current) {
+      observer.observe(observerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, isLoadingMore, loadMoreCircuits]);
 
   const handleSortChange = (newSort: 'copies' | 'recent' | 'favorites' | 'relevance') => {
     setSortBy(newSort);
@@ -337,12 +423,20 @@ function BrowsePageContent() {
             </div>
           )}
 
-          {/* Results Info */}
-          {!isLoading && circuits.length > 0 && circuits.length >= CIRCUITS_PER_PAGE && (
-            <div className="mt-12 text-center">
-              <p className="text-muted-foreground text-sm">
-                Showing top {CIRCUITS_PER_PAGE} results. {isSearchMode ? 'Refine your search for more specific results.' : ''}
-              </p>
+          {/* Infinite Scroll Trigger and Loading Indicator */}
+          {!isLoading && circuits.length > 0 && (
+            <div ref={observerRef} className="mt-12 text-center py-8">
+              {isLoadingMore && (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader className="w-8 h-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground text-sm">Loading more circuits...</p>
+                </div>
+              )}
+              {!hasMore && !isLoadingMore && circuits.length >= CIRCUITS_PER_PAGE && (
+                <p className="text-muted-foreground text-sm">
+                  You&apos;ve reached the end! Showing all {circuits.length} circuits.
+                </p>
+              )}
             </div>
           )}
         </div>

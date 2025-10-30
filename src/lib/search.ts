@@ -31,6 +31,7 @@ export interface SearchOptions {
   license?: string;
   sort?: 'relevance' | 'recent' | 'popular' | 'views' | 'favorites';
   limit?: number;
+  offset?: number;
   excludeImported?: boolean;
 }
 
@@ -81,6 +82,9 @@ export async function searchCircuits(options: SearchOptions = {}): Promise<Searc
     // Add limit (default 50, max 100)
     const limit = Math.min(options.limit || 50, 100);
     params.set('limit', limit.toString());
+
+    // Add offset for pagination
+    if (options.offset) params.set('offset', options.offset.toString());
 
     // Exclude imported circuits if requested
     if (options.excludeImported) params.set('excludeImported', 'true');
