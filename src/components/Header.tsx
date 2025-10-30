@@ -20,12 +20,21 @@ export function Header() {
     }
   };
 
+  const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    // If already on homepage, force a full reload
+    if (pathname === '/') {
+      e.preventDefault();
+      window.location.href = '/';
+    }
+    // Otherwise, let Next.js Link handle it normally for fast navigation
+  };
+
   return (
     <header className="border-b border-border bg-background/95 backdrop-blur-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4">
         {/* Top Row: Logo, Nav, User */}
         <div className="flex items-center justify-between gap-4">
-          <Link href="/" className="text-2xl font-bold green-gradient-text hover:opacity-80 transition-opacity flex-shrink-0">
+          <Link href="/" onClick={handleLogoClick} className="text-2xl font-bold green-gradient-text hover:opacity-80 transition-opacity flex-shrink-0">
             CircuitSnips
           </Link>
 
