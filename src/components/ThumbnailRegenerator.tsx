@@ -401,27 +401,45 @@ export function ThumbnailRegenerator() {
         return;
       }
 
-      // Fetch circuits based on mode
-      let query = supabase
-        .from('circuits')
-        .select('id, slug, title, user_id')
-        .eq('user_id', importerUser.id)
-        .order('created_at', { ascending: false });
+      // Fetch circuits based on mode (fetch ALL using pagination to bypass 1000 limit)
+      const allCircuits: Array<{ id: string; slug: string; title: string; user_id: string }> = [];
+      let hasMoreToFetch = true;
+      let offset = 0;
+      const batchSize = 1000; // Fetch in batches of 1000
 
-      // Only filter for missing thumbnails if not in "all" mode
-      if (!isAllMode) {
-        query = query.or('thumbnail_light_url.is.null,thumbnail_dark_url.is.null');
+      while (hasMoreToFetch) {
+        let query = supabase
+          .from('circuits')
+          .select('id, slug, title, user_id')
+          .eq('user_id', importerUser.id)
+          .order('created_at', { ascending: false })
+          .range(offset, offset + batchSize - 1);
+
+        // Only filter for missing thumbnails if not in "all" mode
+        if (!isAllMode) {
+          query = query.or('thumbnail_light_url.is.null,thumbnail_dark_url.is.null');
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('Error fetching circuits:', error);
+          alert('Failed to fetch circuits');
+          return;
+        }
+
+        if (data && data.length > 0) {
+          allCircuits.push(...data);
+          offset += batchSize;
+
+          // If we got less than batchSize, we've reached the end
+          if (data.length < batchSize) {
+            hasMoreToFetch = false;
+          }
+        } else {
+          hasMoreToFetch = false;
+        }
       }
-
-      const { data: circuitsToProcess, error } = await query;
-
-      if (error) {
-        console.error('Error fetching circuits:', error);
-        alert('Failed to fetch circuits');
-        return;
-      }
-
-      const allCircuits = circuitsToProcess || [];
 
       if (allCircuits.length === 0) {
         alert('No circuits found!');
