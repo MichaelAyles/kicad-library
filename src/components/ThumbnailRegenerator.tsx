@@ -39,6 +39,7 @@ export function ThumbnailRegenerator() {
   const [withThumbnailsCount, setWithThumbnailsCount] = useState(0);
   const [withoutThumbnailsCount, setWithoutThumbnailsCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [forceRegenMode, setForceRegenMode] = useState<'without' | 'all'>('without');
   const PAGE_SIZE = 100;
   const kicanvasRef = useRef<HTMLDivElement>(null);
 
@@ -373,7 +374,12 @@ export function ThumbnailRegenerator() {
   };
 
   const startProcessAllWithoutThumbnails = async () => {
-    if (!confirm('This will process ALL circuits without thumbnails from the database. This may take a long time. Continue?')) {
+    const isAllMode = forceRegenMode === 'all';
+    const confirmMessage = isAllMode
+      ? 'This will process ALL circuits from the database and regenerate thumbnails. This may take a very long time. Continue?'
+      : 'This will process ALL circuits without thumbnails from the database. This may take a long time. Continue?';
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -395,29 +401,35 @@ export function ThumbnailRegenerator() {
         return;
       }
 
-      // Fetch ALL circuits without thumbnails (just metadata, no raw_sexpr)
-      const { data: circuitsWithoutThumbs, error } = await supabase
+      // Fetch circuits based on mode
+      let query = supabase
         .from('circuits')
         .select('id, slug, title, user_id')
         .eq('user_id', importerUser.id)
-        .or('thumbnail_light_url.is.null,thumbnail_dark_url.is.null')
         .order('created_at', { ascending: false });
+
+      // Only filter for missing thumbnails if not in "all" mode
+      if (!isAllMode) {
+        query = query.or('thumbnail_light_url.is.null,thumbnail_dark_url.is.null');
+      }
+
+      const { data: circuitsToProcess, error } = await query;
 
       if (error) {
         console.error('Error fetching circuits:', error);
-        alert('Failed to fetch circuits without thumbnails');
+        alert('Failed to fetch circuits');
         return;
       }
 
-      const allCircuits = circuitsWithoutThumbs || [];
+      const allCircuits = circuitsToProcess || [];
 
       if (allCircuits.length === 0) {
-        alert('No circuits without thumbnails found!');
+        alert('No circuits found!');
         setIsProcessing(false);
         return;
       }
 
-      alert(`Found ${allCircuits.length} circuits without thumbnails. Starting processing...`);
+      alert(`Found ${allCircuits.length} circuits ${isAllMode ? '' : 'without thumbnails'}. Starting processing...`);
 
       // Process each circuit
       let successCount = 0;
@@ -707,10 +719,50 @@ export function ThumbnailRegenerator() {
         </div>
 
         <div className="space-y-3">
+          {/* Force Regeneration Mode Toggle */}
+          <div className="bg-muted/30 rounded-lg p-4 border">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium text-sm">Force Regeneration Mode:</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setForceRegenMode('without')}
+                  disabled={isProcessing}
+                  className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+                    forceRegenMode === 'without'
+                      ? 'bg-orange-600 text-white'
+                      : 'bg-muted border hover:bg-muted/80'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  Without Thumbnails Only
+                </button>
+                <button
+                  onClick={() => setForceRegenMode('all')}
+                  disabled={isProcessing}
+                  className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+                    forceRegenMode === 'all'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-muted border hover:bg-muted/80'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  All Circuits
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {forceRegenMode === 'without'
+                ? 'Only process circuits that are missing thumbnails'
+                : 'Force regenerate thumbnails for ALL circuits (including those that already have thumbnails)'}
+            </p>
+          </div>
+
           <button
             onClick={startProcessAllWithoutThumbnails}
             disabled={isProcessing}
-            className="w-full px-6 py-3 bg-orange-600 text-white rounded-md font-bold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className={`w-full px-6 py-3 text-white rounded-md font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+              forceRegenMode === 'all'
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-orange-600 hover:bg-orange-700'
+            }`}
           >
             {isProcessing ? (
               <>
@@ -720,7 +772,9 @@ export function ThumbnailRegenerator() {
             ) : (
               <>
                 <AlertTriangle className="w-5 h-5" />
-                Process ALL Without Thumbnails (From Entire Database)
+                {forceRegenMode === 'all'
+                  ? `Force Regenerate ALL Circuits (${totalCount} from Database)`
+                  : `Process Circuits Without Thumbnails (${withoutThumbnails} from Database)`}
               </>
             )}
           </button>
