@@ -889,6 +889,7 @@ export function ThumbnailRegenerator() {
         <div className="fixed -top-[9999px] -left-[9999px] opacity-0 pointer-events-none" style={{ width: '800px', height: '600px' }}>
           <div ref={kicanvasRef} style={{ width: '100%', height: '100%' }}>
             <KiCanvas
+              key={circuits[currentIndex].slug}
               slug={circuits[currentIndex].slug}
               controls="basic"
               height="100%"
