@@ -33,12 +33,15 @@ export default function AdminDashboard() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [flags, setFlags] = useState<FlaggedCircuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'flags' | 'thumbnails' | 'stats'>('flags');
+  const [activeTab, setActiveTab] = useState<'flags' | 'thumbnails' | 'stats' | 'users'>('flags');
   const [flagFilter, setFlagFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
   const [selectedFlags, setSelectedFlags] = useState<Set<string>>(new Set());
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [isSyncingStats, setIsSyncingStats] = useState(false);
   const [globalStats, setGlobalStats] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Check admin authorization
   useEffect(() => {
@@ -419,6 +422,90 @@ export default function AdminDashboard() {
     }
   };
 
+  // Load users when users tab is active
+  useEffect(() => {
+    if (!isAuthorized || activeTab !== 'users') return;
+
+    const loadUsers = async () => {
+      setIsLoadingUsers(true);
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+          throw new Error('Not authenticated');
+        }
+
+        const response = await fetch('/api/admin/delete-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            searchQuery: userSearchQuery,
+            limit: 100,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to load users');
+        }
+
+        const result = await response.json();
+        setUsers(result.users || []);
+      } catch (error: any) {
+        console.error('Error loading users:', error);
+        alert(error.message || 'Failed to load users');
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+
+    loadUsers();
+  }, [isAuthorized, activeTab, userSearchQuery]);
+
+  const handleDeleteUser = async (userId: string, username: string) => {
+    if (!confirm(`Are you sure you want to delete user @${username}?\n\nThis will permanently delete:\n- Their profile\n- All their circuits\n- All their comments\n- All their favorites\n\nThis action CANNOT be undone!`)) {
+      return;
+    }
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/admin/delete-user', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete user');
+      }
+
+      const result = await response.json();
+      alert(result.message);
+
+      // Refresh user list
+      setUsers(users.filter(u => u.id !== userId));
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      alert(error.message || 'Failed to delete user');
+    }
+  };
+
   if (authLoading || !isAuthorized) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -482,6 +569,17 @@ export default function AdminDashboard() {
             >
               <BarChart3 className="w-4 h-4" />
               Global Stats
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`px-6 py-3 font-semibold transition-colors flex items-center gap-2 ${
+                activeTab === 'users'
+                  ? 'border-b-2 border-primary text-primary -mb-0.5'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              User Management
             </button>
           </div>
 
@@ -803,6 +901,106 @@ export default function AdminDashboard() {
                     <p className="text-muted-foreground">Loading stats...</p>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Users Section */}
+          {activeTab === 'users' && (
+            <div className="space-y-6">
+              <div className="bg-card border rounded-lg p-6">
+                <h2 className="text-2xl font-bold mb-4">User Management</h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Search and manage users. Deleting a user will remove all their data including circuits, comments, and favorites.
+                </p>
+
+                {/* Search */}
+                <div className="mb-6">
+                  <input
+                    type="text"
+                    placeholder="Search users by username..."
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-md bg-background text-foreground"
+                  />
+                </div>
+
+                {/* User List */}
+                {isLoadingUsers ? (
+                  <div className="text-center py-12">
+                    <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+                    <p className="text-muted-foreground">Loading users...</p>
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    No users found
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {users.map((userItem) => (
+                      <div
+                        key={userItem.id}
+                        className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border"
+                      >
+                        <div className="flex items-center gap-4">
+                          {userItem.avatar_url ? (
+                            <img
+                              src={userItem.avatar_url}
+                              alt={userItem.username}
+                              className="w-12 h-12 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Users className="w-6 h-6 text-primary" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-semibold">@{userItem.username}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {userItem.circuitCount} circuit{userItem.circuitCount !== 1 ? 's' : ''} •
+                              Joined {new Date(userItem.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/profile?user=${userItem.username}`}
+                            className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50 transition-colors"
+                            target="_blank"
+                          >
+                            <Eye className="w-4 h-4 inline mr-1" />
+                            View Profile
+                          </Link>
+                          <button
+                            onClick={() => handleDeleteUser(userItem.id, userItem.username)}
+                            disabled={userItem.id === user?.id}
+                            className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete User
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Warning Box */}
+                <div className="mt-6 bg-red-500/10 border border-red-500/50 rounded-lg p-4">
+                  <div className="flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium text-red-600 dark:text-red-400 mb-1">
+                        ⚠️ Permanent Deletion Warning
+                      </p>
+                      <p className="text-muted-foreground">
+                        Deleting a user is permanent and cannot be undone. This will delete their profile,
+                        all circuits they&apos;ve uploaded, all their comments, favorites, and any other data
+                        associated with their account. Use this feature with extreme caution.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
