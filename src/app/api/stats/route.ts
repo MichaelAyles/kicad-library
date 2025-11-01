@@ -17,14 +17,32 @@ export async function GET() {
     if (circuitError) throw circuitError;
 
     // Get total copies (sum of all copy_count)
-    const { data: copiesData, error: copiesError } = await supabase
-      .from('circuits')
-      .select('copy_count')
-      .eq('is_public', true);
+    // Fetch in batches to bypass 1000 row limit
+    let totalCopies = 0;
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
 
-    if (copiesError) throw copiesError;
+    while (hasMore) {
+      const { data: copiesData, error: copiesError } = await supabase
+        .from('circuits')
+        .select('copy_count')
+        .eq('is_public', true)
+        .range(offset, offset + batchSize - 1);
 
-    const totalCopies = copiesData?.reduce((sum, circuit) => sum + (circuit.copy_count || 0), 0) || 0;
+      if (copiesError) throw copiesError;
+
+      if (copiesData && copiesData.length > 0) {
+        totalCopies += copiesData.reduce((sum, circuit) => sum + (circuit.copy_count || 0), 0);
+        offset += batchSize;
+
+        if (copiesData.length < batchSize) {
+          hasMore = false;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
 
     // Get unique user count (makers)
     const { count: makerCount, error: makerError } = await supabase
