@@ -1,5 +1,65 @@
 import { createClient } from '@/lib/supabase/client';
 
+/**
+ * Shuffle circuits that have equal scores to randomize their order
+ * This gives all circuits with the same metric a fair chance at visibility
+ */
+function shuffleEqualScores(circuits: Circuit[], sortBy: 'copies' | 'recent' | 'favorites'): Circuit[] {
+  if (circuits.length === 0) return circuits;
+
+  const getScoreKey = (sortBy: string): keyof Circuit => {
+    switch (sortBy) {
+      case 'copies': return 'copy_count';
+      case 'favorites': return 'favorite_count';
+      case 'recent': return 'created_at';
+      default: return 'copy_count';
+    }
+  };
+
+  const scoreKey = getScoreKey(sortBy);
+  const result: Circuit[] = [];
+  let currentGroup: Circuit[] = [];
+  let currentScore: any = null;
+
+  // Group circuits by their score
+  circuits.forEach((circuit, index) => {
+    const score = circuit[scoreKey];
+
+    if (currentScore === null || score === currentScore) {
+      // Same score, add to current group
+      currentGroup.push(circuit);
+      currentScore = score;
+    } else {
+      // Different score, shuffle and flush current group
+      if (currentGroup.length > 1) {
+        // Fisher-Yates shuffle for groups with ties
+        for (let i = currentGroup.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [currentGroup[i], currentGroup[j]] = [currentGroup[j], currentGroup[i]];
+        }
+      }
+      result.push(...currentGroup);
+
+      // Start new group
+      currentGroup = [circuit];
+      currentScore = score;
+    }
+
+    // Handle last group
+    if (index === circuits.length - 1) {
+      if (currentGroup.length > 1) {
+        for (let i = currentGroup.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [currentGroup[i], currentGroup[j]] = [currentGroup[j], currentGroup[i]];
+        }
+      }
+      result.push(...currentGroup);
+    }
+  });
+
+  return result;
+}
+
 export interface Circuit {
   id: string;
   slug: string;
@@ -83,8 +143,12 @@ export async function getCircuits(
 
     if (error) throw error;
 
+    // Randomize order for circuits with equal scores (ties)
+    const circuits = (data || []) as Circuit[];
+    const shuffledCircuits = shuffleEqualScores(circuits, sortBy);
+
     return {
-      circuits: (data || []) as Circuit[],
+      circuits: shuffledCircuits,
       total: count || 0,
     };
   } catch (error) {
