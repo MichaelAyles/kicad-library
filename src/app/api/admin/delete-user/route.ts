@@ -135,15 +135,10 @@ export async function POST(request: NextRequest) {
 
     const { searchQuery, limit = 50 } = await request.json();
 
+    // Simple query without expensive aggregations
     let query = supabase
       .from('profiles')
-      .select(`
-        id,
-        username,
-        avatar_url,
-        created_at,
-        circuits:circuits(count)
-      `)
+      .select('id, username, avatar_url, created_at')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -156,13 +151,14 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // Transform the data to include circuit count
+    // For performance, we'll just return users without circuit counts
+    // Circuit counts can be expensive with large databases
     const users = (data || []).map((user: any) => ({
       id: user.id,
       username: user.username,
       avatar_url: user.avatar_url,
       created_at: user.created_at,
-      circuitCount: user.circuits?.[0]?.count || 0,
+      circuitCount: 0, // Not calculated for performance
     }));
 
     return NextResponse.json({ users });

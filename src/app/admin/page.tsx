@@ -957,7 +957,6 @@ export default function AdminDashboard() {
                           <div>
                             <div className="font-semibold">@{userItem.username}</div>
                             <div className="text-sm text-muted-foreground">
-                              {userItem.circuitCount} circuit{userItem.circuitCount !== 1 ? 's' : ''} •
                               Joined {new Date(userItem.created_at).toLocaleDateString()}
                             </div>
                           </div>
