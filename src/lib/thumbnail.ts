@@ -17,14 +17,85 @@ export interface ThumbnailResult {
 }
 
 /**
- * Wait for theme to apply and KiCanvas to re-render
+ * Wait for KiCanvas to fully load and render
+ * Polls for shadow DOM content instead of arbitrary timeout
  */
-function waitForTheme(ms: number = 300): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+async function waitForKiCanvasLoad(element: HTMLElement, maxWaitMs: number = 5000): Promise<boolean> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const kicanvasEmbed = element.querySelector('kicanvas-embed') as any;
+
+    if (kicanvasEmbed?.shadowRoot) {
+      // Check if content has been rendered (look for canvas or svg elements)
+      const canvas = kicanvasEmbed.shadowRoot.querySelector('canvas');
+      const svg = kicanvasEmbed.shadowRoot.querySelector('svg');
+
+      if (canvas || svg) {
+        // Give it a little more time to stabilize rendering
+        await new Promise(resolve => setTimeout(resolve, 200));
+        return true;
+      }
+    }
+
+    // Wait 50ms before checking again
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  return false;
 }
 
 /**
- * Capture a screenshot of the KiCanvas element
+ * Generate light mode thumbnail from dark mode by inverting colors
+ * Creates a lighter, inverted version suitable for light themes
+ */
+function generateLightFromDark(darkDataURL: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      // Draw the dark image
+      ctx.drawImage(img, 0, 0);
+
+      // Get image data
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Invert colors (skip alpha channel)
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = 255 - data[i];         // Red
+        data[i + 1] = 255 - data[i + 1]; // Green
+        data[i + 2] = 255 - data[i + 2]; // Blue
+        // data[i + 3] is alpha, keep unchanged
+      }
+
+      // Put the inverted data back
+      ctx.putImageData(imageData, 0, 0);
+
+      // Convert to data URL
+      resolve(canvas.toDataURL('image/png', 0.9));
+    };
+
+    img.onerror = () => {
+      reject(new Error('Failed to load image for light mode generation'));
+    };
+
+    img.src = darkDataURL;
+  });
+}
+
+/**
+ * Capture a screenshot of the KiCanvas element in dark mode
  */
 async function captureElement(element: HTMLElement): Promise<string> {
   try {
@@ -102,14 +173,16 @@ async function captureElement(element: HTMLElement): Promise<string> {
 }
 
 /**
- * Capture thumbnails in both light and dark modes
+ * Capture thumbnail in dark mode only and generate light mode programmatically
  *
- * This function:
- * 1. Captures the current state (light mode)
- * 2. Switches to dark mode
- * 3. Waits for re-render
- * 4. Captures dark mode
- * 5. Switches back to original theme
+ * Optimized approach:
+ * 1. Ensure we're in dark mode
+ * 2. Wait for KiCanvas to fully load (smart polling)
+ * 3. Capture dark mode screenshot
+ * 4. Generate light mode by inverting colors
+ * 5. Return both thumbnails
+ *
+ * This is ~2x faster than capturing both modes separately.
  */
 export async function captureThumbnails(
   kicanvasElement: HTMLElement,
@@ -117,46 +190,36 @@ export async function captureThumbnails(
   setTheme: (theme: 'light' | 'dark') => void
 ): Promise<ThumbnailResult> {
   try {
-    let lightThumb: string;
-    let darkThumb: string;
-
-    if (currentTheme === 'light') {
-      // Capture light mode first
-      console.log('Capturing light mode thumbnail...');
-      lightThumb = await captureElement(kicanvasElement);
-
-      // Switch to dark mode
+    // Switch to dark mode if not already
+    if (currentTheme !== 'dark') {
       console.log('Switching to dark mode...');
       setTheme('dark');
-      await waitForTheme(400); // Wait for theme transition
+      // Wait a bit for theme to apply
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
 
-      // Capture dark mode
-      console.log('Capturing dark mode thumbnail...');
-      darkThumb = await captureElement(kicanvasElement);
+    // Wait for KiCanvas to fully load and render (smart polling)
+    console.log('Waiting for KiCanvas to load...');
+    const loaded = await waitForKiCanvasLoad(kicanvasElement, 5000);
 
-      // Switch back to light
+    if (!loaded) {
+      throw new Error('KiCanvas failed to load within timeout period');
+    }
+
+    console.log('KiCanvas loaded, capturing dark mode thumbnail...');
+
+    // Capture dark mode screenshot
+    const darkThumb = await captureElement(kicanvasElement);
+
+    console.log('Generating light mode thumbnail from dark mode...');
+
+    // Generate light mode by inverting colors
+    const lightThumb = await generateLightFromDark(darkThumb);
+
+    // Switch back to original theme if needed
+    if (currentTheme === 'light') {
       console.log('Switching back to light mode...');
       setTheme('light');
-      await waitForTheme(300);
-    } else {
-      // Currently in dark mode
-      // Capture dark mode first
-      console.log('Capturing dark mode thumbnail...');
-      darkThumb = await captureElement(kicanvasElement);
-
-      // Switch to light mode
-      console.log('Switching to light mode...');
-      setTheme('light');
-      await waitForTheme(400);
-
-      // Capture light mode
-      console.log('Capturing light mode thumbnail...');
-      lightThumb = await captureElement(kicanvasElement);
-
-      // Switch back to dark
-      console.log('Switching back to dark mode...');
-      setTheme('dark');
-      await waitForTheme(300);
     }
 
     console.log('Thumbnail capture complete!');

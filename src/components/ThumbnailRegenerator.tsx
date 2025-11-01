@@ -238,21 +238,13 @@ export function ThumbnailRegenerator() {
         throw new Error('Circuit data is not a valid KiCad S-expression');
       }
 
-      // Wait for KiCanvas to fully render and stabilize
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
+      // Get KiCanvas element (smart waiting is now handled in captureThumbnails)
       const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
       if (!kicanvasElement) {
         throw new Error('KiCanvas element not found - viewer may not have loaded');
       }
 
-      // Check if KiCanvas has actually rendered content
-      const kicanvasContent = kicanvasElement.shadowRoot;
-      if (!kicanvasContent) {
-        throw new Error('KiCanvas shadow DOM not initialized');
-      }
-
-      // Capture thumbnails in both themes
+      // Capture thumbnails (now uses smart polling + single dark mode capture)
       let thumbnailResult;
       try {
         thumbnailResult = await captureThumbnails(
@@ -516,20 +508,13 @@ export function ThumbnailRegenerator() {
             throw new Error('Circuit data is not a valid KiCad S-expression');
           }
 
-          // Wait for KiCanvas to render
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
+          // Get KiCanvas element (smart waiting is now handled in captureThumbnails)
           const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
           if (!kicanvasElement) {
             throw new Error('KiCanvas element not found');
           }
 
-          const kicanvasContent = kicanvasElement.shadowRoot;
-          if (!kicanvasContent) {
-            throw new Error('KiCanvas shadow DOM not initialized');
-          }
-
-          // Capture thumbnails
+          // Capture thumbnails (now uses smart polling + single dark mode capture)
           const thumbnailResult = await captureThumbnails(
             kicanvasElement,
             theme,
