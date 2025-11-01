@@ -186,24 +186,25 @@ export function dataURLtoBlob(dataURL: string): Blob {
 }
 
 /**
- * Upload thumbnail to Supabase Storage
+ * Upload thumbnail to Supabase Storage with versioning
  */
 export async function uploadThumbnail(
   supabase: any,
   userId: string,
   circuitId: string,
   theme: 'light' | 'dark',
-  dataURL: string
+  dataURL: string,
+  version: number = 1
 ): Promise<string> {
   const blob = dataURLtoBlob(dataURL);
-  // Store in user's folder: {userId}/{circuitId}-{theme}.png
-  const fileName = `${userId}/${circuitId}-${theme}.png`;
+  // Store in user's folder with version: {userId}/{circuitId}-v{version}-{theme}.png
+  const fileName = `${userId}/${circuitId}-v${version}-${theme}.png`;
 
   const { data, error } = await supabase.storage
     .from('thumbnails')
     .upload(fileName, blob, {
       contentType: 'image/png',
-      upsert: true, // Overwrite if exists
+      upsert: false, // Don't overwrite - create new versions
     });
 
   if (error) {

@@ -75,20 +75,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert base64 to buffer for upload
+    // Get current thumbnail version and increment
+    const { data: circuit, error: circuitError } = await adminSupabase
+      .from('circuits')
+      .select('thumbnail_version')
+      .eq('id', circuitId)
+      .single();
+
+    if (circuitError || !circuit) {
+      return NextResponse.json(
+        { error: 'Circuit not found', details: circuitError?.message },
+        { status: 404 }
+      );
+    }
+
+    const newVersion = (circuit.thumbnail_version || 0) + 1;
+
+    // Convert base64 to buffer for upload (with versioning)
     const uploadThumbnail = async (base64Data: string, theme: 'light' | 'dark') => {
       // Remove data URL prefix if present
       const base64String = base64Data.replace(/^data:image\/\w+;base64,/, '');
       const buffer = Buffer.from(base64String, 'base64');
 
-      const filePath = `${userId}/${circuitId}-${theme}.png`;
+      const filePath = `${userId}/${circuitId}-v${newVersion}-${theme}.png`;
 
       // Upload using admin client (bypasses RLS)
+      // Set upsert: false to ensure we create new files, not overwrite
       const { data, error } = await adminSupabase.storage
         .from('thumbnails')
         .upload(filePath, buffer, {
           contentType: 'image/png',
-          upsert: true, // Overwrite if exists
+          upsert: false, // Create new version, don't overwrite
         });
 
       if (error) {
@@ -107,12 +124,45 @@ export async function POST(request: NextRequest) {
     const lightUrl = await uploadThumbnail(lightThumbBase64, 'light');
     const darkUrl = await uploadThumbnail(darkThumbBase64, 'dark');
 
-    // Update circuit record with thumbnail URLs (using admin client)
+    // Mark previous versions as not current
+    const { error: historyUpdateError } = await adminSupabase
+      .from('thumbnail_history')
+      .update({ is_current: false })
+      .eq('circuit_id', circuitId)
+      .eq('is_current', true);
+
+    if (historyUpdateError) {
+      console.error('Error updating thumbnail history:', historyUpdateError);
+    }
+
+    // Insert new version into history
+    const { error: historyInsertError } = await adminSupabase
+      .from('thumbnail_history')
+      .insert({
+        circuit_id: circuitId,
+        version: newVersion,
+        thumbnail_light_url: lightUrl,
+        thumbnail_dark_url: darkUrl,
+        regenerated_by: user.id,
+        is_current: true,
+        notes: 'Admin regeneration',
+      });
+
+    if (historyInsertError) {
+      console.error('Error inserting thumbnail history:', historyInsertError);
+      return NextResponse.json(
+        { error: 'Failed to save thumbnail history', details: historyInsertError.message },
+        { status: 500 }
+      );
+    }
+
+    // Update circuit record with new thumbnail URLs and version (using admin client)
     const { error: updateError } = await adminSupabase
       .from('circuits')
       .update({
         thumbnail_light_url: lightUrl,
         thumbnail_dark_url: darkUrl,
+        thumbnail_version: newVersion,
       })
       .eq('id', circuitId);
 
@@ -128,7 +178,8 @@ export async function POST(request: NextRequest) {
       success: true,
       lightUrl,
       darkUrl,
-      message: 'Thumbnails uploaded successfully',
+      version: newVersion,
+      message: `Thumbnails uploaded successfully (v${newVersion})`,
     });
   } catch (error: any) {
     console.error('Error in regenerate thumbnail endpoint:', error);

@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS public.circuits (
   -- Thumbnail URLs (stored in Supabase Storage)
   thumbnail_light_url TEXT,
   thumbnail_dark_url TEXT,
+  thumbnail_version INTEGER DEFAULT 1,
 
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -163,6 +164,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name='circuits' AND column_name='thumbnail_dark_url') THEN
     ALTER TABLE public.circuits ADD COLUMN thumbnail_dark_url TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='thumbnail_version') THEN
+    ALTER TABLE public.circuits ADD COLUMN thumbnail_version INTEGER DEFAULT 1;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
@@ -274,6 +280,27 @@ DROP TRIGGER IF EXISTS update_favorite_count_trigger ON public.favorites;
 CREATE TRIGGER update_favorite_count_trigger
   AFTER INSERT OR DELETE ON public.favorites
   FOR EACH ROW EXECUTE FUNCTION update_circuit_favorite_count();
+
+-- ============================================================================
+-- THUMBNAIL HISTORY
+-- Track all thumbnail versions for audit trail and rollback capability
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.thumbnail_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  thumbnail_light_url TEXT NOT NULL,
+  thumbnail_dark_url TEXT NOT NULL,
+  regenerated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  regenerated_at TIMESTAMPTZ DEFAULT NOW(),
+  is_current BOOLEAN DEFAULT FALSE,
+  notes TEXT,
+
+  UNIQUE(circuit_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS thumbnail_history_circuit_id_idx ON public.thumbnail_history(circuit_id);
+CREATE INDEX IF NOT EXISTS thumbnail_history_current_idx ON public.thumbnail_history(circuit_id, is_current) WHERE is_current = TRUE;
 
 -- ============================================================================
 -- COPY TRACKING
@@ -983,6 +1010,26 @@ $$ LANGUAGE plpgsql STABLE;
 
 -- Populate global_stats with current counts
 SELECT sync_global_stats();
+
+-- Migrate existing circuits to thumbnail versioning (v1)
+-- Create history records for circuits that have thumbnails but no history
+INSERT INTO public.thumbnail_history (circuit_id, version, thumbnail_light_url, thumbnail_dark_url, is_current, regenerated_at, notes)
+SELECT
+  c.id,
+  1 as version,
+  c.thumbnail_light_url,
+  c.thumbnail_dark_url,
+  TRUE as is_current,
+  c.created_at as regenerated_at,
+  'Initial migration - v1' as notes
+FROM public.circuits c
+WHERE c.thumbnail_light_url IS NOT NULL
+  AND c.thumbnail_dark_url IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM public.thumbnail_history th
+    WHERE th.circuit_id = c.id AND th.version = 1
+  )
+ON CONFLICT (circuit_id, version) DO NOTHING;
 
 -- ============================================================================
 -- SETUP COMPLETE!

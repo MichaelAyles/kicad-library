@@ -290,24 +290,44 @@ export default function UploadPage() {
 
       if (circuitError) throw circuitError;
 
-      // 2. Upload thumbnails to storage
+      // 2. Upload thumbnails to storage (v1)
+      const version = 1;
       setUploadProgress("Uploading light theme thumbnail...");
-      const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', lightThumb);
+      const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', lightThumb, version);
 
       setUploadProgress("Uploading dark theme thumbnail...");
-      const darkUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'dark', darkThumb);
+      const darkUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'dark', darkThumb, version);
 
-      // 3. Update circuit with thumbnail URLs
+      // 3. Update circuit with thumbnail URLs and version
       setUploadProgress("Finalizing...");
       const { error: updateError } = await supabase
         .from('circuits')
         .update({
           thumbnail_light_url: lightUrl,
           thumbnail_dark_url: darkUrl,
+          thumbnail_version: version,
         })
         .eq('id', circuit.id);
 
       if (updateError) throw updateError;
+
+      // 4. Create initial thumbnail history record
+      const { error: historyError } = await supabase
+        .from('thumbnail_history')
+        .insert({
+          circuit_id: circuit.id,
+          version: version,
+          thumbnail_light_url: lightUrl,
+          thumbnail_dark_url: darkUrl,
+          regenerated_by: user.id,
+          is_current: true,
+          notes: 'Initial upload',
+        });
+
+      if (historyError) {
+        console.error('Error creating thumbnail history:', historyError);
+        // Don't fail the upload if history creation fails
+      }
 
       // Success!
       setCurrentStep('success');
