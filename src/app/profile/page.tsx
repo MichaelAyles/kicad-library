@@ -137,18 +137,42 @@ function ProfileContent() {
       if (!profileUser) return;
 
       try {
-        // Get user's circuits and calculate stats
-        const { data: circuits, error } = await supabase
+        // Get circuit count using count query (not limited to 1000)
+        const { count: circuitCount, error: countError } = await supabase
           .from('circuits')
-          .select('copy_count, favorite_count')
+          .select('*', { count: 'exact', head: true })
           .eq('user_id', profileUser.id);
 
-        if (error) throw error;
+        if (countError) throw countError;
+
+        // Fetch all circuits in batches to calculate total copies and favorites
+        let allCircuits: Array<{ copy_count: number; favorite_count: number }> = [];
+        let hasMore = true;
+        let offset = 0;
+        const batchSize = 1000;
+
+        while (hasMore) {
+          const { data: batch, error: batchError } = await supabase
+            .from('circuits')
+            .select('copy_count, favorite_count')
+            .eq('user_id', profileUser.id)
+            .range(offset, offset + batchSize - 1);
+
+          if (batchError) throw batchError;
+
+          if (batch && batch.length > 0) {
+            allCircuits.push(...batch);
+            offset += batchSize;
+            if (batch.length < batchSize) hasMore = false;
+          } else {
+            hasMore = false;
+          }
+        }
 
         const stats: UserStats = {
-          circuitsUploaded: circuits?.length || 0,
-          totalCopies: circuits?.reduce((sum, c) => sum + (c.copy_count || 0), 0) || 0,
-          totalFavorites: circuits?.reduce((sum, c) => sum + (c.favorite_count || 0), 0) || 0,
+          circuitsUploaded: circuitCount || 0,
+          totalCopies: allCircuits.reduce((sum, c) => sum + (c.copy_count || 0), 0),
+          totalFavorites: allCircuits.reduce((sum, c) => sum + (c.favorite_count || 0), 0),
         };
 
         setStats(stats);
