@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 
 // Declare the kicanvas-embed custom element for TypeScript
 declare global {
@@ -56,11 +57,17 @@ export function KiCanvas({
   width = '100%',
 }: KiCanvasProps) {
   const [mounted, setMounted] = useState(false);
+  const { theme, systemTheme } = useTheme();
 
   // Prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Determine KiCanvas theme based on current theme
+  // Light mode = 'kicad', Dark mode = 'witchhazel'
+  const currentTheme = theme === 'system' ? systemTheme : theme;
+  const kicanvasTheme = currentTheme === 'dark' ? 'witchhazel' : 'kicad';
 
   // Determine the source URL
   const schematicUrl = slug
@@ -86,6 +93,7 @@ export function KiCanvas({
     <kicanvas-embed
       src={schematicUrl}
       controls={controls}
+      theme={kicanvasTheme}
       className={className}
       style={{
         width,

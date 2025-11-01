@@ -42,7 +42,11 @@ export default function EditCircuitPage() {
   const router = useRouter();
   const slug = params?.slug as string;
   const { user, isLoading: authLoading } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, systemTheme } = useTheme();
+
+  // Determine KiCanvas theme: light = 'kicad', dark = 'witchhazel'
+  const currentTheme = theme === 'system' ? systemTheme : theme;
+  const kicanvasTheme = currentTheme === 'dark' ? 'witchhazel' : 'kicad';
 
   const [circuit, setCircuit] = useState<Circuit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -688,6 +692,7 @@ export default function EditCircuitPage() {
                   <kicanvas-embed
                     src={previewUrl}
                     controls="basic"
+                    theme={kicanvasTheme}
                     style={{ width: '100%', height: '100%' }}
                   />
                 </div>
