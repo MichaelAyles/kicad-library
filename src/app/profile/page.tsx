@@ -389,7 +389,7 @@ function ProfileContent() {
             ) : (
               <div className="space-y-4">
                 {circuits.map((circuit) => {
-                  const thumbnailUrl = circuit.thumbnail_light_url || circuit.thumbnail_dark_url;
+                  const thumbnailUrl = circuit.thumbnail_dark_url;
                   const timeAgo = getTimeAgo(circuit.created_at);
 
                   return (

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Upload, Copy, Zap } from "lucide-react";
-import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getCircuits, type Circuit } from "@/lib/circuits";
@@ -18,13 +17,6 @@ export default function HomePage() {
   const [topCircuits, setTopCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({ circuits: 0, copies: 0, makers: 0 });
-  const { theme, systemTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // Prevent hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Load top circuits
   useEffect(() => {
@@ -204,12 +196,8 @@ export default function HomePage() {
           {!isLoading && topCircuits.length > 0 && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {topCircuits.map((circuit) => {
-                // Determine which thumbnail to show based on theme
-                const currentTheme = theme === 'system' ? systemTheme : theme;
-                const isDark = currentTheme === 'dark';
-                const thumbnailUrl = mounted
-                  ? (isDark ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || circuit.thumbnail_light_url
-                  : circuit.thumbnail_light_url;
+                // Always use dark mode thumbnail
+                const thumbnailUrl = circuit.thumbnail_dark_url;
 
                 return (
                   <Link

@@ -27,22 +27,31 @@ async function waitForKiCanvasLoad(element: HTMLElement, maxWaitMs: number = 500
     const kicanvasEmbed = element.querySelector('kicanvas-embed') as any;
 
     if (kicanvasEmbed?.shadowRoot) {
-      // Check if content has been rendered (look for canvas or svg elements)
+      // Check if shadow DOM has any significant content rendered
+      const shadowChildren = kicanvasEmbed.shadowRoot.children;
+
+      // Look for various possible rendering elements
       const canvas = kicanvasEmbed.shadowRoot.querySelector('canvas');
       const svg = kicanvasEmbed.shadowRoot.querySelector('svg');
+      const divs = kicanvasEmbed.shadowRoot.querySelectorAll('div');
 
-      if (canvas || svg) {
-        // Give it a little more time to stabilize rendering
-        await new Promise(resolve => setTimeout(resolve, 200));
+      // Consider it loaded if we have a canvas/svg, or if there are multiple divs (likely rendered content)
+      if (canvas || svg || (divs && divs.length > 2)) {
+        // Give it a bit more time to stabilize rendering
+        await new Promise(resolve => setTimeout(resolve, 500));
         return true;
       }
     }
 
-    // Wait 50ms before checking again
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Wait 100ms before checking again (increased from 50ms for better stability)
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
-  return false;
+  // If we timeout, return true anyway and let html2canvas try
+  // This prevents blocking if KiCanvas structure changes
+  console.warn('KiCanvas load detection timed out, proceeding anyway...');
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  return true;
 }
 
 /**
