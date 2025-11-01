@@ -27,30 +27,30 @@ ON CONFLICT (id) DO NOTHING;
 CREATE OR REPLACE FUNCTION sync_global_stats()
 RETURNS VOID AS $$
 DECLARE
-  circuit_count INTEGER;
-  copy_count INTEGER;
-  user_count INTEGER;
+  v_circuit_count INTEGER;
+  v_copy_count INTEGER;
+  v_user_count INTEGER;
 BEGIN
   -- Count public circuits
-  SELECT COUNT(*) INTO circuit_count
+  SELECT COUNT(*) INTO v_circuit_count
   FROM public.circuits
   WHERE is_public = true;
 
-  -- Sum all copy counts (need to handle pagination for >1000 circuits)
-  SELECT COALESCE(SUM(copy_count), 0) INTO copy_count
-  FROM public.circuits
-  WHERE is_public = true;
+  -- Sum all copy counts (PostgreSQL will handle all rows efficiently)
+  SELECT COALESCE(SUM(c.copy_count), 0) INTO v_copy_count
+  FROM public.circuits c
+  WHERE c.is_public = true;
 
   -- Count all users
-  SELECT COUNT(*) INTO user_count
+  SELECT COUNT(*) INTO v_user_count
   FROM public.profiles;
 
   -- Update global stats
   UPDATE public.global_stats
   SET
-    total_circuits = circuit_count,
-    total_copies = copy_count,
-    total_users = user_count,
+    total_circuits = v_circuit_count,
+    total_copies = v_copy_count,
+    total_users = v_user_count,
     last_synced_at = NOW(),
     updated_at = NOW()
   WHERE id = 1;
