@@ -14,6 +14,7 @@ import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { formatDate } from "@/lib/utils";
 import { getCircuitBySlug, incrementViewCount, incrementCopyCount, checkIfFavorited, toggleFavorite, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
+import { isAdmin } from "@/lib/admin";
 
 export default function CircuitDetailPage() {
   const params = useParams();
@@ -31,6 +32,7 @@ export default function CircuitDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<any>(null); // Parsed metadata from S-expression
   const [isFlagModalOpen, setIsFlagModalOpen] = useState(false);
+  const [isUserAdmin, setIsUserAdmin] = useState(false);
 
   // Load circuit data from database
   useEffect(() => {
@@ -78,6 +80,20 @@ export default function CircuitDetailPage() {
 
     loadCircuit();
   }, [slug, user?.id]);
+
+  // Check if current user is admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (user) {
+        const adminStatus = await isAdmin(user);
+        setIsUserAdmin(adminStatus);
+      } else {
+        setIsUserAdmin(false);
+      }
+    };
+
+    checkAdmin();
+  }, [user]);
 
   // Helper function to prepare data from database
   const prepareCircuitData = (rawSexpr: string, title: string) => {
@@ -322,8 +338,8 @@ export default function CircuitDetailPage() {
               Download .kicad_sch
             </button>
 
-            {/* Edit button - only shown to circuit owner */}
-            {user && circuit.user_id === user.id && (
+            {/* Edit button - shown to circuit owner or admin */}
+            {user && (circuit.user_id === user.id || isUserAdmin) && (
               <Link
                 href={`/circuit/${slug}/edit`}
                 className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2"
