@@ -77,6 +77,7 @@ export interface Circuit {
   comment_count: number;
   thumbnail_light_url: string | null;
   thumbnail_dark_url: string | null;
+  thumbnail_version: number;
   is_public: boolean;
   is_featured: boolean;
   created_at: string;

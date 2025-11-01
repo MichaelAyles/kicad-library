@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Loader, X, Trash2, Camera } from "lucide-react";
+import { ArrowLeft, Save, Loader, X, Trash2, Camera, History } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
+import { isAdmin } from "@/lib/admin";
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 import { wrapSnippetToFullFile, isClipboardSnippet } from "@/lib/kicad-parser";
@@ -49,12 +50,18 @@ export default function EditCircuitPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isUserAdmin, setIsUserAdmin] = useState(false);
 
   // Thumbnail regeneration state
   const [isRegeneratingThumbnails, setIsRegeneratingThumbnails] = useState(false);
   const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+
+  // Thumbnail version history
+  const [thumbnailHistory, setThumbnailHistory] = useState<any[]>([]);
+  const [showVersionSelector, setShowVersionSelector] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Form fields
   const [title, setTitle] = useState("");
@@ -64,6 +71,17 @@ export default function EditCircuitPage() {
   const [category, setCategory] = useState("");
   const [license, setLicense] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user) {
+        const adminStatus = await isAdmin(user);
+        setIsUserAdmin(adminStatus);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
 
   // Load circuit data
   useEffect(() => {
@@ -85,15 +103,19 @@ export default function EditCircuitPage() {
           return;
         }
 
-        // Check if user is the owner
+        // Check if user is the owner or admin
+        const userIsAdmin = user ? await isAdmin(user) : false;
+        const isOwner = user?.id === circuitData.user_id;
+
         console.log("Edit permission check:", {
           hasUser: !!user,
           userId: user?.id,
           circuitUserId: circuitData.user_id,
-          matches: user?.id === circuitData.user_id
+          isOwner,
+          isAdmin: userIsAdmin
         });
 
-        if (!user || circuitData.user_id !== user.id) {
+        if (!user || (!isOwner && !userIsAdmin)) {
           setError("You don't have permission to edit this circuit");
           setIsLoading(false);
           return;
@@ -323,6 +345,78 @@ export default function EditCircuitPage() {
       setError(err instanceof Error ? err.message : 'Failed to capture thumbnails');
     } finally {
       setIsRegeneratingThumbnails(false);
+    }
+  };
+
+  // Load thumbnail version history
+  const loadThumbnailHistory = async () => {
+    if (!circuit) return;
+
+    setIsLoadingHistory(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('thumbnail_history')
+        .select('*')
+        .eq('circuit_id', circuit.id)
+        .order('version', { ascending: false });
+
+      if (error) throw error;
+
+      setThumbnailHistory(data || []);
+      setShowVersionSelector(true);
+    } catch (err) {
+      console.error('Failed to load thumbnail history:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load thumbnail history');
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Set active thumbnail version
+  const setActiveVersion = async (versionId: string, version: number, lightUrl: string, darkUrl: string) => {
+    if (!circuit) return;
+
+    try {
+      const supabase = createClient();
+
+      // Mark all versions as not current
+      await supabase
+        .from('thumbnail_history')
+        .update({ is_current: false })
+        .eq('circuit_id', circuit.id);
+
+      // Mark selected version as current
+      await supabase
+        .from('thumbnail_history')
+        .update({ is_current: true })
+        .eq('id', versionId);
+
+      // Update circuit with selected thumbnail URLs and version
+      const { error: updateError } = await supabase
+        .from('circuits')
+        .update({
+          thumbnail_light_url: lightUrl,
+          thumbnail_dark_url: darkUrl,
+          thumbnail_version: version,
+        })
+        .eq('id', circuit.id);
+
+      if (updateError) throw updateError;
+
+      // Reload circuit data
+      const updatedCircuit = await getCircuitBySlug(slug);
+      if (updatedCircuit) {
+        setCircuit(updatedCircuit);
+      }
+
+      // Reload history
+      await loadThumbnailHistory();
+
+      alert(`Thumbnail version ${version} is now active`);
+    } catch (err) {
+      console.error('Failed to set active version:', err);
+      setError(err instanceof Error ? err.message : 'Failed to set active version');
     }
   };
 
@@ -651,6 +745,121 @@ export default function EditCircuitPage() {
                 </>
               )}
             </div>
+          </div>
+
+          {/* Thumbnail Version History Section */}
+          <div className="mt-8 p-6 border border-blue-500/30 bg-blue-500/5 rounded-lg">
+            <h3 className="font-semibold text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Thumbnail Version History
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              View all thumbnail versions and select which one to display. Current version: v{circuit?.thumbnail_version || 1}
+            </p>
+
+            {!showVersionSelector ? (
+              <button
+                onClick={loadThumbnailHistory}
+                disabled={isLoadingHistory}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+              >
+                {isLoadingHistory ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <History className="w-4 h-4" />
+                    View All Versions
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-medium">Select Active Version</h4>
+                  <button
+                    onClick={() => setShowVersionSelector(false)}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {thumbnailHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No thumbnail history found.</p>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {thumbnailHistory.map((version) => (
+                      <div
+                        key={version.id}
+                        className={`border rounded-lg p-4 ${
+                          version.is_current
+                            ? 'border-blue-500 bg-blue-500/10'
+                            : 'border-muted hover:border-blue-500/50'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h5 className="font-semibold">
+                              Version {version.version}
+                              {version.is_current && (
+                                <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-1 rounded">
+                                  ACTIVE
+                                </span>
+                              )}
+                            </h5>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(version.regenerated_at).toLocaleString()}
+                            </p>
+                            {version.notes && (
+                              <p className="text-xs text-muted-foreground italic mt-1">{version.notes}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Thumbnail Previews */}
+                        <div className="space-y-2 mb-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Light Mode:</p>
+                            <img
+                              src={version.thumbnail_light_url}
+                              alt={`Version ${version.version} light`}
+                              className="w-full border rounded"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Dark Mode:</p>
+                            <img
+                              src={version.thumbnail_dark_url}
+                              alt={`Version ${version.version} dark`}
+                              className="w-full border rounded"
+                            />
+                          </div>
+                        </div>
+
+                        {!version.is_current && (
+                          <button
+                            onClick={() =>
+                              setActiveVersion(
+                                version.id,
+                                version.version,
+                                version.thumbnail_light_url,
+                                version.thumbnail_dark_url
+                              )
+                            }
+                            className="w-full px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                          >
+                            Set as Active
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Delete Circuit Section */}
