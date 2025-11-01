@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -61,22 +61,64 @@ function getTimeAgo(dateString: string): string {
   return `${years}y ago`;
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
+  const [profileUser, setProfileUser] = useState<any>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [circuits, setCircuits] = useState<Circuit[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isLoadingCircuits, setIsLoadingCircuits] = useState(true);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
+  const [isViewingOwnProfile, setIsViewingOwnProfile] = useState(true);
   const supabase = createClient();
 
-  // Redirect if not logged in
+  // Get username from query params or use logged-in user
+  const usernameParam = searchParams.get('user');
+
+  // Load the profile user (either from query param or logged-in user)
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, authLoading, router]);
+    const loadProfileUser = async () => {
+      if (usernameParam) {
+        // Viewing someone else's profile
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('username', usernameParam)
+          .single();
+
+        if (error || !data) {
+          // User not found, redirect to 404 or own profile
+          router.push('/profile');
+          return;
+        }
+
+        setProfileUser(data);
+        setIsViewingOwnProfile(user?.id === data.id);
+      } else {
+        // Viewing own profile
+        if (!authLoading && !user) {
+          router.push('/login');
+          return;
+        }
+        if (user) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+          if (data) {
+            setProfileUser(data);
+            setIsViewingOwnProfile(true);
+          }
+        }
+      }
+    };
+
+    loadProfileUser();
+  }, [usernameParam, user, authLoading, router, supabase]);
 
   // Check if user is admin
   useEffect(() => {
@@ -92,14 +134,14 @@ export default function ProfilePage() {
   // Load user statistics
   useEffect(() => {
     const loadUserStats = async () => {
-      if (!user) return;
+      if (!profileUser) return;
 
       try {
         // Get user's circuits and calculate stats
         const { data: circuits, error } = await supabase
           .from('circuits')
           .select('copy_count, favorite_count')
-          .eq('user_id', user.id);
+          .eq('user_id', profileUser.id);
 
         if (error) throw error;
 
@@ -118,18 +160,18 @@ export default function ProfilePage() {
     };
 
     loadUserStats();
-  }, [user, supabase]);
+  }, [profileUser, supabase]);
 
   // Load user's uploaded circuits
   useEffect(() => {
     const loadCircuits = async () => {
-      if (!user) return;
+      if (!profileUser) return;
 
       try {
         const { data, error } = await supabase
           .from('circuits')
           .select('id, slug, title, description, view_count, copy_count, favorite_count, created_at, thumbnail_light_url, thumbnail_dark_url')
-          .eq('user_id', user.id)
+          .eq('user_id', profileUser.id)
           .order('created_at', { ascending: false })
           .limit(10);
 
@@ -144,9 +186,9 @@ export default function ProfilePage() {
     };
 
     loadCircuits();
-  }, [user, supabase]);
+  }, [profileUser, supabase]);
 
-  if (authLoading || !user) {
+  if (authLoading || !profileUser) {
     return (
       <div className="flex flex-col min-h-screen bg-background">
         <Header />
@@ -157,10 +199,10 @@ export default function ProfilePage() {
     );
   }
 
-  // Extract GitHub metadata from user object
-  const githubUsername = user.user_metadata?.user_name || user.user_metadata?.preferred_username;
-  const githubAvatar = user.user_metadata?.avatar_url;
-  const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
+  // Extract GitHub metadata from profileUser object
+  const githubUsername = profileUser.username;
+  const githubAvatar = profileUser.avatar_url;
+  const fullName = profileUser.full_name || profileUser.username;
   const githubUrl = githubUsername ? `https://github.com/${githubUsername}` : null;
 
   return (
@@ -206,7 +248,7 @@ export default function ProfilePage() {
                     </div>
                   )}
 
-                  {user.email && (
+                  {isViewingOwnProfile && user?.email && (
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4" />
                       <span>{user.email}</span>
@@ -215,34 +257,36 @@ export default function ProfilePage() {
 
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    <span>Joined {new Date(user.created_at || '').toLocaleDateString()}</span>
+                    <span>Joined {new Date(profileUser.created_at || '').toLocaleDateString()}</span>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3">
-                  <Link
-                    href="/upload"
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
-                  >
-                    Upload Circuit
-                  </Link>
-                  {isUserAdmin && (
+                {isViewingOwnProfile && (
+                  <div className="flex gap-3">
                     <Link
-                      href="/admin"
-                      className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md font-medium hover:bg-destructive/90 transition-colors flex items-center gap-2"
+                      href="/upload"
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
                     >
-                      <Shield className="w-4 h-4" />
-                      Admin Portal
+                      Upload Circuit
                     </Link>
-                  )}
-                  <Link
-                    href="/settings"
-                    className="px-4 py-2 border rounded-md font-medium hover:bg-muted transition-colors"
-                  >
-                    Edit Profile
-                  </Link>
-                </div>
+                    {isUserAdmin && (
+                      <Link
+                        href="/admin"
+                        className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md font-medium hover:bg-destructive/90 transition-colors flex items-center gap-2"
+                      >
+                        <Shield className="w-4 h-4" />
+                        Admin Portal
+                      </Link>
+                    )}
+                    <Link
+                      href="/settings"
+                      className="px-4 py-2 border rounded-md font-medium hover:bg-muted transition-colors"
+                    >
+                      Edit Profile
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -285,9 +329,11 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <Activity className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold">Your Circuits</h2>
+                <h2 className="text-xl font-semibold">
+                  {isViewingOwnProfile ? 'Your Circuits' : `${fullName}'s Circuits`}
+                </h2>
               </div>
-              {circuits.length > 0 && (
+              {isViewingOwnProfile && circuits.length > 0 && (
                 <Link
                   href="/upload"
                   className="text-sm text-primary hover:underline font-medium"
@@ -304,13 +350,17 @@ export default function ProfilePage() {
             ) : circuits.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Upload className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="mb-2">No circuits uploaded yet</p>
-                <Link
-                  href="/upload"
-                  className="text-primary hover:underline font-medium inline-block"
-                >
-                  Upload your first circuit →
-                </Link>
+                <p className="mb-2">
+                  {isViewingOwnProfile ? 'No circuits uploaded yet' : `${fullName} hasn't uploaded any circuits yet`}
+                </p>
+                {isViewingOwnProfile && (
+                  <Link
+                    href="/upload"
+                    className="text-primary hover:underline font-medium inline-block"
+                  >
+                    Upload your first circuit →
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -381,5 +431,20 @@ export default function ProfilePage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col min-h-screen bg-background">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader className="w-8 h-8 animate-spin text-primary" />
+        </main>
+      </div>
+    }>
+      <ProfileContent />
+    </Suspense>
   );
 }
