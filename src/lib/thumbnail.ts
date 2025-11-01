@@ -16,43 +16,6 @@ export interface ThumbnailResult {
   dark: string;  // base64 data URL
 }
 
-/**
- * Wait for KiCanvas to fully load and render
- * Polls for shadow DOM content instead of arbitrary timeout
- */
-async function waitForKiCanvasLoad(element: HTMLElement, maxWaitMs: number = 5000): Promise<boolean> {
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < maxWaitMs) {
-    const kicanvasEmbed = element.querySelector('kicanvas-embed') as any;
-
-    if (kicanvasEmbed?.shadowRoot) {
-      // Check if shadow DOM has any significant content rendered
-      const shadowChildren = kicanvasEmbed.shadowRoot.children;
-
-      // Look for various possible rendering elements
-      const canvas = kicanvasEmbed.shadowRoot.querySelector('canvas');
-      const svg = kicanvasEmbed.shadowRoot.querySelector('svg');
-      const divs = kicanvasEmbed.shadowRoot.querySelectorAll('div');
-
-      // Consider it loaded if we have a canvas/svg, or if there are multiple divs (likely rendered content)
-      if (canvas || svg || (divs && divs.length > 2)) {
-        // Give it a bit more time to stabilize rendering
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return true;
-      }
-    }
-
-    // Wait 100ms before checking again (increased from 50ms for better stability)
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-
-  // If we timeout, return true anyway and let html2canvas try
-  // This prevents blocking if KiCanvas structure changes
-  console.warn('KiCanvas load detection timed out, proceeding anyway...');
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  return true;
-}
 
 /**
  * Generate light mode thumbnail from dark mode by inverting colors
@@ -184,9 +147,9 @@ async function captureElement(element: HTMLElement): Promise<string> {
 /**
  * Capture thumbnail in dark mode only and generate light mode programmatically
  *
- * Optimized approach:
+ * Approach:
  * 1. Ensure we're in dark mode
- * 2. Wait for KiCanvas to fully load (smart polling)
+ * 2. Wait fixed 2 seconds for KiCanvas to render
  * 3. Capture dark mode screenshot
  * 4. Generate light mode by inverting colors
  * 5. Return both thumbnails
@@ -207,15 +170,11 @@ export async function captureThumbnails(
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    // Wait for KiCanvas to fully load and render (smart polling)
+    // Wait for KiCanvas to fully render
     console.log('Waiting for KiCanvas to load...');
-    const loaded = await waitForKiCanvasLoad(kicanvasElement, 5000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    if (!loaded) {
-      throw new Error('KiCanvas failed to load within timeout period');
-    }
-
-    console.log('KiCanvas loaded, capturing dark mode thumbnail...');
+    console.log('Capturing dark mode thumbnail...');
 
     // Capture dark mode screenshot
     const darkThumb = await captureElement(kicanvasElement);
