@@ -6,7 +6,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
-import { AlertTriangle, Trash2, Eye, CheckCircle, XCircle, Loader, Image } from "lucide-react";
+import { AlertTriangle, Trash2, Eye, CheckCircle, XCircle, Loader, Image, BarChart3, RefreshCw, Copy, Users } from "lucide-react";
 import Link from "next/link";
 import { ThumbnailRegenerator } from "@/components/ThumbnailRegenerator";
 
@@ -33,10 +33,12 @@ export default function AdminDashboard() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [flags, setFlags] = useState<FlaggedCircuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'flags' | 'thumbnails'>('flags');
+  const [activeTab, setActiveTab] = useState<'flags' | 'thumbnails' | 'stats'>('flags');
   const [flagFilter, setFlagFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
   const [selectedFlags, setSelectedFlags] = useState<Set<string>>(new Set());
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [isSyncingStats, setIsSyncingStats] = useState(false);
+  const [globalStats, setGlobalStats] = useState<any>(null);
 
   // Check admin authorization
   useEffect(() => {
@@ -350,6 +352,73 @@ export default function AdminDashboard() {
     setSelectedFlags(newSelected);
   };
 
+  // Load global stats when stats tab is active
+  useEffect(() => {
+    if (!isAuthorized || activeTab !== 'stats') return;
+
+    const loadGlobalStats = async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+
+        const { data, error } = await supabase
+          .from('global_stats')
+          .select('*')
+          .eq('id', 1)
+          .single();
+
+        if (error) {
+          console.error('Error loading global stats:', error);
+        } else {
+          setGlobalStats(data);
+        }
+      } catch (error) {
+        console.error('Failed to load global stats:', error);
+      }
+    };
+
+    loadGlobalStats();
+  }, [isAuthorized, activeTab]);
+
+  const handleSyncStats = async () => {
+    if (!confirm('This will recalculate all stats from the database. Continue?')) {
+      return;
+    }
+
+    setIsSyncingStats(true);
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/admin/sync-stats', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync stats');
+      }
+
+      const result = await response.json();
+      setGlobalStats(result.stats);
+      alert('Stats synchronized successfully!');
+    } catch (error: any) {
+      console.error('Error syncing stats:', error);
+      alert(error.message || 'Failed to sync stats. Please try again.');
+    } finally {
+      setIsSyncingStats(false);
+    }
+  };
+
   if (authLoading || !isAuthorized) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -402,6 +471,17 @@ export default function AdminDashboard() {
             >
               <Image className="w-4 h-4" />
               Thumbnail Regeneration
+            </button>
+            <button
+              onClick={() => setActiveTab('stats')}
+              className={`px-6 py-3 font-semibold transition-colors flex items-center gap-2 ${
+                activeTab === 'stats'
+                  ? 'border-b-2 border-primary text-primary -mb-0.5'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Global Stats
             </button>
           </div>
 
@@ -608,6 +688,123 @@ export default function AdminDashboard() {
           {/* Thumbnails Section */}
           {activeTab === 'thumbnails' && (
             <ThumbnailRegenerator />
+          )}
+
+          {/* Stats Section */}
+          {activeTab === 'stats' && (
+            <div className="space-y-6">
+              <div className="bg-card border rounded-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold mb-2">Global Stats Management</h2>
+                    <p className="text-sm text-muted-foreground">
+                      View and synchronize global statistics. Stats are automatically updated but you can manually sync if needed.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSyncStats}
+                    disabled={isSyncingStats}
+                    className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isSyncingStats ? (
+                      <>
+                        <Loader className="w-5 h-5 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-5 h-5" />
+                        Sync Stats
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {globalStats ? (
+                  <>
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                      <div className="bg-muted/30 rounded-lg p-6 border">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <BarChart3 className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Circuits</p>
+                            <p className="text-3xl font-bold">{globalStats.total_circuits.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-muted/30 rounded-lg p-6 border">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                            <Copy className="w-5 h-5 text-green-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Downloads</p>
+                            <p className="text-3xl font-bold">{globalStats.total_copies.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-muted/30 rounded-lg p-6 border">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                            <Users className="w-5 h-5 text-blue-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Users</p>
+                            <p className="text-3xl font-bold">{globalStats.total_users.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="bg-muted/30 rounded-lg p-4 border">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Last Synced:</span>{' '}
+                          <span className="font-medium">
+                            {new Date(globalStats.last_synced_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Last Updated:</span>{' '}
+                          <span className="font-medium">
+                            {new Date(globalStats.updated_at).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Info Box */}
+                    <div className="mt-6 bg-blue-500/10 border border-blue-500/50 rounded-lg p-4">
+                      <div className="flex gap-3">
+                        <AlertTriangle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-blue-600 dark:text-blue-400 mb-1">
+                            How Global Stats Work
+                          </p>
+                          <ul className="text-muted-foreground space-y-1 list-disc list-inside">
+                            <li>Stats are automatically updated when users copy circuits, upload new circuits, or create accounts</li>
+                            <li>The homepage pulls from this single record instead of aggregating thousands of rows</li>
+                            <li>Use &quot;Sync Stats&quot; if you suspect the counts are out of sync (e.g., after bulk operations)</li>
+                            <li>Syncing recalculates all counts from the source tables</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-12">
+                    <Loader className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+                    <p className="text-muted-foreground">Loading stats...</p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </main>

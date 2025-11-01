@@ -8,53 +8,40 @@ export async function GET() {
   try {
     const supabase = await createClient();
 
-    // Get total circuit count
-    const { count: circuitCount, error: circuitError } = await supabase
-      .from('circuits')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_public', true);
+    // Get stats from global_stats table (single row, super fast)
+    const { data: globalStats, error: statsError } = await supabase
+      .from('global_stats')
+      .select('total_circuits, total_copies, total_users, last_synced_at')
+      .eq('id', 1)
+      .single();
 
-    if (circuitError) throw circuitError;
+    if (statsError) {
+      console.error('Error fetching global stats:', statsError);
 
-    // Get total copies (sum of all copy_count)
-    // Fetch in batches to bypass 1000 row limit
-    let totalCopies = 0;
-    let offset = 0;
-    const batchSize = 1000;
-    let hasMore = true;
+      // Fallback to old method if global_stats doesn't exist yet
+      console.log('Falling back to aggregation method...');
 
-    while (hasMore) {
-      const { data: copiesData, error: copiesError } = await supabase
+      const { count: circuitCount } = await supabase
         .from('circuits')
-        .select('copy_count')
-        .eq('is_public', true)
-        .range(offset, offset + batchSize - 1);
+        .select('*', { count: 'exact', head: true })
+        .eq('is_public', true);
 
-      if (copiesError) throw copiesError;
+      const { count: makerCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
 
-      if (copiesData && copiesData.length > 0) {
-        totalCopies += copiesData.reduce((sum, circuit) => sum + (circuit.copy_count || 0), 0);
-        offset += batchSize;
-
-        if (copiesData.length < batchSize) {
-          hasMore = false;
-        }
-      } else {
-        hasMore = false;
-      }
+      return NextResponse.json({
+        circuits: circuitCount || 0,
+        copies: 0, // Can't efficiently calculate without migration
+        makers: makerCount || 0,
+      });
     }
 
-    // Get unique user count (makers)
-    const { count: makerCount, error: makerError } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true });
-
-    if (makerError) throw makerError;
-
     return NextResponse.json({
-      circuits: circuitCount || 0,
-      copies: totalCopies,
-      makers: makerCount || 0,
+      circuits: globalStats.total_circuits || 0,
+      copies: globalStats.total_copies || 0,
+      makers: globalStats.total_users || 0,
+      lastSynced: globalStats.last_synced_at,
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
