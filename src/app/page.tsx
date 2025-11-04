@@ -54,6 +54,21 @@ export default function HomePage() {
     <div className="flex flex-col">
       <Header />
 
+      {/* Warning Banner */}
+      <div className="bg-yellow-50 dark:bg-yellow-950/30 border-b border-yellow-200 dark:border-yellow-900/50">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-start gap-3">
+            <span className="text-yellow-600 dark:text-yellow-400 text-xl mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>Known Issues:</strong> We&apos;re currently experiencing some issues with thumbnails, licensing information, and attribution metadata.
+                These are scheduled to be fixed soon. Thank you for your patience!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Hero Section - Green Theme */}
       <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden py-20 px-4">
         {/* Subtle Background Gradient */}
