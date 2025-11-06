@@ -202,6 +202,24 @@ export default function CircuitDetailPage() {
     }
   };
 
+  // Handle copy from KiCanvas viewer (Ctrl+C)
+  const handleViewerCopy = async () => {
+    if (!circuit) return;
+
+    console.log("User copied from KiCanvas viewer");
+
+    try {
+      // Increment copy count in database
+      await incrementCopyCount(circuit.id);
+      console.log("Successfully incremented copy count from viewer");
+
+      // Update local copy count optimistically
+      setCopyCount(prev => prev + 1);
+    } catch (err) {
+      console.error("Failed to increment copy count from viewer:", err);
+    }
+  };
+
   // Show loading state
   if (isLoading) {
     return (
@@ -371,7 +389,13 @@ export default function CircuitDetailPage() {
             </div>
           ) : fullFileData ? (
             <div className="mb-8">
-              <SchematicViewer sexpr={fullFileData} title={circuit.title} slug={circuit.slug} />
+              <SchematicViewer
+                sexpr={fullFileData}
+                title={circuit.title}
+                slug={circuit.slug}
+                circuitId={circuit.id}
+                onCopy={handleViewerCopy}
+              />
             </div>
           ) : (
             <div className="bg-card border rounded-lg p-8 mb-8">

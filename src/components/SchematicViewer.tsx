@@ -7,6 +7,8 @@ interface SchematicViewerProps {
   sexpr: string;
   title?: string;
   slug: string;
+  circuitId?: string;
+  onCopy?: () => void;
 }
 
 /**
@@ -15,7 +17,7 @@ interface SchematicViewerProps {
  * Uses KiCanvas from https://kicanvas.org for interactive viewing
  * Falls back to expandable S-expression view if needed
  */
-export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
+export function SchematicViewer({ sexpr, title, slug, circuitId, onCopy }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [componentCount, setComponentCount] = useState(0);
 
@@ -58,6 +60,8 @@ export function SchematicViewer({ sexpr, title, slug }: SchematicViewerProps) {
           slug={cleanSlug}
           controls="full"
           height="500px"
+          circuitId={circuitId}
+          onCopy={onCopy}
         />
       </div>
 
