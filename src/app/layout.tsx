@@ -35,7 +35,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* KiCanvas library for interactive schematic viewing - self-hosted from michaelayles/kicanvas fork */}
-        <script type="module" src="http://kicanvas.mikeayles.com/kicanvas.js" async />
+        <script type="module" src="https://kicanvas.mikeayles.com/kicanvas.js" async />
       </head>
       <body className={inter.className}>
         <ThemeProvider>
