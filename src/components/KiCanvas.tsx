@@ -10,10 +10,15 @@ declare global {
       'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
         src?: string;
         controls?: 'none' | 'basic' | 'full';
-        theme?: 'kicad' | 'witchhazel';
       }, HTMLElement>;
     }
   }
+}
+
+// Extended interface for the KiCanvas element (accessed via ref)
+interface KiCanvasElement extends HTMLElement {
+  theme: 'kicad' | 'witchhazel';
+  loaded: boolean;
 }
 
 interface KiCanvasProps {
@@ -66,7 +71,7 @@ export function KiCanvas({
 }: KiCanvasProps) {
   const [mounted, setMounted] = useState(false);
   const { theme, resolvedTheme } = useTheme();
-  const viewerRef = useRef<HTMLElement>(null);
+  const viewerRef = useRef<KiCanvasElement>(null);
 
   // Prevent hydration mismatch
   useEffect(() => {
@@ -81,10 +86,30 @@ export function KiCanvas({
     const currentTheme = resolvedTheme || theme;
     const kicanvasTheme = currentTheme === 'dark' ? 'witchhazel' : 'kicad';
 
-    // Update theme attribute
-    viewer.setAttribute('theme', kicanvasTheme);
+    // Function to set theme on the viewer
+    const setViewerTheme = () => {
+      // Set theme as a property (not attribute!)
+      viewer.theme = kicanvasTheme;
+      console.log(`KiCanvas theme updated to: ${kicanvasTheme} (page theme: ${currentTheme})`);
+    };
 
-    console.log(`KiCanvas theme updated to: ${kicanvasTheme} (page theme: ${currentTheme})`);
+    // Check if viewer is already loaded
+    if (viewer.loaded) {
+      setViewerTheme();
+    } else {
+      // Wait for kicanvas:load event
+      const handleLoad = () => {
+        console.log('KiCanvas loaded, setting theme');
+        // Add small delay to ensure internal state is ready
+        setTimeout(setViewerTheme, 100);
+      };
+
+      viewer.addEventListener('kicanvas:load', handleLoad as any, { once: true });
+
+      return () => {
+        viewer.removeEventListener('kicanvas:load', handleLoad as any);
+      };
+    }
   }, [mounted, theme, resolvedTheme]);
 
   // Track Ctrl+C copies from the viewer
@@ -133,16 +158,11 @@ export function KiCanvas({
     );
   }
 
-  // Determine initial theme
-  const currentTheme = resolvedTheme || theme;
-  const kicanvasTheme = currentTheme === 'dark' ? 'witchhazel' : 'kicad';
-
   return (
     <kicanvas-embed
       ref={viewerRef as any}
       src={schematicUrl}
       controls={controls}
-      theme={kicanvasTheme}
       className={className}
       style={{
         width,
