@@ -54,6 +54,15 @@ export default function HomePage() {
     <div className="flex flex-col">
       <Header />
 
+      {/* Known Issues Banner */}
+      <div className="bg-yellow-50 dark:bg-yellow-950/30 border-b border-yellow-200 dark:border-yellow-900/50">
+        <div className="container mx-auto px-4 py-3">
+          <p className="text-sm text-yellow-900 dark:text-yellow-100 text-center">
+            ⚠️ <strong>Known Issue:</strong> Some bulk-imported circuits may have missing attribution and thumbnails. This is scheduled to be fixed soon.
+          </p>
+        </div>
+      </div>
+
       {/* Hero Section - Green Theme */}
       <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden py-20 px-4">
         {/* Subtle Background Gradient */}
