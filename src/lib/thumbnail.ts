@@ -7,15 +7,122 @@
 
 import html2canvas from 'html2canvas';
 
-// A4 Landscape aspect ratio: 297mm x 210mm ≈ 1.414:1
-export const THUMBNAIL_WIDTH = 800;
-export const THUMBNAIL_HEIGHT = 566; // 800 / 1.414
+// Configuration constants
+export const THUMBNAIL_CONFIG = {
+  // A4 Landscape aspect ratio: 297mm x 210mm ≈ 1.414:1
+  WIDTH: 800,
+  HEIGHT: 566, // 800 / 1.414
+  QUALITY: 0.9,
+  SCALE: 2, // 2x resolution for higher quality
+} as const;
+
+export const RENDER_CONFIG = {
+  MAX_WAIT_TIME: 5000, // Max time to wait for KiCanvas render (ms)
+  POLL_INTERVAL: 100, // How often to check if KiCanvas is ready (ms)
+  THEME_SWITCH_WAIT: 500, // Max time to wait for theme switch (ms)
+  THEME_POLL_INTERVAL: 50, // How often to check theme (ms)
+  OVERLAY_DISMISS_WAIT: 100, // Time to wait after dismissing overlay (ms)
+  MIN_PIXEL_THRESHOLD: 10, // Minimum non-transparent pixels to consider rendered
+} as const;
+
+// For backwards compatibility
+export const THUMBNAIL_WIDTH = THUMBNAIL_CONFIG.WIDTH;
+export const THUMBNAIL_HEIGHT = THUMBNAIL_CONFIG.HEIGHT;
 
 export interface ThumbnailResult {
   light: string; // base64 data URL
   dark: string;  // base64 data URL
 }
 
+/**
+ * Check if a canvas has rendered content (not just blank/transparent)
+ */
+function hasRenderedContent(canvas: HTMLCanvasElement): boolean {
+  try {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || canvas.width === 0 || canvas.height === 0) {
+      return false;
+    }
+
+    // Sample a few pixels from different areas to detect rendering
+    const samplePoints = [
+      [canvas.width / 4, canvas.height / 4],
+      [canvas.width / 2, canvas.height / 2],
+      [canvas.width * 3 / 4, canvas.height * 3 / 4],
+    ];
+
+    let nonTransparentPixels = 0;
+    for (const [x, y] of samplePoints) {
+      const pixel = ctx.getImageData(x, y, 1, 1).data;
+      // Check if pixel is not fully transparent
+      if (pixel[3] > 0) {
+        nonTransparentPixels++;
+      }
+    }
+
+    return nonTransparentPixels >= RENDER_CONFIG.MIN_PIXEL_THRESHOLD / 3;
+  } catch (error) {
+    console.warn('Could not check canvas content:', error);
+    return false;
+  }
+}
+
+/**
+ * Wait for KiCanvas to be ready and fully rendered
+ * Polls the canvas element for actual rendered content
+ */
+async function waitForKiCanvasReady(element: HTMLElement): Promise<void> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < RENDER_CONFIG.MAX_WAIT_TIME) {
+    try {
+      // Find kicanvas-embed in regular DOM
+      const kicanvasEmbed = element.querySelector('kicanvas-embed') as any;
+
+      if (kicanvasEmbed && kicanvasEmbed.shadowRoot) {
+        // Check if canvas exists in shadow DOM
+        const canvas = kicanvasEmbed.shadowRoot.querySelector('canvas');
+
+        if (canvas && canvas.width > 0 && canvas.height > 0) {
+          // Check if canvas has actual rendered content
+          if (hasRenderedContent(canvas)) {
+            console.log(`KiCanvas ready after ${Date.now() - startTime}ms`);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      // Continue polling on errors (shadow DOM may not be accessible yet)
+    }
+
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.POLL_INTERVAL));
+  }
+
+  throw new Error(`KiCanvas failed to render within ${RENDER_CONFIG.MAX_WAIT_TIME}ms`);
+}
+
+/**
+ * Wait for theme to be applied to the document
+ */
+async function waitForThemeApplied(expectedTheme: 'light' | 'dark'): Promise<void> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < RENDER_CONFIG.THEME_SWITCH_WAIT) {
+    const currentTheme = document.documentElement.getAttribute('data-theme') ||
+                        document.documentElement.className.includes('dark') ? 'dark' : 'light';
+
+    if (currentTheme === expectedTheme) {
+      console.log(`Theme switched to ${expectedTheme} after ${Date.now() - startTime}ms`);
+      return;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.THEME_POLL_INTERVAL));
+  }
+
+  // Log warning but don't fail - theme might be applied differently
+  console.warn(`Theme did not switch to ${expectedTheme} within ${RENDER_CONFIG.THEME_SWITCH_WAIT}ms`);
+}
 
 /**
  * Generate light mode thumbnail from dark mode by inverting colors
@@ -67,7 +174,7 @@ function generateLightFromDark(darkDataURL: string): Promise<string> {
 }
 
 /**
- * Capture a screenshot of the KiCanvas element in dark mode
+ * Capture a screenshot of the KiCanvas element
  */
 async function captureElement(element: HTMLElement): Promise<string> {
   try {
@@ -77,7 +184,7 @@ async function captureElement(element: HTMLElement): Promise<string> {
       // Simulate a click to activate the viewer and dismiss overlay
       kicanvasEmbed.click();
       // Wait a bit for the overlay to disappear
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.OVERLAY_DISMISS_WAIT));
     }
 
     // Additionally, try to hide overlay by class name if it still exists
@@ -89,7 +196,7 @@ async function captureElement(element: HTMLElement): Promise<string> {
 
     const canvas = await html2canvas(element, {
       backgroundColor: null,
-      scale: 2, // Higher quality (2x resolution)
+      scale: THUMBNAIL_CONFIG.SCALE,
       logging: false,
       useCORS: true,
       allowTaint: true,
@@ -109,8 +216,8 @@ async function captureElement(element: HTMLElement): Promise<string> {
 
     // Resize canvas to thumbnail dimensions while maintaining aspect ratio
     const resizedCanvas = document.createElement('canvas');
-    resizedCanvas.width = THUMBNAIL_WIDTH;
-    resizedCanvas.height = THUMBNAIL_HEIGHT;
+    resizedCanvas.width = THUMBNAIL_CONFIG.WIDTH;
+    resizedCanvas.height = THUMBNAIL_CONFIG.HEIGHT;
 
     const ctx = resizedCanvas.getContext('2d');
     if (!ctx) {
@@ -119,25 +226,25 @@ async function captureElement(element: HTMLElement): Promise<string> {
 
     // Calculate scaling to fit within thumbnail dimensions
     const scale = Math.min(
-      THUMBNAIL_WIDTH / canvas.width,
-      THUMBNAIL_HEIGHT / canvas.height
+      THUMBNAIL_CONFIG.WIDTH / canvas.width,
+      THUMBNAIL_CONFIG.HEIGHT / canvas.height
     );
 
     const scaledWidth = canvas.width * scale;
     const scaledHeight = canvas.height * scale;
 
     // Center the image
-    const x = (THUMBNAIL_WIDTH - scaledWidth) / 2;
-    const y = (THUMBNAIL_HEIGHT - scaledHeight) / 2;
+    const x = (THUMBNAIL_CONFIG.WIDTH - scaledWidth) / 2;
+    const y = (THUMBNAIL_CONFIG.HEIGHT - scaledHeight) / 2;
 
     // Fill background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+    ctx.fillRect(0, 0, THUMBNAIL_CONFIG.WIDTH, THUMBNAIL_CONFIG.HEIGHT);
 
     // Draw scaled image
     ctx.drawImage(canvas, x, y, scaledWidth, scaledHeight);
 
-    return resizedCanvas.toDataURL('image/png', 0.9);
+    return resizedCanvas.toDataURL('image/png', THUMBNAIL_CONFIG.QUALITY);
   } catch (err) {
     console.error('Screenshot capture failed:', err);
     throw new Error(`Failed to capture screenshot: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -149,10 +256,11 @@ async function captureElement(element: HTMLElement): Promise<string> {
  *
  * Approach:
  * 1. Ensure we're in dark mode
- * 2. Wait fixed 2 seconds for KiCanvas to render
- * 3. Capture dark mode screenshot
- * 4. Generate light mode by inverting colors
- * 5. Return both thumbnails
+ * 2. Wait for theme to apply (smart polling)
+ * 3. Wait for KiCanvas to fully render (smart polling with pixel validation)
+ * 4. Capture dark mode screenshot
+ * 5. Generate light mode by inverting colors
+ * 6. Return both thumbnails
  *
  * This is ~2x faster than capturing both modes separately.
  */
@@ -166,13 +274,13 @@ export async function captureThumbnails(
     if (currentTheme !== 'dark') {
       console.log('Switching to dark mode...');
       setTheme('dark');
-      // Wait a bit for theme to apply
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Wait for theme to actually apply
+      await waitForThemeApplied('dark');
     }
 
-    // Wait for KiCanvas to fully render
+    // Wait for KiCanvas to fully render with smart polling
     console.log('Waiting for KiCanvas to load...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await waitForKiCanvasReady(kicanvasElement);
 
     console.log('Capturing dark mode thumbnail...');
 
@@ -188,6 +296,7 @@ export async function captureThumbnails(
     if (currentTheme === 'light') {
       console.log('Switching back to light mode...');
       setTheme('light');
+      await waitForThemeApplied('light');
     }
 
     console.log('Thumbnail capture complete!');
@@ -235,7 +344,7 @@ export async function uploadThumbnail(
     .from('thumbnails')
     .upload(fileName, blob, {
       contentType: 'image/png',
-      upsert: false, // Don't overwrite - create new versions
+      upsert: true, // Allow overwrite when regenerating thumbnails
     });
 
   if (error) {

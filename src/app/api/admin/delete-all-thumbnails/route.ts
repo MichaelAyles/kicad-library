@@ -1,10 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createAnonClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isAdmin } from '@/lib/admin';
 
 // Increase timeout for large operations
 export const maxDuration = 60; // 60 seconds max (requires Vercel Pro)
 export const dynamic = 'force-dynamic';
+
+// Error categories for better user feedback
+enum ErrorCategory {
+  VALIDATION = 'VALIDATION_ERROR',
+  AUTHENTICATION = 'AUTHENTICATION_ERROR',
+  AUTHORIZATION = 'AUTHORIZATION_ERROR',
+  NOT_FOUND = 'NOT_FOUND',
+  STORAGE = 'STORAGE_ERROR',
+  DATABASE = 'DATABASE_ERROR',
+  TIMEOUT = 'TIMEOUT_ERROR',
+  INTERNAL = 'INTERNAL_ERROR',
+}
+
+// Helper to create categorized error responses
+function createErrorResponse(
+  category: ErrorCategory,
+  message: string,
+  details?: string,
+  suggestion?: string,
+  statusCode: number = 500
+) {
+  return NextResponse.json(
+    {
+      error: message,
+      category,
+      details,
+      suggestion,
+      timestamp: new Date().toISOString(),
+    },
+    { status: statusCode }
+  );
+}
 
 /**
  * DELETE /api/admin/delete-all-thumbnails
@@ -20,9 +53,12 @@ export async function DELETE(request: NextRequest) {
     const token = authHeader?.replace('Bearer ', '');
 
     if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized - No token provided' },
-        { status: 401 }
+      return createErrorResponse(
+        ErrorCategory.AUTHENTICATION,
+        'No authentication token provided',
+        'The Authorization header is missing or invalid',
+        'Please include a valid Bearer token in the Authorization header',
+        401
       );
     }
 
@@ -42,18 +78,24 @@ export async function DELETE(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Invalid token' },
-        { status: 401 }
+      return createErrorResponse(
+        ErrorCategory.AUTHENTICATION,
+        'Invalid authentication token',
+        authError?.message,
+        'Please log in again to get a fresh authentication token',
+        401
       );
     }
 
-    // Check if user has admin role
-    const userRole = user.user_metadata?.role;
-    if (userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
+    // Check if user has admin role using centralized helper
+    const adminStatus = await isAdmin(user);
+    if (!adminStatus) {
+      return createErrorResponse(
+        ErrorCategory.AUTHORIZATION,
+        'Admin access required',
+        'This endpoint is restricted to administrators only',
+        'Contact an administrator if you believe you should have access',
+        403
       );
     }
 
@@ -68,9 +110,12 @@ export async function DELETE(request: NextRequest) {
       .single();
 
     if (importerError || !importerUser) {
-      return NextResponse.json(
-        { error: 'circuitsnips-importer user not found' },
-        { status: 404 }
+      return createErrorResponse(
+        ErrorCategory.NOT_FOUND,
+        'Importer user not found',
+        'The circuitsnips-importer user does not exist in the database',
+        'Ensure the importer user account has been created',
+        404
       );
     }
 
@@ -89,9 +134,12 @@ export async function DELETE(request: NextRequest) {
 
       if (fetchError) {
         console.error('Error fetching circuits:', fetchError);
-        return NextResponse.json(
-          { error: 'Failed to fetch circuits' },
-          { status: 500 }
+        return createErrorResponse(
+          ErrorCategory.DATABASE,
+          'Failed to fetch circuits',
+          fetchError.message,
+          'Database query failed. Please try again',
+          500
         );
       }
 
@@ -212,9 +260,12 @@ export async function DELETE(request: NextRequest) {
 
     if (updateError) {
       console.error('Error updating database:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to update database' },
-        { status: 500 }
+      return createErrorResponse(
+        ErrorCategory.DATABASE,
+        'Failed to update circuit records',
+        updateError.message,
+        'Storage files were deleted but database update failed. Please try deleting again.',
+        500
       );
     }
 
@@ -226,11 +277,27 @@ export async function DELETE(request: NextRequest) {
       filesFailed: failedFiles
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in delete-all-thumbnails:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+
+    // Categorize errors
+    let category = ErrorCategory.INTERNAL;
+    let suggestion = 'Please try again or contact support if the problem persists';
+
+    if (error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT')) {
+      category = ErrorCategory.TIMEOUT;
+      suggestion = 'The operation took too long. The database may be under heavy load. Try again later.';
+    } else if (error.message?.includes('storage')) {
+      category = ErrorCategory.STORAGE;
+      suggestion = 'Storage operation failed. Check storage quota and permissions.';
+    }
+
+    return createErrorResponse(
+      category,
+      'Bulk thumbnail deletion failed',
+      error.message || 'Unknown error',
+      suggestion,
+      500
     );
   }
 }
