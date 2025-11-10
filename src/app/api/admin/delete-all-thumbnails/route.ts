@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createAnonClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
  * DELETE /api/admin/delete-all-thumbnails
@@ -10,33 +11,53 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    // Get the Authorization header with bearer token
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
 
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    if (!token) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized - No token provided' },
         { status: 401 }
       );
     }
 
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', user.id)
-      .single();
+    // Create a client with the anon key to verify the token
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-    if (!profile || profile.username !== 'circuitsnips') {
+    const supabase = createAnonClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    // Verify the token by getting the user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Invalid token' },
+        { status: 401 }
+      );
+    }
+
+    // Check if user has admin role
+    const userRole = user.user_metadata?.role;
+    if (userRole !== 'admin') {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 }
       );
     }
 
+    // Use admin client for operations
+    const adminClient = createAdminClient();
+
     // Get the circuitsnips-importer user ID
-    const { data: importerUser, error: importerError } = await supabase
+    const { data: importerUser, error: importerError } = await adminClient
       .from('profiles')
       .select('id')
       .eq('username', 'circuitsnips-importer')
@@ -50,7 +71,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Fetch all circuits with thumbnails from circuitsnips-importer
-    const { data: circuits, error: fetchError } = await supabase
+    const { data: circuits, error: fetchError } = await adminClient
       .from('circuits')
       .select('id, thumbnail_light_url, thumbnail_dark_url')
       .eq('user_id', importerUser.id)
@@ -92,7 +113,7 @@ export async function DELETE(request: NextRequest) {
 
       // Delete files from storage
       if (filePaths.length > 0) {
-        const { error: deleteError } = await supabase.storage
+        const { error: deleteError } = await adminClient.storage
           .from('thumbnails')
           .remove(filePaths);
 
@@ -106,7 +127,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Update database to set thumbnail URLs to null
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminClient
       .from('circuits')
       .update({
         thumbnail_light_url: null,
