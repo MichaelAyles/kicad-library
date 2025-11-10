@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Loader, CheckCircle, XCircle, AlertTriangle, Trash2 } from "lucide-react";
 import { captureThumbnails } from "@/lib/thumbnail";
 import { KiCanvas, KiCanvasCard } from "@/components/KiCanvas";
 
@@ -30,6 +30,7 @@ export function ThumbnailRegenerator() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -617,6 +618,60 @@ export function ThumbnailRegenerator() {
     setSelectedCircuits(newSelected);
   };
 
+  const handleDeleteAllThumbnails = async () => {
+    if (!confirm(
+      '⚠️ WARNING: This will delete ALL thumbnails from circuitsnips-importer circuits.\n\n' +
+      'This action will:\n' +
+      '• Delete all thumbnail files from storage\n' +
+      '• Reset all thumbnail URLs to null in the database\n\n' +
+      'This cannot be undone. Are you sure you want to continue?'
+    )) {
+      return;
+    }
+
+    setIsDeletingAll(true);
+
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        alert('Not authenticated');
+        return;
+      }
+
+      const response = await fetch('/api/admin/delete-all-thumbnails', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete thumbnails');
+      }
+
+      const result = await response.json();
+      alert(
+        `✅ Successfully deleted all thumbnails!\n\n` +
+        `Circuits updated: ${result.circuitsUpdated}\n` +
+        `Files deleted: ${result.filesDeleted}\n` +
+        `Files failed: ${result.filesFailed || 0}`
+      );
+
+      // Refresh the page to reload circuits and stats
+      window.location.reload();
+
+    } catch (error: any) {
+      console.error('Error deleting all thumbnails:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="text-center py-12">
@@ -722,6 +777,38 @@ export function ThumbnailRegenerator() {
         </div>
 
         <div className="space-y-3">
+          {/* Delete All Thumbnails Button */}
+          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-600 dark:text-red-400 mb-1 flex items-center gap-2">
+                  <Trash2 className="w-4 h-4" />
+                  Danger Zone: Delete All Thumbnails
+                </h3>
+                <p className="text-xs text-red-600/80 dark:text-red-400/80">
+                  This will permanently delete all thumbnails and reset the database. Use this to start fresh before regenerating.
+                </p>
+              </div>
+              <button
+                onClick={handleDeleteAllThumbnails}
+                disabled={isProcessing || isDeletingAll}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 flex-shrink-0"
+              >
+                {isDeletingAll ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Delete All
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* Force Regeneration Mode Toggle */}
           <div className="bg-muted/30 rounded-lg p-4 border">
             <div className="flex items-center justify-between mb-2">
