@@ -47,7 +47,7 @@ export async function PUT(
 
     // Parse request body
     const body = await request.json();
-    const { title, description, tags, category, license, is_public, thumbnail_light_url, thumbnail_dark_url } = body;
+    const { title, description, tags, category, license, is_public, thumbnail_light_url, thumbnail_dark_url, thumbnail_version } = body;
 
     // Build update object - only include fields that are provided
     const updateData: any = {
@@ -61,6 +61,9 @@ export async function PUT(
       // Only update thumbnails
       updateData.thumbnail_light_url = thumbnail_light_url;
       updateData.thumbnail_dark_url = thumbnail_dark_url;
+      if (thumbnail_version !== undefined) {
+        updateData.thumbnail_version = thumbnail_version;
+      }
     } else {
       // Validate required fields for metadata update
       if (!title || !description || !tags || !license) {
@@ -122,6 +125,7 @@ export async function PUT(
       // Also update thumbnails if provided
       if (thumbnail_light_url) updateData.thumbnail_light_url = thumbnail_light_url;
       if (thumbnail_dark_url) updateData.thumbnail_dark_url = thumbnail_dark_url;
+      if (thumbnail_version !== undefined) updateData.thumbnail_version = thumbnail_version;
     }
 
     // Update the circuit
