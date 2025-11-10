@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createAnonClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+// Increase timeout for large operations
+export const maxDuration = 60; // 60 seconds max (requires Vercel Pro)
+export const dynamic = 'force-dynamic';
+
 /**
  * DELETE /api/admin/delete-all-thumbnails
  *
@@ -113,49 +117,69 @@ export async function DELETE(request: NextRequest) {
     const circuits = allCircuits;
 
     // Delete ALL thumbnail files for these circuits from storage
-    // This includes all versions, not just current ones
+    // Optimize by listing the entire user folder once instead of per-circuit
     let deletedFiles = 0;
     let failedFiles = 0;
 
-    for (const circuit of circuits) {
-      // List all files in the user's folder for this circuit
-      // Files are stored as: {userId}/{circuitId}-v{version}-{theme}.png
-      const folderPath = `${circuit.user_id}`;
+    const folderPath = `${importerUser.id}`;
 
-      try {
-        // List all files in the user's folder
-        const { data: fileList, error: listError } = await adminClient.storage
-          .from('thumbnails')
-          .list(folderPath);
+    try {
+      console.log(`Listing all files in folder: ${folderPath}`);
 
-        if (listError) {
-          console.warn(`Error listing files for ${folderPath}:`, listError);
-          continue;
-        }
+      // List ALL files in the importer user's folder
+      const { data: fileList, error: listError } = await adminClient.storage
+        .from('thumbnails')
+        .list(folderPath, {
+          limit: 10000, // Increase limit to handle large number of files
+          sortBy: { column: 'name', order: 'asc' }
+        });
 
-        // Find all files that belong to this circuit (any version)
-        const circuitFiles = fileList
-          ?.filter(file => file.name.startsWith(`${circuit.id}-`))
-          .map(file => `${folderPath}/${file.name}`) || [];
+      if (listError) {
+        console.error(`Error listing files:`, listError);
+        throw new Error(`Failed to list files: ${listError.message}`);
+      }
 
-        if (circuitFiles.length > 0) {
-          console.log(`Deleting ${circuitFiles.length} files for circuit ${circuit.id}`);
+      if (fileList && fileList.length > 0) {
+        console.log(`Found ${fileList.length} total files in storage`);
 
-          const { error: deleteError } = await adminClient.storage
-            .from('thumbnails')
-            .remove(circuitFiles);
+        // Build set of circuit IDs for quick lookup
+        const circuitIdSet = new Set(circuits.map(c => c.id));
 
-          if (deleteError) {
-            console.error(`Error deleting files for circuit ${circuit.id}:`, deleteError);
-            failedFiles += circuitFiles.length;
-          } else {
-            deletedFiles += circuitFiles.length;
+        // Filter to only files belonging to our circuits
+        const filesToDelete = fileList
+          .filter(file => {
+            // Extract circuit ID from filename (format: circuitId-v#-theme.png)
+            const match = file.name.match(/^([a-f0-9-]+)-v\d+-/);
+            return match && circuitIdSet.has(match[1]);
+          })
+          .map(file => `${folderPath}/${file.name}`);
+
+        console.log(`Deleting ${filesToDelete.length} thumbnail files...`);
+
+        if (filesToDelete.length > 0) {
+          // Delete in batches to avoid request size limits
+          const batchSize = 100;
+          for (let i = 0; i < filesToDelete.length; i += batchSize) {
+            const batch = filesToDelete.slice(i, i + batchSize);
+
+            const { error: deleteError } = await adminClient.storage
+              .from('thumbnails')
+              .remove(batch);
+
+            if (deleteError) {
+              console.error(`Error deleting batch ${i / batchSize + 1}:`, deleteError);
+              failedFiles += batch.length;
+            } else {
+              deletedFiles += batch.length;
+            }
           }
         }
-      } catch (error) {
-        console.error(`Error processing circuit ${circuit.id}:`, error);
-        failedFiles++;
+      } else {
+        console.log('No files found in storage');
       }
+    } catch (error) {
+      console.error('Error processing storage files:', error);
+      // Continue to database update even if file deletion fails
     }
 
     // Delete all thumbnail history records for these circuits
