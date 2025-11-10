@@ -104,12 +104,12 @@ export async function POST(request: NextRequest) {
       const filePath = `${userId}/${circuitId}-v${newVersion}-${theme}.png`;
 
       // Upload using admin client (bypasses RLS)
-      // Set upsert: false to ensure we create new files, not overwrite
+      // Use upsert: true to overwrite existing files if they exist
       const { data, error } = await adminSupabase.storage
         .from('thumbnails')
         .upload(filePath, buffer, {
           contentType: 'image/png',
-          upsert: false, // Create new version, don't overwrite
+          upsert: true, // Overwrite if exists (useful after cleanup)
         });
 
       if (error) {
