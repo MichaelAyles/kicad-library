@@ -786,7 +786,7 @@ export function ThumbnailRegenerator() {
                   Danger Zone: Delete All Thumbnails
                 </h3>
                 <p className="text-xs text-red-600/80 dark:text-red-400/80">
-                  This will permanently delete all thumbnails and reset the database. Use this to start fresh before regenerating.
+                  This will permanently delete all thumbnails from <strong>@circuitsnips-importer</strong> circuits only and reset their database entries. Use this to start fresh before regenerating.
                 </p>
               </div>
               <button

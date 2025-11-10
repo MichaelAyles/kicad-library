@@ -146,7 +146,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Deleted thumbnails from ${circuits.length} circuits`,
+      message: `Deleted thumbnails from ${circuits.length} @circuitsnips-importer circuits`,
       circuitsUpdated: circuits.length,
       filesDeleted: deletedFiles,
       filesFailed: failedFiles
