@@ -11,11 +11,11 @@ export const metadata: Metadata = {
   title: "CircuitSnips - Share KiCad Subcircuits",
   description: "Open-source platform for sharing and discovering reusable KiCad schematic subcircuits. Copy-paste circuits for your electronics projects.",
   keywords: ["KiCad", "electronics", "schematics", "open source hardware", "circuits", "PCB", "electronic design"],
-  authors: [{ name: "CircuitSnips", url: "https://circuitsnips.mikeayles.com" }],
+  authors: [{ name: "CircuitSnips", url: "https://circuitsnips.com" }],
   openGraph: {
     title: "CircuitSnips - Share KiCad Subcircuits",
     description: "Open-source platform for sharing reusable KiCad schematic subcircuits",
-    url: "https://circuitsnips.mikeayles.com",
+    url: "https://circuitsnips.com",
     siteName: "CircuitSnips",
     type: "website",
   },

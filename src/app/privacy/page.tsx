@@ -170,7 +170,7 @@ export default function PrivacyPage() {
               If you have questions about this Privacy Policy or your data, please contact us:
             </p>
             <ul className="list-none pl-0 mt-4">
-              <li><strong>Email:</strong> privacy@circuitsnips.mikeayles.com</li>
+              <li><strong>Email:</strong> privacy@circuitsnips.com</li>
               <li><strong>GitHub:</strong> <a href="https://github.com/MichaelAyles/kicad-library" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">github.com/MichaelAyles/kicad-library</a></li>
             </ul>
           </section>

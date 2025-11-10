@@ -175,7 +175,7 @@ export default function TermsPage() {
               <li>Physical or electronic signature</li>
             </ul>
             <p>
-              Send DMCA notices to: <strong>dmca@circuitsnips.mikeayles.com</strong>
+              Send DMCA notices to: <strong>dmca@circuitsnips.com</strong>
             </p>
           </section>
 
@@ -209,7 +209,7 @@ export default function TermsPage() {
               For questions about these Terms, please contact us:
             </p>
             <ul className="list-none pl-0 mt-4">
-              <li><strong>Email:</strong> legal@circuitsnips.mikeayles.com</li>
+              <li><strong>Email:</strong> legal@circuitsnips.com</li>
               <li><strong>GitHub Issues:</strong> <a href="https://github.com/MichaelAyles/kicad-library/issues" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">github.com/MichaelAyles/kicad-library</a></li>
             </ul>
           </section>

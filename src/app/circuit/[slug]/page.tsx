@@ -158,7 +158,7 @@ export default function CircuitDetailPage() {
     // Add attribution to the complete schematic file
     const attributed = addAttribution(fullFileData, {
       author: circuit.user?.username ? `@${circuit.user.username}` : 'Unknown',
-      url: `https://circuitsnips.mikeayles.com/circuit/${circuit.slug}`,
+      url: `https://circuitsnips.com/circuit/${circuit.slug}`,
       license: circuit.license,
     });
 
@@ -499,7 +499,7 @@ export default function CircuitDetailPage() {
             <div className="bg-card border rounded-md p-4 font-mono text-sm">
               <div>&quot;{circuit.title}&quot;</div>
               {circuit.user && <div>by @{circuit.user.username}</div>}
-              <div>https://circuitsnips.mikeayles.com/circuit/{circuit.slug}</div>
+              <div>https://circuitsnips.com/circuit/{circuit.slug}</div>
               <div>Licensed under {circuit.license}</div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">

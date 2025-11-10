@@ -104,6 +104,6 @@ Uploaded circuits: Users pick from CERN-OHL-S-2.0, MIT, CC-BY-4.0, CC-BY-SA-4.0,
 
 ## Links
 
-Live site: https://circuitsnips.mikeayles.com
+Live site: https://circuitsnips.com
 
 Report bugs in GitHub Issues.

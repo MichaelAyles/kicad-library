@@ -43,7 +43,7 @@ export function useAuth() {
     setError(null);
     try {
       // Use window.location.origin to handle both local and production environments
-      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.mikeayles.com'}/auth/callback`;
+      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.com'}/auth/callback`;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
@@ -77,7 +77,7 @@ export function useAuth() {
   const signUpWithEmail = async (email: string, password: string, username?: string) => {
     setError(null);
     try {
-      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.mikeayles.com'}/auth/callback`;
+      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.com'}/auth/callback`;
 
       const { error } = await supabase.auth.signUp({
         email,
@@ -100,7 +100,7 @@ export function useAuth() {
   const resetPassword = async (email: string) => {
     setError(null);
     try {
-      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.mikeayles.com'}/auth/reset-password`;
+      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.com'}/auth/reset-password`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,

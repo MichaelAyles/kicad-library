@@ -7,8 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 CircuitSnips is an open-source platform for sharing reusable KiCad schematic subcircuits. Users copy circuits from KiCad (S-expressions), upload with metadata and licensing, and others can search and paste them directly into their projects.
 
 **Status**: MVP+ Complete - Core features + Community engagement implemented
-**Deployment**: https://circuitsnips.mikeayles.com (Live on Vercel)
-**Future**: circuitsnips.io (production domain)
+**Deployment**: https://circuitsnips.com (Live on Vercel)
 
 ## Architecture Overview
 
@@ -164,7 +163,7 @@ When user copies a circuit, automatically embed attribution in S-expression comm
 (kicad_sch (version 20230121) (generator "CircuitSnips")
   (title "LM358 Op-Amp Circuit")
   (comment 1 "Author: @username")
-  (comment 2 "Source: https://circuitsnips.mikeayles.com/circuits/abc123")
+  (comment 2 "Source: https://circuitsnips.com/circuits/abc123")
   (comment 3 "License: CERN-OHL-S-2.0")
   (comment 4 "Downloaded: 2025-01-15")
   ...
@@ -281,7 +280,7 @@ Read these for context before implementing features.
 - [x] GitHub OAuth with Supabase Auth
 - [x] Dark mode support with theme persistence
 - [x] Responsive design (mobile & desktop)
-- [x] Live deployment on Vercel (https://circuitsnips.mikeayles.com)
+- [x] Live deployment on Vercel (https://circuitsnips.com)
 
 **S-Expression Parser** (`src/lib/kicad-parser.ts`)
 - [x] Parse KiCad S-expression format
@@ -416,7 +415,7 @@ kicad-library-designs/
 
 ### Vercel Previews
 Each branch automatically deploys to Vercel:
-- Main: https://circuitsnips.mikeayles.com
+- Main: https://circuitsnips.com
 - Hyper-modern: https://circuitsnips-git-design-hyper-modern-michaelayless-projects.vercel.app
 - Classic: https://circuitsnips-git-design-classic-michaelayless-projects.vercel.app
 - Wild: https://circuitsnips-git-design-wild-michaelayless-projects.vercel.app
@@ -470,7 +469,7 @@ Optimization techniques:
 2. Configure environment variables in dashboard
 3. Set build command: `npm run build` (default)
 4. Root directory: `.` (monorepo root)
-5. Custom domain: circuitsnips.mikeayles.com
+5. Custom domain: circuitsnips.com
 
 Database: Use Neon (serverless PostgreSQL) or Railway
 - Neon free tier: 500MB, good for MVP
