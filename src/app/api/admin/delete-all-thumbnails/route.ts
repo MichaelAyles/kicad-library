@@ -70,27 +70,47 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Fetch all circuits from circuitsnips-importer
-    const { data: circuits, error: fetchError } = await adminClient
-      .from('circuits')
-      .select('id, user_id, thumbnail_light_url, thumbnail_dark_url')
-      .eq('user_id', importerUser.id);
+    // Fetch ALL circuits from circuitsnips-importer (pagination to handle large datasets)
+    let allCircuits: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (fetchError) {
-      console.error('Error fetching circuits:', fetchError);
-      return NextResponse.json(
-        { error: 'Failed to fetch circuits' },
-        { status: 500 }
-      );
+    while (hasMore) {
+      const { data: circuits, error: fetchError } = await adminClient
+        .from('circuits')
+        .select('id, user_id, thumbnail_light_url, thumbnail_dark_url')
+        .eq('user_id', importerUser.id)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (fetchError) {
+        console.error('Error fetching circuits:', fetchError);
+        return NextResponse.json(
+          { error: 'Failed to fetch circuits' },
+          { status: 500 }
+        );
+      }
+
+      if (!circuits || circuits.length === 0) {
+        hasMore = false;
+      } else {
+        allCircuits = allCircuits.concat(circuits);
+        hasMore = circuits.length === pageSize;
+        page++;
+      }
     }
 
-    if (!circuits || circuits.length === 0) {
+    console.log(`Found ${allCircuits.length} total circuits for circuitsnips-importer`);
+
+    if (allCircuits.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No circuits found for circuitsnips-importer',
         deletedCount: 0
       });
     }
+
+    const circuits = allCircuits;
 
     // Delete ALL thumbnail files for these circuits from storage
     // This includes all versions, not just current ones
