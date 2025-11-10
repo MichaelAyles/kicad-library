@@ -59,6 +59,19 @@ export default function AboutPage() {
                     , the incredible WebGL-based schematic viewer that powers our circuit previews.
                     KiCanvas makes it possible to interactively view KiCad schematics directly in the browser.
                   </p>
+                  <p className="text-sm text-muted-foreground">
+                    CircuitSnips uses a{' '}
+                    <a
+                      href="https://github.com/MichaelAyles/kicanvas"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      fork of KiCanvas
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                    {' '}with modifications to integrate seamlessly with our platform and support additional features.
+                  </p>
                 </div>
 
                 <div className="space-y-2 text-muted-foreground">
