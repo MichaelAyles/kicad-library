@@ -6,7 +6,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
-import { AlertTriangle, Trash2, Eye, CheckCircle, XCircle, Loader, Image, BarChart3, RefreshCw, Copy, Users } from "lucide-react";
+import { AlertTriangle, Trash2, Eye, CheckCircle, XCircle, Loader, Image, BarChart3, RefreshCw, Copy, Users, Upload, Heart, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { ThumbnailRegenerator } from "@/components/ThumbnailRegenerator";
 
@@ -940,44 +940,86 @@ export default function AdminDashboard() {
                     {users.map((userItem) => (
                       <div
                         key={userItem.id}
-                        className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border"
+                        className="p-4 bg-muted/30 rounded-lg border"
                       >
-                        <div className="flex items-center gap-4">
-                          {userItem.avatar_url ? (
-                            <img
-                              src={userItem.avatar_url}
-                              alt={userItem.username}
-                              className="w-12 h-12 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Users className="w-6 h-6 text-primary" />
-                            </div>
-                          )}
-                          <div>
-                            <div className="font-semibold">@{userItem.username}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Joined {new Date(userItem.created_at).toLocaleDateString()}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-4">
+                            {userItem.avatar_url ? (
+                              <img
+                                src={userItem.avatar_url}
+                                alt={userItem.username}
+                                className="w-12 h-12 rounded-full"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Users className="w-6 h-6 text-primary" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-semibold">@{userItem.username}</div>
+                              <div className="text-sm text-muted-foreground">
+                                Joined {new Date(userItem.created_at).toLocaleDateString()}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/profile?user=${userItem.username}`}
+                              className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50 transition-colors"
+                              target="_blank"
+                            >
+                              <Eye className="w-4 h-4 inline mr-1" />
+                              View Profile
+                            </Link>
+                            <button
+                              onClick={() => handleDeleteUser(userItem.id, userItem.username)}
+                              disabled={userItem.id === user?.id}
+                              className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete User
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Link
-                            href={`/profile?user=${userItem.username}`}
-                            className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50 transition-colors"
-                            target="_blank"
-                          >
-                            <Eye className="w-4 h-4 inline mr-1" />
-                            View Profile
-                          </Link>
-                          <button
-                            onClick={() => handleDeleteUser(userItem.id, userItem.username)}
-                            disabled={userItem.id === user?.id}
-                            className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete User
-                          </button>
+
+                        {/* User Statistics */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t">
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                              <Upload className="w-4 h-4 text-blue-500" />
+                            </div>
+                            <div>
+                              <div className="font-semibold">{userItem.circuitCount || 0}</div>
+                              <div className="text-xs text-muted-foreground">Uploads</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                              <Copy className="w-4 h-4 text-green-500" />
+                            </div>
+                            <div>
+                              <div className="font-semibold">{userItem.totalCopies || 0}</div>
+                              <div className="text-xs text-muted-foreground">Downloads</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center">
+                              <MessageSquare className="w-4 h-4 text-purple-500" />
+                            </div>
+                            <div>
+                              <div className="font-semibold">{userItem.commentCount || 0}</div>
+                              <div className="text-xs text-muted-foreground">Comments</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center">
+                              <Heart className="w-4 h-4 text-pink-500" />
+                            </div>
+                            <div>
+                              <div className="font-semibold">{userItem.favoriteCount || 0}</div>
+                              <div className="text-xs text-muted-foreground">Favorites</div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}

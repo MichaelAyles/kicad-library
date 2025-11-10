@@ -151,17 +151,49 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // For performance, we'll just return users without circuit counts
-    // Circuit counts can be expensive with large databases
-    const users = (data || []).map((user: any) => ({
-      id: user.id,
-      username: user.username,
-      avatar_url: user.avatar_url,
-      created_at: user.created_at,
-      circuitCount: 0, // Not calculated for performance
-    }));
+    // Fetch statistics for each user
+    const usersWithStats = await Promise.all(
+      (data || []).map(async (user: any) => {
+        // Get circuit count
+        const { count: circuitCount } = await supabase
+          .from('circuits')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
 
-    return NextResponse.json({ users });
+        // Get total copy count across all their circuits
+        const { data: circuitCopies } = await supabase
+          .from('circuits')
+          .select('copy_count')
+          .eq('user_id', user.id);
+
+        const totalCopies = circuitCopies?.reduce((sum, c) => sum + (c.copy_count || 0), 0) || 0;
+
+        // Get comment count
+        const { count: commentCount } = await supabase
+          .from('circuit_comments')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+
+        // Get favorite count (how many favorites they've given)
+        const { count: favoriteCount } = await supabase
+          .from('favorites')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+
+        return {
+          id: user.id,
+          username: user.username,
+          avatar_url: user.avatar_url,
+          created_at: user.created_at,
+          circuitCount: circuitCount || 0,
+          totalCopies: totalCopies,
+          commentCount: commentCount || 0,
+          favoriteCount: favoriteCount || 0,
+        };
+      })
+    );
+
+    return NextResponse.json({ users: usersWithStats });
   } catch (error: any) {
     console.error('Error searching users:', error);
     return NextResponse.json(
