@@ -124,36 +124,38 @@ export async function POST(request: NextRequest) {
     const lightUrl = await uploadThumbnail(lightThumbBase64, 'light');
     const darkUrl = await uploadThumbnail(darkThumbBase64, 'dark');
 
-    // Mark previous versions as not current
-    const { error: historyUpdateError } = await adminSupabase
-      .from('thumbnail_history')
-      .update({ is_current: false })
-      .eq('circuit_id', circuitId)
-      .eq('is_current', true);
+    // Try to save to thumbnail_history table (optional - table may not exist)
+    try {
+      // Mark previous versions as not current
+      const { error: historyUpdateError } = await adminSupabase
+        .from('thumbnail_history')
+        .update({ is_current: false })
+        .eq('circuit_id', circuitId)
+        .eq('is_current', true);
 
-    if (historyUpdateError) {
-      console.error('Error updating thumbnail history:', historyUpdateError);
-    }
+      if (historyUpdateError) {
+        console.warn('Error updating thumbnail history (non-critical):', historyUpdateError);
+      }
 
-    // Insert new version into history
-    const { error: historyInsertError } = await adminSupabase
-      .from('thumbnail_history')
-      .insert({
-        circuit_id: circuitId,
-        version: newVersion,
-        thumbnail_light_url: lightUrl,
-        thumbnail_dark_url: darkUrl,
-        regenerated_by: user.id,
-        is_current: true,
-        notes: 'Admin regeneration',
-      });
+      // Insert new version into history
+      const { error: historyInsertError } = await adminSupabase
+        .from('thumbnail_history')
+        .insert({
+          circuit_id: circuitId,
+          version: newVersion,
+          thumbnail_light_url: lightUrl,
+          thumbnail_dark_url: darkUrl,
+          regenerated_by: user.id,
+          is_current: true,
+          notes: 'Admin regeneration',
+        });
 
-    if (historyInsertError) {
-      console.error('Error inserting thumbnail history:', historyInsertError);
-      return NextResponse.json(
-        { error: 'Failed to save thumbnail history', details: historyInsertError.message },
-        { status: 500 }
-      );
+      if (historyInsertError) {
+        console.warn('Error inserting thumbnail history (non-critical):', historyInsertError);
+      }
+    } catch (historyError: any) {
+      // Thumbnail history is optional - log but don't fail the request
+      console.warn('Thumbnail history operations skipped (table may not exist):', historyError.message);
     }
 
     // Update circuit record with new thumbnail URLs and version (using admin client)
@@ -183,8 +185,13 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error in regenerate thumbnail endpoint:', error);
+    console.error('Error stack:', error.stack);
     return NextResponse.json(
-      { error: 'Internal server error', message: error.message },
+      {
+        error: 'Internal server error',
+        message: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
