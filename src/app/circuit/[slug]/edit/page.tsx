@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Loader, X, Trash2, Camera, History } from "lucide-reac
 import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { KiCanvas } from "@/components/KiCanvas";
 import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
@@ -685,10 +686,11 @@ export default function EditCircuitPage() {
               <div className="mb-4">
                 <p className="text-sm font-medium mb-2">Preview (verify this looks correct before capturing):</p>
                 <div className="bg-background rounded-md overflow-hidden border" style={{ height: '400px' }} ref={viewerRef}>
-                  <kicanvas-embed
+                  <KiCanvas
                     src={previewUrl}
                     controls="basic"
-                    style={{ width: '100%', height: '100%' }}
+                    height="100%"
+                    width="100%"
                   />
                 </div>
               </div>
