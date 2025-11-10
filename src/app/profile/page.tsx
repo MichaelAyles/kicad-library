@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useTheme } from 'next-themes';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { useAuth } from '@/hooks/useAuth';
@@ -65,6 +66,7 @@ function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
+  const { theme } = useTheme();
   const [profileUser, setProfileUser] = useState<any>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [circuits, setCircuits] = useState<Circuit[]>([]);
@@ -389,7 +391,7 @@ function ProfileContent() {
             ) : (
               <div className="space-y-4">
                 {circuits.map((circuit) => {
-                  const thumbnailUrl = circuit.thumbnail_dark_url;
+                  const thumbnailUrl = theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url;
                   const timeAgo = getTimeAgo(circuit.created_at);
 
                   return (

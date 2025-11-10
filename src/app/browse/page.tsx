@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Filter, Loader, X } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { SearchAutocomplete } from '@/components/SearchAutocomplete';
@@ -15,6 +16,7 @@ const CIRCUITS_PER_PAGE = 50;
 function BrowsePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { theme } = useTheme();
   const [circuits, setCircuits] = useState<(Circuit | SearchCircuit)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -332,8 +334,8 @@ function BrowsePageContent() {
           {!isLoading && circuits.length > 0 && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {circuits.map((circuit) => {
-                // Always use dark mode thumbnail
-                const thumbnailUrl = circuit.thumbnail_dark_url;
+                // Use theme-appropriate thumbnail
+                const thumbnailUrl = theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url;
 
                 return (
                   <Link

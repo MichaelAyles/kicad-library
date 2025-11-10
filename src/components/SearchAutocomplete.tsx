@@ -145,9 +145,9 @@ export function SearchAutocomplete() {
                 }`}
               >
                 {/* Thumbnail */}
-                {circuit.thumbnail_dark_url && (
+                {(circuit.thumbnail_dark_url || circuit.thumbnail_light_url) && (
                   <img
-                    src={circuit.thumbnail_dark_url}
+                    src={(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || ''}
                     alt={circuit.title}
                     className="w-16 h-16 rounded object-cover flex-shrink-0 bg-muted"
                   />

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Search as SearchIcon, Filter, SortDesc } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SearchAutocomplete } from "@/components/SearchAutocomplete";
@@ -17,6 +18,7 @@ interface PopularTag {
 function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { theme } = useTheme();
   const [circuits, setCircuits] = useState<SearchCircuit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -167,7 +169,7 @@ function SearchContent() {
                 >
                   <div className="aspect-video bg-muted relative overflow-hidden">
                     <img
-                      src={circuit.thumbnail_light_url || '/placeholder-circuit.png'}
+                      src={(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || '/placeholder-circuit.png'}
                       alt={circuit.title}
                       className="w-full h-full object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
                     />
