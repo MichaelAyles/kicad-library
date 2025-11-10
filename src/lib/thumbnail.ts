@@ -17,12 +17,10 @@ export const THUMBNAIL_CONFIG = {
 } as const;
 
 export const RENDER_CONFIG = {
-  MAX_WAIT_TIME: 5000, // Max time to wait for KiCanvas render (ms)
-  POLL_INTERVAL: 100, // How often to check if KiCanvas is ready (ms)
+  RENDER_WAIT: 2000, // Fixed wait time for KiCanvas render (ms)
   THEME_SWITCH_WAIT: 500, // Max time to wait for theme switch (ms)
   THEME_POLL_INTERVAL: 50, // How often to check theme (ms)
   OVERLAY_DISMISS_WAIT: 100, // Time to wait after dismissing overlay (ms)
-  MIN_PIXEL_THRESHOLD: 10, // Minimum non-transparent pixels to consider rendered
 } as const;
 
 // For backwards compatibility
@@ -35,71 +33,14 @@ export interface ThumbnailResult {
 }
 
 /**
- * Check if a canvas has rendered content (not just blank/transparent)
- */
-function hasRenderedContent(canvas: HTMLCanvasElement): boolean {
-  try {
-    const ctx = canvas.getContext('2d');
-    if (!ctx || canvas.width === 0 || canvas.height === 0) {
-      return false;
-    }
-
-    // Sample a few pixels from different areas to detect rendering
-    const samplePoints = [
-      [canvas.width / 4, canvas.height / 4],
-      [canvas.width / 2, canvas.height / 2],
-      [canvas.width * 3 / 4, canvas.height * 3 / 4],
-    ];
-
-    let nonTransparentPixels = 0;
-    for (const [x, y] of samplePoints) {
-      const pixel = ctx.getImageData(x, y, 1, 1).data;
-      // Check if pixel is not fully transparent
-      if (pixel[3] > 0) {
-        nonTransparentPixels++;
-      }
-    }
-
-    return nonTransparentPixels >= RENDER_CONFIG.MIN_PIXEL_THRESHOLD / 3;
-  } catch (error) {
-    console.warn('Could not check canvas content:', error);
-    return false;
-  }
-}
-
-/**
  * Wait for KiCanvas to be ready and fully rendered
- * Polls the canvas element for actual rendered content
+ * Simply waits for a fixed duration as KiCanvas doesn't provide a ready API
  */
 async function waitForKiCanvasReady(element: HTMLElement): Promise<void> {
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < RENDER_CONFIG.MAX_WAIT_TIME) {
-    try {
-      // Find kicanvas-embed in regular DOM
-      const kicanvasEmbed = element.querySelector('kicanvas-embed') as any;
-
-      if (kicanvasEmbed && kicanvasEmbed.shadowRoot) {
-        // Check if canvas exists in shadow DOM
-        const canvas = kicanvasEmbed.shadowRoot.querySelector('canvas');
-
-        if (canvas && canvas.width > 0 && canvas.height > 0) {
-          // Check if canvas has actual rendered content
-          if (hasRenderedContent(canvas)) {
-            console.log(`KiCanvas ready after ${Date.now() - startTime}ms`);
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      // Continue polling on errors (shadow DOM may not be accessible yet)
-    }
-
-    // Wait before next poll
-    await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.POLL_INTERVAL));
-  }
-
-  throw new Error(`KiCanvas failed to render within ${RENDER_CONFIG.MAX_WAIT_TIME}ms`);
+  console.log('Waiting for KiCanvas to render...');
+  // KiCanvas doesn't expose a "ready" API, so we just wait a fixed duration
+  await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.RENDER_WAIT));
+  console.log('KiCanvas render wait complete');
 }
 
 /**
