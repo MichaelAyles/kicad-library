@@ -11,6 +11,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createAnonClient } from '@supabase/supabase-js';
 
+// Force Node.js runtime for Buffer support
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Get the Authorization header with bearer token
