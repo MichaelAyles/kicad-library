@@ -70,12 +70,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Fetch all circuits with thumbnails from circuitsnips-importer
+    // Fetch all circuits from circuitsnips-importer
     const { data: circuits, error: fetchError } = await adminClient
       .from('circuits')
-      .select('id, thumbnail_light_url, thumbnail_dark_url')
-      .eq('user_id', importerUser.id)
-      .or('thumbnail_light_url.not.is.null,thumbnail_dark_url.not.is.null');
+      .select('id, user_id, thumbnail_light_url, thumbnail_dark_url')
+      .eq('user_id', importerUser.id);
 
     if (fetchError) {
       console.error('Error fetching circuits:', fetchError);
@@ -88,51 +87,82 @@ export async function DELETE(request: NextRequest) {
     if (!circuits || circuits.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'No thumbnails to delete',
+        message: 'No circuits found for circuitsnips-importer',
         deletedCount: 0
       });
     }
 
-    // Delete thumbnail files from storage
+    // Delete ALL thumbnail files for these circuits from storage
+    // This includes all versions, not just current ones
     let deletedFiles = 0;
     let failedFiles = 0;
 
     for (const circuit of circuits) {
-      // Extract file paths from URLs
-      const filePaths: string[] = [];
+      // List all files in the user's folder for this circuit
+      // Files are stored as: {userId}/{circuitId}-v{version}-{theme}.png
+      const folderPath = `${circuit.user_id}`;
 
-      if (circuit.thumbnail_light_url) {
-        const lightPath = circuit.thumbnail_light_url.split('/thumbnails/')[1];
-        if (lightPath) filePaths.push(lightPath);
-      }
-
-      if (circuit.thumbnail_dark_url) {
-        const darkPath = circuit.thumbnail_dark_url.split('/thumbnails/')[1];
-        if (darkPath) filePaths.push(darkPath);
-      }
-
-      // Delete files from storage
-      if (filePaths.length > 0) {
-        const { error: deleteError } = await adminClient.storage
+      try {
+        // List all files in the user's folder
+        const { data: fileList, error: listError } = await adminClient.storage
           .from('thumbnails')
-          .remove(filePaths);
+          .list(folderPath);
 
-        if (deleteError) {
-          console.error(`Error deleting files for circuit ${circuit.id}:`, deleteError);
-          failedFiles += filePaths.length;
-        } else {
-          deletedFiles += filePaths.length;
+        if (listError) {
+          console.warn(`Error listing files for ${folderPath}:`, listError);
+          continue;
         }
+
+        // Find all files that belong to this circuit (any version)
+        const circuitFiles = fileList
+          ?.filter(file => file.name.startsWith(`${circuit.id}-`))
+          .map(file => `${folderPath}/${file.name}`) || [];
+
+        if (circuitFiles.length > 0) {
+          console.log(`Deleting ${circuitFiles.length} files for circuit ${circuit.id}`);
+
+          const { error: deleteError } = await adminClient.storage
+            .from('thumbnails')
+            .remove(circuitFiles);
+
+          if (deleteError) {
+            console.error(`Error deleting files for circuit ${circuit.id}:`, deleteError);
+            failedFiles += circuitFiles.length;
+          } else {
+            deletedFiles += circuitFiles.length;
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing circuit ${circuit.id}:`, error);
+        failedFiles++;
       }
     }
 
-    // Update database to set thumbnail URLs to null
+    // Delete all thumbnail history records for these circuits
+    const circuitIds = circuits.map(c => c.id);
+
+    try {
+      const { error: historyDeleteError } = await adminClient
+        .from('thumbnail_history')
+        .delete()
+        .in('circuit_id', circuitIds);
+
+      if (historyDeleteError) {
+        console.warn('Error deleting thumbnail history (non-critical):', historyDeleteError);
+      } else {
+        console.log('Deleted thumbnail history for all circuits');
+      }
+    } catch (error) {
+      console.warn('Thumbnail history deletion skipped (table may not exist)');
+    }
+
+    // Update database to set thumbnail URLs to null and reset version to 0
     const { error: updateError } = await adminClient
       .from('circuits')
       .update({
         thumbnail_light_url: null,
         thumbnail_dark_url: null,
-        thumbnail_version: 1
+        thumbnail_version: 0
       })
       .eq('user_id', importerUser.id);
 
@@ -146,7 +176,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Deleted thumbnails from ${circuits.length} @circuitsnips-importer circuits`,
+      message: `Deleted all thumbnails from ${circuits.length} @circuitsnips-importer circuits`,
       circuitsUpdated: circuits.length,
       filesDeleted: deletedFiles,
       filesFailed: failedFiles
