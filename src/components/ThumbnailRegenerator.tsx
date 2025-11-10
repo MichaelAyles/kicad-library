@@ -13,6 +13,7 @@ interface Circuit {
   raw_sexpr?: string; // Make optional, load lazily
   thumbnail_light_url: string | null;
   thumbnail_dark_url: string | null;
+  thumbnail_version?: number;
 }
 
 interface ProcessingResult {
@@ -117,7 +118,7 @@ export function ThumbnailRegenerator() {
         // Fetch first page of circuits WITHOUT raw_sexpr (much lighter)
         const { data, error } = await supabase
           .from('circuits')
-          .select('id, slug, title, user_id, thumbnail_light_url, thumbnail_dark_url')
+          .select('id, slug, title, user_id, thumbnail_light_url, thumbnail_dark_url, thumbnail_version')
           .eq('user_id', importerUser.id)
           .order('created_at', { ascending: false })
           .range(0, PAGE_SIZE - 1);
@@ -306,12 +307,13 @@ export function ThumbnailRegenerator() {
         } : r
       ));
 
-      // Update circuit state with new thumbnail URLs
+      // Update circuit state with new thumbnail URLs and version
       setCircuits(prev => prev.map((c, i) =>
         i === index ? {
           ...c,
           thumbnail_light_url: result.lightUrl,
-          thumbnail_dark_url: result.darkUrl
+          thumbnail_dark_url: result.darkUrl,
+          thumbnail_version: result.version
         } : c
       ));
 
@@ -945,7 +947,7 @@ export function ThumbnailRegenerator() {
                   <p className="font-medium truncate">{result.title}</p>
                   {circuit && circuit.thumbnail_light_url && circuit.thumbnail_dark_url ? (
                     <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-500 rounded flex-shrink-0">
-                      Has Thumbnails
+                      Has Thumbnails {circuit.thumbnail_version ? `(v${circuit.thumbnail_version})` : ''}
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 text-xs bg-orange-500/10 text-orange-500 rounded flex-shrink-0">
@@ -960,17 +962,28 @@ export function ThumbnailRegenerator() {
 
               {/* Actions and Index */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                {/* View Thumbnail button - only show if thumbnails exist */}
+                {/* View Thumbnail buttons - only show if thumbnails exist */}
                 {circuit && circuit.thumbnail_light_url && circuit.thumbnail_dark_url && (
-                  <a
-                    href={circuit.thumbnail_light_url || ''}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors bg-blue-500/10 border-blue-500/50 text-blue-600 dark:text-blue-400"
-                    title="View thumbnail in new tab"
-                  >
-                    View Thumb
-                  </a>
+                  <>
+                    <a
+                      href={circuit.thumbnail_light_url || ''}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400"
+                      title="View light mode thumbnail"
+                    >
+                      Light
+                    </a>
+                    <a
+                      href={circuit.thumbnail_dark_url || ''}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1 text-xs border rounded hover:bg-background transition-colors bg-slate-500/10 border-slate-500/50 text-slate-600 dark:text-slate-400"
+                      title="View dark mode thumbnail"
+                    >
+                      Dark
+                    </a>
+                  </>
                 )}
 
                 {/* Go to Circuit link */}
