@@ -194,7 +194,7 @@ export function ThumbnailRegenerator() {
     }
   };
 
-  const processCircuit = async (circuit: Circuit, index: number) => {
+  const processCircuit = async (circuit: Circuit, index: number): Promise<'success' | 'error'> => {
     // Update status to processing
     setResults(prev => prev.map((r, i) =>
       i === index ? { ...r, status: 'processing' } : r
@@ -306,6 +306,17 @@ export function ThumbnailRegenerator() {
         } : r
       ));
 
+      // Update circuit state with new thumbnail URLs
+      setCircuits(prev => prev.map((c, i) =>
+        i === index ? {
+          ...c,
+          thumbnail_light_url: result.lightUrl,
+          thumbnail_dark_url: result.darkUrl
+        } : c
+      ));
+
+      return 'success';
+
     } catch (error: any) {
       console.error(`Error processing circuit ${circuit.id}:`, error);
       setResults(prev => prev.map((r, i) =>
@@ -315,6 +326,7 @@ export function ThumbnailRegenerator() {
           error: error.message || 'Unknown error'
         } : r
       ));
+      return 'error';
     }
   };
 
@@ -340,13 +352,12 @@ export function ThumbnailRegenerator() {
         continue; // Skip unselected circuits
       }
       setCurrentIndex(i);
-      await processCircuit(circuits[i], i);
+      const status = await processCircuit(circuits[i], i);
       processed++;
 
-      // Track results
-      const result = results[i];
-      if (result?.status === 'success') successCount++;
-      if (result?.status === 'error') errorCount++;
+      // Track results from return value
+      if (status === 'success') successCount++;
+      if (status === 'error') errorCount++;
     }
 
     setIsProcessing(false);
