@@ -259,7 +259,7 @@ export default function HomePage() {
 
                       {/* Footer */}
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>by @{circuit.user?.username || 'unknown'}</span>
+                        <span>by @{circuit.github_owner || circuit.user?.username || 'unknown'}</span>
                         <div className="flex items-center gap-3">
                           <span className="group-hover:text-primary transition-colors">📋 {circuit.copy_count}</span>
                           <span className="group-hover:text-primary transition-colors">⭐ {circuit.favorite_count}</span>

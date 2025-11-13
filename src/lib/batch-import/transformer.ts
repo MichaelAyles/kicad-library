@@ -19,6 +19,8 @@ export interface CircuitData {
   tags: string[];
   license: string;
   is_public: boolean;
+  github_owner: string | null;
+  github_repo: string | null;
   thumbnail_light_url: string | null;
   thumbnail_dark_url: string | null;
 }
@@ -36,7 +38,7 @@ export function transformToCircuit(
   slug: string,
   botUserId: string
 ): CircuitData {
-  const { subcircuit, raw_sexpr, component_count, repo_license } = record;
+  const { subcircuit, raw_sexpr, component_count, repo_license, repo_owner, repo_name } = record;
 
   // Build enhanced description with attribution
   const description = buildDescription(record);
@@ -64,6 +66,8 @@ export function transformToCircuit(
     tags,
     license,
     is_public: true,
+    github_owner: repo_owner, // Store GitHub username for display
+    github_repo: repo_name,   // Store repo name for reference
     thumbnail_light_url: null, // Generated later
     thumbnail_dark_url: null, // Generated later
   };

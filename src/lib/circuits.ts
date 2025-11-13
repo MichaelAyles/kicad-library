@@ -80,6 +80,8 @@ export interface Circuit {
   thumbnail_version: number;
   is_public: boolean;
   is_featured: boolean;
+  github_owner: string | null;
+  github_repo: string | null;
   created_at: string;
   updated_at: string;
   user?: {

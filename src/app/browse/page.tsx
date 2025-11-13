@@ -387,7 +387,9 @@ function BrowsePageContent() {
                     {/* Footer */}
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span>
-                        by @{('user' in circuit
+                        by @{('github_owner' in circuit && circuit.github_owner
+                          ? circuit.github_owner
+                          : 'user' in circuit
                           ? circuit.user?.username
                           : 'profiles' in circuit
                             ? circuit.profiles?.username

@@ -119,6 +119,10 @@ CREATE TABLE IF NOT EXISTS public.circuits (
   -- Visibility
   is_public BOOLEAN DEFAULT true,
 
+  -- GitHub import attribution (for circuits imported by bot)
+  github_owner TEXT, -- GitHub username of original repo owner
+  github_repo TEXT,  -- GitHub repository name
+
   -- Thumbnail URLs (stored in Supabase Storage)
   thumbnail_light_url TEXT,
   thumbnail_dark_url TEXT,
@@ -151,6 +155,17 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name='circuits' AND column_name='comment_count') THEN
     ALTER TABLE public.circuits ADD COLUMN comment_count INTEGER DEFAULT 0;
+  END IF;
+
+  -- Add github_owner and github_repo for imported circuits
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='github_owner') THEN
+    ALTER TABLE public.circuits ADD COLUMN github_owner TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='github_repo') THEN
+    ALTER TABLE public.circuits ADD COLUMN github_repo TEXT;
   END IF;
 
   -- Make file_path nullable if not already

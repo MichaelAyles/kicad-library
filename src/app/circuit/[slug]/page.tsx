@@ -298,7 +298,23 @@ export default function CircuitDetailPage() {
             </div>
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-              {circuit.user && (
+              {circuit.github_owner ? (
+                <>
+                  <span>
+                    by{" "}
+                    <a
+                      href={`https://github.com/${circuit.github_owner}${circuit.github_repo ? `/${circuit.github_repo}` : ''}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      @{circuit.github_owner}
+                      {circuit.github_repo && ` / ${circuit.github_repo}`}
+                    </a>
+                  </span>
+                  <span>•</span>
+                </>
+              ) : circuit.user ? (
                 <>
                   <span>
                     by{" "}
@@ -308,7 +324,7 @@ export default function CircuitDetailPage() {
                   </span>
                   <span>•</span>
                 </>
-              )}
+              ) : null}
               <span>Uploaded {formatDate(circuit.created_at)}</span>
               <span>•</span>
               <span>{circuit.view_count} views</span>
