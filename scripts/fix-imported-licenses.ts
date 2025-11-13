@@ -114,35 +114,58 @@ async function fixCircuitLicenses(dryRun: boolean = false) {
   console.log('🔍 Scanning for circuits with incorrect licenses...\n');
 
   // Fetch all circuits with GitHub attribution
-  const query = supabase
-    .from('circuits')
-    .select('id, slug, title, description, license, user_id')
-    .like('description', '%**From GitHub**:%');
+  // Note: Supabase has a default limit of 1000 rows, so we need to paginate
+  let allCircuits: Circuit[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
 
-  // If BOT_USER_ID is set, filter by user_id
-  if (botUserId) {
-    query.eq('user_id', botUserId);
+  while (hasMore) {
+    const query = supabase
+      .from('circuits')
+      .select('id, slug, title, description, license, user_id')
+      .like('description', '%**From GitHub**:%')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    // If BOT_USER_ID is set, filter by user_id
+    if (botUserId) {
+      query.eq('user_id', botUserId);
+    }
+
+    const { data: circuits, error } = await query;
+
+    if (error) {
+      console.error('Error fetching circuits:', error);
+      process.exit(1);
+    }
+
+    if (!circuits || circuits.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    allCircuits = allCircuits.concat(circuits);
+    console.log(`Fetched page ${page + 1} (${circuits.length} circuits, ${allCircuits.length} total so far)...`);
+
+    if (circuits.length < pageSize) {
+      hasMore = false;
+    }
+
+    page++;
   }
 
-  const { data: circuits, error } = await query;
-
-  if (error) {
-    console.error('Error fetching circuits:', error);
-    process.exit(1);
-  }
-
-  if (!circuits || circuits.length === 0) {
+  if (allCircuits.length === 0) {
     console.log('No circuits found with GitHub attribution.');
     return;
   }
 
-  console.log(`Found ${circuits.length} circuits to check.\n`);
+  console.log(`\nFound ${allCircuits.length} total circuits to check.\n`);
 
   let fixedCount = 0;
   let skippedCount = 0;
   let errorCount = 0;
 
-  for (const circuit of circuits) {
+  for (const circuit of allCircuits) {
     // Extract the license from the description
     const extractedLicense = extractLicenseFromDescription(circuit.description);
 
@@ -189,7 +212,7 @@ async function fixCircuitLicenses(dryRun: boolean = false) {
   }
 
   console.log('\n📊 Summary:');
-  console.log(`   Total circuits checked: ${circuits.length}`);
+  console.log(`   Total circuits checked: ${allCircuits.length}`);
   console.log(`   Fixed: ${fixedCount}`);
   console.log(`   Skipped (already correct): ${skippedCount}`);
   console.log(`   Errors: ${errorCount}`);
