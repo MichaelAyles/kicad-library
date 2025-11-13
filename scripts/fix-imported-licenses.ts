@@ -8,8 +8,13 @@
  *   npx tsx scripts/fix-imported-licenses.ts [--dry-run]
  */
 
+import { config } from 'dotenv';
+import { resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeLicense } from '../src/lib/batch-import/validator';
+
+// Load environment variables from .env.local
+config({ path: resolve(process.cwd(), '.env.local') });
 
 // Check for required environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -42,12 +47,67 @@ interface Circuit {
  * Format: > **From GitHub**: [owner/repo](url) ([LICENSE license](link))
  */
 function extractLicenseFromDescription(description: string): string | null {
-  // Match pattern: ([LICENSE license](link))
-  const licenseMatch = description.match(/\(\[([^\]]+)\s+license\]/i);
+  // Try multiple patterns to match different license formats
+
+  // Pattern 1: ([LICENSE license](link))
+  let licenseMatch = description.match(/\(\[([^\]]+)\s+license\]/i);
   if (licenseMatch && licenseMatch[1]) {
-    return licenseMatch[1].trim();
+    return normalizeExtractedLicense(licenseMatch[1].trim());
   }
+
+  // Pattern 2: ([LICENSE](link)) - without "license" word
+  licenseMatch = description.match(/\(\[([A-Z][A-Z0-9\s\-\.]+)\]\([^)]+\/LICENSE\)/);
+  if (licenseMatch && licenseMatch[1]) {
+    return normalizeExtractedLicense(licenseMatch[1].trim());
+  }
+
+  // Pattern 3: License: XXXX in description
+  licenseMatch = description.match(/License:\s*([A-Z][A-Z0-9\s\-\.]+)/);
+  if (licenseMatch && licenseMatch[1]) {
+    return normalizeExtractedLicense(licenseMatch[1].trim());
+  }
+
   return null;
+}
+
+/**
+ * Normalize extracted license names to standard identifiers
+ * Converts full names like "Creative Commons Zero v1.0 Universal" to "CC0-1.0"
+ */
+function normalizeExtractedLicense(license: string): string {
+  const mapping: Record<string, string> = {
+    'creative commons zero v1.0 universal': 'CC0-1.0',
+    'creative commons attribution 4.0 international': 'CC-BY-4.0',
+    'creative commons attribution share alike 4.0 international': 'CC-BY-SA-4.0',
+    'creative commons attribution non commercial share alike 4.0 international': 'CC-BY-NC-SA-4.0',
+    'creative commons attribution non commercial 4.0 international': 'CC-BY-NC-4.0',
+    'creative commons attribution no derivatives 4.0 international': 'CC-BY-ND-4.0',
+    'mit license': 'MIT',
+    'apache license 2.0': 'Apache-2.0',
+    'gnu general public license v2.0': 'GPL-2.0',
+    'gnu general public license v3.0': 'GPL-3.0',
+    'gnu lesser general public license v2.1': 'LGPL-2.1',
+    'gnu lesser general public license v3.0': 'LGPL-3.0',
+    'gnu affero general public license v3.0': 'AGPL-3.0',
+    'mozilla public license 2.0': 'MPL-2.0',
+    'bsd 2-clause "simplified" license': 'BSD-2-Clause',
+    'bsd 3-clause "new" or "revised" license': 'BSD-3-Clause',
+    'the unlicense': 'Unlicense',
+    'cern open hardware licence version 2 - strongly reciprocal': 'CERN-OHL-S-2.0',
+    'cern open hardware licence version 2 - weakly reciprocal': 'CERN-OHL-W-2.0',
+    'cern open hardware licence version 2 - permissive': 'CERN-OHL-P-2.0',
+    'cern-ohl-1.2': 'CERN-OHL-1.2',
+  };
+
+  const lowerLicense = license.toLowerCase();
+
+  // Check if it's in our mapping
+  if (mapping[lowerLicense]) {
+    return mapping[lowerLicense];
+  }
+
+  // Return as-is if not found
+  return license;
 }
 
 async function fixCircuitLicenses(dryRun: boolean = false) {
