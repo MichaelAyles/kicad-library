@@ -198,7 +198,10 @@ function isValidUrl(url: string): boolean {
  */
 export function normalizeLicense(license: string): string | null {
   // Supported licenses in CircuitSnips
+  // User uploads are limited to OSHW-compliant licenses
+  // GitHub imports can use additional common open source licenses
   const supportedLicenses = [
+    // OSHW-compliant (for user uploads)
     'MIT',
     'Apache-2.0',
     'GPL-3.0',
@@ -207,6 +210,18 @@ export function normalizeLicense(license: string): string | null {
     'CC-BY-SA-4.0',
     'CERN-OHL-S-2.0',
     'TAPR-OHL-1.0',
+    // Common GitHub licenses (imports only)
+    'CC-BY-NC-SA-4.0',
+    'CC-BY-NC-4.0',
+    'CC-BY-ND-4.0',
+    'CC0-1.0',
+    'Unlicense',
+    'GPL-2.0',
+    'LGPL-2.1',
+    'LGPL-3.0',
+    'MPL-2.0',
+    'BSD-3-Clause',
+    'ISC',
   ];
 
   // Normalize input (trim, uppercase for comparison)
@@ -227,13 +242,27 @@ export function normalizeLicense(license: string): string | null {
     'apache': 'Apache-2.0',
     'gpl-3': 'GPL-3.0',
     'gpl3': 'GPL-3.0',
+    'gpl-2': 'GPL-2.0',
+    'gpl2': 'GPL-2.0',
+    'lgpl-2.1': 'LGPL-2.1',
+    'lgpl-3': 'LGPL-3.0',
+    'lgpl-3.0': 'LGPL-3.0',
     'bsd-2': 'BSD-2-Clause',
     'bsd2': 'BSD-2-Clause',
+    'bsd-3': 'BSD-3-Clause',
+    'bsd3': 'BSD-3-Clause',
     'cc-by': 'CC-BY-4.0',
     'cc-by-sa': 'CC-BY-SA-4.0',
+    'cc-by-nc-sa': 'CC-BY-NC-SA-4.0',
+    'cc by nc sa 4.0': 'CC-BY-NC-SA-4.0',
+    'cc-by-nc': 'CC-BY-NC-4.0',
+    'cc-by-nd': 'CC-BY-ND-4.0',
+    'cc0': 'CC0-1.0',
     'cern-ohl-s': 'CERN-OHL-S-2.0',
     'cern-ohl': 'CERN-OHL-S-2.0',
     'tapr': 'TAPR-OHL-1.0',
+    'mpl-2': 'MPL-2.0',
+    'mpl': 'MPL-2.0',
   };
 
   const variation = variations[normalized.toLowerCase()];

@@ -1,0 +1,158 @@
+/**
+ * Fix Imported Circuit Licenses
+ *
+ * This script fixes circuits imported from GitHub that have incorrect licenses.
+ * It extracts the actual license from the description and updates the database.
+ *
+ * Usage:
+ *   npx tsx scripts/fix-imported-licenses.ts [--dry-run]
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import { normalizeLicense } from '../src/lib/batch-import/validator';
+
+// Check for required environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const botUserId = process.env.BOT_USER_ID;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Error: Missing required environment variables');
+  console.error('Required: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
+
+if (!botUserId) {
+  console.error('Warning: BOT_USER_ID not set, will process all circuits with GitHub attribution');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+interface Circuit {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  license: string;
+  user_id: string;
+}
+
+/**
+ * Extract license from GitHub attribution in description
+ * Format: > **From GitHub**: [owner/repo](url) ([LICENSE license](link))
+ */
+function extractLicenseFromDescription(description: string): string | null {
+  // Match pattern: ([LICENSE license](link))
+  const licenseMatch = description.match(/\(\[([^\]]+)\s+license\]/i);
+  if (licenseMatch && licenseMatch[1]) {
+    return licenseMatch[1].trim();
+  }
+  return null;
+}
+
+async function fixCircuitLicenses(dryRun: boolean = false) {
+  console.log('🔍 Scanning for circuits with incorrect licenses...\n');
+
+  // Fetch all circuits with GitHub attribution
+  const query = supabase
+    .from('circuits')
+    .select('id, slug, title, description, license, user_id')
+    .like('description', '%**From GitHub**:%');
+
+  // If BOT_USER_ID is set, filter by user_id
+  if (botUserId) {
+    query.eq('user_id', botUserId);
+  }
+
+  const { data: circuits, error } = await query;
+
+  if (error) {
+    console.error('Error fetching circuits:', error);
+    process.exit(1);
+  }
+
+  if (!circuits || circuits.length === 0) {
+    console.log('No circuits found with GitHub attribution.');
+    return;
+  }
+
+  console.log(`Found ${circuits.length} circuits to check.\n`);
+
+  let fixedCount = 0;
+  let skippedCount = 0;
+  let errorCount = 0;
+
+  for (const circuit of circuits) {
+    // Extract the license from the description
+    const extractedLicense = extractLicenseFromDescription(circuit.description);
+
+    if (!extractedLicense) {
+      console.log(`⚠️  [${circuit.slug}] - Could not extract license from description`);
+      skippedCount++;
+      continue;
+    }
+
+    // Normalize the extracted license
+    const normalizedLicense = normalizeLicense(extractedLicense) || extractedLicense;
+
+    // Check if the license needs to be updated
+    if (circuit.license === normalizedLicense) {
+      // License is already correct
+      skippedCount++;
+      continue;
+    }
+
+    console.log(`📝 [${circuit.slug}]`);
+    console.log(`   Title: ${circuit.title}`);
+    console.log(`   Current: ${circuit.license}`);
+    console.log(`   Extracted: ${extractedLicense}`);
+    console.log(`   Normalized: ${normalizedLicense}`);
+
+    if (dryRun) {
+      console.log(`   ⏭️  DRY RUN - Would update to: ${normalizedLicense}\n`);
+      fixedCount++;
+    } else {
+      // Update the license in the database
+      const { error: updateError } = await supabase
+        .from('circuits')
+        .update({ license: normalizedLicense })
+        .eq('id', circuit.id);
+
+      if (updateError) {
+        console.log(`   ❌ Error updating: ${updateError.message}\n`);
+        errorCount++;
+      } else {
+        console.log(`   ✅ Updated to: ${normalizedLicense}\n`);
+        fixedCount++;
+      }
+    }
+  }
+
+  console.log('\n📊 Summary:');
+  console.log(`   Total circuits checked: ${circuits.length}`);
+  console.log(`   Fixed: ${fixedCount}`);
+  console.log(`   Skipped (already correct): ${skippedCount}`);
+  console.log(`   Errors: ${errorCount}`);
+
+  if (dryRun) {
+    console.log('\n💡 This was a dry run. Run without --dry-run to apply changes.');
+  }
+}
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const dryRun = args.includes('--dry-run');
+
+if (dryRun) {
+  console.log('🔬 Running in DRY RUN mode - no changes will be made\n');
+}
+
+fixCircuitLicenses(dryRun)
+  .then(() => {
+    console.log('\n✨ Done!');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('\n❌ Fatal error:', error);
+    process.exit(1);
+  });

@@ -41,8 +41,9 @@ export function transformToCircuit(
   // Build enhanced description with attribution
   const description = buildDescription(record);
 
-  // Normalize license
-  const license = normalizeLicense(repo_license) || 'CERN-OHL-S-2.0';
+  // Normalize license - preserve original if normalization fails
+  // This ensures GitHub licenses are stored correctly even if not in our standard list
+  const license = normalizeLicense(repo_license) || repo_license.trim();
 
   // Infer category from tags
   const category = inferCategory(subcircuit.tags);
