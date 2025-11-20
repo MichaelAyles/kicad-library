@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
-import { ExternalLink, Github, Scale, Shield, Users, Zap } from 'lucide-react';
+import { ExternalLink, Github, Mail, Scale, Shield, Users, Zap } from 'lucide-react';
 
 export default function AboutPage() {
   return (
@@ -247,6 +247,13 @@ export default function AboutPage() {
                   >
                     <Shield className="w-4 h-4" />
                     Report Issues
+                  </a>
+                  <a
+                    href="mailto:info@circuitsnips.com"
+                    className="px-4 py-2 border rounded-md hover:bg-muted transition-colors inline-flex items-center gap-2"
+                  >
+                    <Mail className="w-4 h-4" />
+                    Contact Us
                   </a>
                 </div>
               </div>

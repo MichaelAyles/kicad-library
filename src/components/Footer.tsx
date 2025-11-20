@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Github } from 'lucide-react';
+import { Github, Mail } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -27,6 +27,13 @@ export function Footer() {
             >
               <Github className="w-4 h-4" />
               <span>GitHub</span>
+            </a>
+            <a
+              href="mailto:info@circuitsnips.com"
+              className="flex items-center gap-2 hover:text-primary transition-colors"
+            >
+              <Mail className="w-4 h-4" />
+              <span>Contact</span>
             </a>
           </div>
           <div className="text-center md:text-right">
