@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/logo_transparent.png" alt="CircuitSnips Logo" width="200"/>
+</div>
+
 # CircuitSnips
 
 Share and discover reusable KiCad circuits.

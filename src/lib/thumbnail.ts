@@ -17,8 +17,8 @@ export const THUMBNAIL_CONFIG = {
 } as const;
 
 export const RENDER_CONFIG = {
-  RENDER_WAIT: 2000, // Fixed wait time for KiCanvas render (ms)
-  THEME_SWITCH_WAIT: 500, // Max time to wait for theme switch (ms)
+  RENDER_TIMEOUT: 10000, // Max time to wait for render event (ms)
+  THEME_SWITCH_WAIT: 1000, // Max time to wait for theme switch (ms)
   THEME_POLL_INTERVAL: 50, // How often to check theme (ms)
   OVERLAY_DISMISS_WAIT: 100, // Time to wait after dismissing overlay (ms)
 } as const;
@@ -34,13 +34,39 @@ export interface ThumbnailResult {
 
 /**
  * Wait for KiCanvas to be ready and fully rendered
- * Simply waits for a fixed duration as KiCanvas doesn't provide a ready API
+ * Listens for the 'kicanvas:render' event which fires after the first frame is drawn
  */
 async function waitForKiCanvasReady(element: HTMLElement): Promise<void> {
   console.log('Waiting for KiCanvas to render...');
-  // KiCanvas doesn't expose a "ready" API, so we just wait a fixed duration
-  await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.RENDER_WAIT));
-  console.log('KiCanvas render wait complete');
+
+  // Find the kicanvas-embed element
+  const kicanvasEmbed = element.querySelector('kicanvas-embed');
+  if (!kicanvasEmbed) {
+    throw new Error('kicanvas-embed element not found');
+  }
+
+  // Check if already rendered (in case the event already fired)
+  if (kicanvasEmbed.hasAttribute('rendered')) {
+    console.log('KiCanvas already rendered');
+    return;
+  }
+
+  // Wait for the kicanvas:render event with timeout
+  const renderPromise = new Promise<void>((resolve) => {
+    kicanvasEmbed.addEventListener('kicanvas:render', () => {
+      console.log('KiCanvas render event received');
+      resolve();
+    }, { once: true });
+  });
+
+  const timeoutPromise = new Promise<void>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`KiCanvas render timeout after ${RENDER_CONFIG.RENDER_TIMEOUT}ms`));
+    }, RENDER_CONFIG.RENDER_TIMEOUT);
+  });
+
+  await Promise.race([renderPromise, timeoutPromise]);
+  console.log('KiCanvas render complete');
 }
 
 /**
@@ -51,7 +77,7 @@ async function waitForThemeApplied(expectedTheme: 'light' | 'dark'): Promise<voi
 
   while (Date.now() - startTime < RENDER_CONFIG.THEME_SWITCH_WAIT) {
     const currentTheme = document.documentElement.getAttribute('data-theme') ||
-                        document.documentElement.className.includes('dark') ? 'dark' : 'light';
+      document.documentElement.className.includes('dark') ? 'dark' : 'light';
 
     if (currentTheme === expectedTheme) {
       console.log(`Theme switched to ${expectedTheme} after ${Date.now() - startTime}ms`);
@@ -116,6 +142,7 @@ function generateLightFromDark(darkDataURL: string): Promise<string> {
 
 /**
  * Capture a screenshot of the KiCanvas element
+ * Uses html2canvas with WebGL preservation
  */
 async function captureElement(element: HTMLElement): Promise<string> {
   try {
@@ -128,34 +155,61 @@ async function captureElement(element: HTMLElement): Promise<string> {
       await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.OVERLAY_DISMISS_WAIT));
     }
 
-    // Additionally, try to hide overlay by class name if it still exists
+    // Hide overlay if it exists
     const overlay = element.querySelector('.kc-overlay') as HTMLElement;
     const originalDisplay = overlay?.style.display;
     if (overlay) {
       overlay.style.display = 'none';
     }
 
-    const canvas = await html2canvas(element, {
+    // Use html2canvas but make sure we're capturing the right element
+    // KiCanvas renders in shadow DOM, which html2canvas can't capture
+    // So we need to use a different approach - capture using browser's native API
+    const sourceCanvas = await html2canvas(element, {
       backgroundColor: null,
       scale: THUMBNAIL_CONFIG.SCALE,
-      logging: false,
+      logging: true,
       useCORS: true,
       allowTaint: true,
+      foreignObjectRendering: false, // Disable to avoid issues with shadow DOM
       width: element.scrollWidth,
       height: element.scrollHeight,
     });
 
-    // Restore overlay after capture
+    // Restore overlay
     if (overlay && originalDisplay !== undefined) {
       overlay.style.display = originalDisplay;
     }
 
+    console.log(`Captured canvas: ${sourceCanvas.width}x${sourceCanvas.height}`);
+
     // Validate canvas dimensions
-    if (canvas.width === 0 || canvas.height === 0) {
-      throw new Error(`Canvas has invalid dimensions: ${canvas.width}x${canvas.height}. Element may not be visible or rendered.`);
+    if (sourceCanvas.width === 0 || sourceCanvas.height === 0) {
+      throw new Error(`Canvas has invalid dimensions: ${sourceCanvas.width}x${sourceCanvas.height}. Element may not be visible or rendered.`);
     }
 
-    // Resize canvas to thumbnail dimensions while maintaining aspect ratio
+    // Instead of resizing to fixed dimensions with letterboxing,
+    // we'll crop the canvas to fit the target aspect ratio and then scale
+    const targetAspectRatio = THUMBNAIL_CONFIG.WIDTH / THUMBNAIL_CONFIG.HEIGHT;
+    const sourceAspectRatio = sourceCanvas.width / sourceCanvas.height;
+
+    let cropWidth = sourceCanvas.width;
+    let cropHeight = sourceCanvas.height;
+    let cropX = 0;
+    let cropY = 0;
+
+    // Crop to match target aspect ratio
+    if (sourceAspectRatio > targetAspectRatio) {
+      // Source is wider - crop width
+      cropWidth = sourceCanvas.height * targetAspectRatio;
+      cropX = (sourceCanvas.width - cropWidth) / 2;
+    } else if (sourceAspectRatio < targetAspectRatio) {
+      // Source is taller - crop height
+      cropHeight = sourceCanvas.width / targetAspectRatio;
+      cropY = (sourceCanvas.height - cropHeight) / 2;
+    }
+
+    // Create output canvas at target dimensions
     const resizedCanvas = document.createElement('canvas');
     resizedCanvas.width = THUMBNAIL_CONFIG.WIDTH;
     resizedCanvas.height = THUMBNAIL_CONFIG.HEIGHT;
@@ -165,25 +219,14 @@ async function captureElement(element: HTMLElement): Promise<string> {
       throw new Error('Could not get canvas context');
     }
 
-    // Calculate scaling to fit within thumbnail dimensions
-    const scale = Math.min(
-      THUMBNAIL_CONFIG.WIDTH / canvas.width,
-      THUMBNAIL_CONFIG.HEIGHT / canvas.height
+    // Draw the cropped and scaled image directly from the source canvas
+    ctx.drawImage(
+      sourceCanvas,
+      cropX, cropY, cropWidth, cropHeight,  // Source rectangle (cropped)
+      0, 0, THUMBNAIL_CONFIG.WIDTH, THUMBNAIL_CONFIG.HEIGHT  // Destination rectangle (full canvas)
     );
 
-    const scaledWidth = canvas.width * scale;
-    const scaledHeight = canvas.height * scale;
-
-    // Center the image
-    const x = (THUMBNAIL_CONFIG.WIDTH - scaledWidth) / 2;
-    const y = (THUMBNAIL_CONFIG.HEIGHT - scaledHeight) / 2;
-
-    // Fill background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, THUMBNAIL_CONFIG.WIDTH, THUMBNAIL_CONFIG.HEIGHT);
-
-    // Draw scaled image
-    ctx.drawImage(canvas, x, y, scaledWidth, scaledHeight);
+    console.log(`Captured and resized to ${THUMBNAIL_CONFIG.WIDTH}x${THUMBNAIL_CONFIG.HEIGHT}`);
 
     return resizedCanvas.toDataURL('image/png', THUMBNAIL_CONFIG.QUALITY);
   } catch (err) {
