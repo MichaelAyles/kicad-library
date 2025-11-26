@@ -35,15 +35,15 @@ export function Header() {
       <div className="container mx-auto px-4 py-4">
         {/* Top Row: Logo, Nav, User */}
         <div className="flex items-center justify-between gap-4">
-          <Link href="/" onClick={handleLogoClick} className="flex items-center gap-2 text-2xl font-bold green-gradient-text hover:opacity-80 transition-opacity flex-shrink-0">
+          <Link href="/" onClick={handleLogoClick} className="hover:opacity-80 transition-opacity flex-shrink-0">
             <Image
               src="/logo_green_transparent.png"
-              alt="CircuitSnips Logo"
-              width={32}
-              height={32}
-              className="w-8 h-8"
+              alt="CircuitSnips"
+              width={180}
+              height={40}
+              className="h-9 w-auto"
+              priority
             />
-            CircuitSnips
           </Link>
 
           {/* Desktop Nav */}
