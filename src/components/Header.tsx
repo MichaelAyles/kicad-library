@@ -39,9 +39,9 @@ export function Header() {
             <Image
               src="/logo_green_transparent.png"
               alt="CircuitSnips"
-              width={180}
-              height={40}
-              className="h-9 w-auto"
+              width={245}
+              height={80}
+              className="h-10 w-auto"
               priority
             />
           </Link>
