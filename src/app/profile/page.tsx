@@ -9,6 +9,7 @@ import { Footer } from '@/components/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
 import { isAdmin } from '@/lib/admin';
+import { toR2ThumbnailUrl } from '@/lib/thumbnail-url';
 import {
   User as UserIcon,
   Mail,
@@ -391,7 +392,7 @@ function ProfileContent() {
             ) : (
               <div className="space-y-4">
                 {circuits.map((circuit) => {
-                  const thumbnailUrl = theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url;
+                  const thumbnailUrl = toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url);
                   const timeAgo = getTimeAgo(circuit.created_at);
 
                   return (

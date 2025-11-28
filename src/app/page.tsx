@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getCircuits, type Circuit } from "@/lib/circuits";
+import { toR2ThumbnailUrl } from "@/lib/thumbnail-url";
 
 interface Stats {
   circuits: number;
@@ -207,8 +208,8 @@ export default function HomePage() {
           {!isLoading && topCircuits.length > 0 && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {topCircuits.map((circuit) => {
-                // Use theme-appropriate thumbnail
-                const thumbnailUrl = theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url;
+                // Use theme-appropriate thumbnail, transformed to R2 URL
+                const thumbnailUrl = toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url);
 
                 return (
                   <Link

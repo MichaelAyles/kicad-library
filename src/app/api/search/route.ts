@@ -17,18 +17,6 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const excludeImported = searchParams.get('excludeImported') === 'true';
 
-    // If excluding imported circuits, first get the importer user's ID
-    let importerUserId: string | null = null;
-    if (excludeImported) {
-      const { data: importerUser } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', 'circuitsnips-importer')
-        .single();
-
-      importerUserId = importerUser?.id || null;
-    }
-
     // Build base query
     let circuits: any[] = [];
 
@@ -44,7 +32,8 @@ export async function GET(request: NextRequest) {
         filter_category: category || null,
         filter_tag: tag || null,
         filter_license: license || null,
-        exclude_user_id: importerUserId,
+        exclude_user_id: null, // Deprecated - using exclude_imported instead
+        exclude_imported: excludeImported,
         result_limit: Math.min(limit, 100),
         result_offset: offset
       });
@@ -79,8 +68,8 @@ export async function GET(request: NextRequest) {
         if (category) fallbackQuery = fallbackQuery.eq('category', category);
         if (tag) fallbackQuery = fallbackQuery.contains('tags', [tag]);
         if (license) fallbackQuery = fallbackQuery.eq('license', license);
-        if (importerUserId && excludeImported) {
-          fallbackQuery = fallbackQuery.neq('user_id', importerUserId);
+        if (excludeImported) {
+          fallbackQuery = fallbackQuery.is('batch_import_id', null);
         }
 
         fallbackQuery = fallbackQuery.range(offset, offset + Math.min(limit, 100) - 1);
@@ -118,8 +107,8 @@ export async function GET(request: NextRequest) {
       if (category) supabaseQuery = supabaseQuery.eq('category', category);
       if (tag) supabaseQuery = supabaseQuery.contains('tags', [tag]);
       if (license) supabaseQuery = supabaseQuery.eq('license', license);
-      if (importerUserId && excludeImported) {
-        supabaseQuery = supabaseQuery.neq('user_id', importerUserId);
+      if (excludeImported) {
+        supabaseQuery = supabaseQuery.is('batch_import_id', null);
       }
 
       supabaseQuery = supabaseQuery.range(offset, offset + Math.min(limit, 100) - 1);

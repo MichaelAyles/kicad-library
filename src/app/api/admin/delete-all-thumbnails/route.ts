@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { createClient as createAnonClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/admin';
+
+// R2 client singleton
+function getR2Client() {
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+  });
+}
 
 // Increase timeout for large operations
 export const maxDuration = 60; // 60 seconds max (requires Vercel Pro)
@@ -164,69 +177,79 @@ export async function DELETE(request: NextRequest) {
 
     const circuits = allCircuits;
 
-    // Delete ALL thumbnail files for these circuits from storage
-    // Optimize by listing the entire user folder once instead of per-circuit
+    // Delete ALL thumbnail files for these circuits from R2
     let deletedFiles = 0;
     let failedFiles = 0;
 
-    const folderPath = `${importerUser.id}`;
-
     try {
-      console.log(`Listing all files in folder: ${folderPath}`);
+      const r2 = getR2Client();
+      const bucketName = process.env.R2_BUCKET_NAME!;
 
-      // List ALL files in the importer user's folder
-      const { data: fileList, error: listError } = await adminClient.storage
-        .from('thumbnails')
-        .list(folderPath, {
-          limit: 10000, // Increase limit to handle large number of files
-          sortBy: { column: 'name', order: 'asc' }
+      // Build set of circuit IDs for quick lookup
+      const circuitIdSet = new Set(circuits.map(c => c.id));
+
+      // List all thumbnail files in R2
+      console.log('Listing all thumbnail files in R2...');
+      let continuationToken: string | undefined;
+      const keysToDelete: string[] = [];
+
+      do {
+        const listCommand = new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: 'thumbnails/',
+          ContinuationToken: continuationToken,
+          MaxKeys: 1000,
         });
 
-      if (listError) {
-        console.error(`Error listing files:`, listError);
-        throw new Error(`Failed to list files: ${listError.message}`);
-      }
+        const listResult = await r2.send(listCommand);
 
-      if (fileList && fileList.length > 0) {
-        console.log(`Found ${fileList.length} total files in storage`);
-
-        // Build set of circuit IDs for quick lookup
-        const circuitIdSet = new Set(circuits.map(c => c.id));
-
-        // Filter to only files belonging to our circuits
-        const filesToDelete = fileList
-          .filter(file => {
-            // Extract circuit ID from filename (format: circuitId-v#-theme.png)
-            const match = file.name.match(/^([a-f0-9-]+)-v\d+-/);
-            return match && circuitIdSet.has(match[1]);
-          })
-          .map(file => `${folderPath}/${file.name}`);
-
-        console.log(`Deleting ${filesToDelete.length} thumbnail files...`);
-
-        if (filesToDelete.length > 0) {
-          // Delete in batches to avoid request size limits
-          const batchSize = 100;
-          for (let i = 0; i < filesToDelete.length; i += batchSize) {
-            const batch = filesToDelete.slice(i, i + batchSize);
-
-            const { error: deleteError } = await adminClient.storage
-              .from('thumbnails')
-              .remove(batch);
-
-            if (deleteError) {
-              console.error(`Error deleting batch ${i / batchSize + 1}:`, deleteError);
-              failedFiles += batch.length;
-            } else {
-              deletedFiles += batch.length;
+        if (listResult.Contents) {
+          for (const obj of listResult.Contents) {
+            if (!obj.Key) continue;
+            // Extract circuit ID from filename (format: thumbnails/circuitId-v#-theme.png)
+            const match = obj.Key.match(/^thumbnails\/([a-f0-9-]+)-v\d+-/);
+            if (match && circuitIdSet.has(match[1])) {
+              keysToDelete.push(obj.Key);
             }
           }
         }
-      } else {
-        console.log('No files found in storage');
+
+        continuationToken = listResult.IsTruncated ? listResult.NextContinuationToken : undefined;
+      } while (continuationToken);
+
+      console.log(`Found ${keysToDelete.length} thumbnail files to delete in R2`);
+
+      if (keysToDelete.length > 0) {
+        // Delete in batches of 1000 (R2/S3 limit)
+        const batchSize = 1000;
+        for (let i = 0; i < keysToDelete.length; i += batchSize) {
+          const batch = keysToDelete.slice(i, i + batchSize);
+
+          const deleteCommand = new DeleteObjectsCommand({
+            Bucket: bucketName,
+            Delete: {
+              Objects: batch.map(key => ({ Key: key })),
+              Quiet: true,
+            },
+          });
+
+          try {
+            const deleteResult = await r2.send(deleteCommand);
+            const errorsInBatch = deleteResult.Errors?.length || 0;
+            deletedFiles += batch.length - errorsInBatch;
+            failedFiles += errorsInBatch;
+
+            if (errorsInBatch > 0) {
+              console.error(`Errors in batch ${i / batchSize + 1}:`, deleteResult.Errors);
+            }
+          } catch (error) {
+            console.error(`Error deleting batch ${i / batchSize + 1}:`, error);
+            failedFiles += batch.length;
+          }
+        }
       }
     } catch (error) {
-      console.error('Error processing storage files:', error);
+      console.error('Error processing R2 files:', error);
       // Continue to database update even if file deletion fails
     }
 

@@ -12,6 +12,7 @@
     "import:test": "tsx scripts/export-and-import.ts --limit 10 --dry-run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.940.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.75.0",
     "@tailwindcss/typography": "^0.5.19",
