@@ -322,40 +322,10 @@ export default function EditCircuitPage() {
         throw new Error(`Failed to fetch circuit version: ${fetchError.message}`);
       }
 
-      const dbVersion = circuitData?.thumbnail_version || 0;
-
-      // Also check storage to find the highest version that actually exists
-      let storageVersion = 0;
-      try {
-        const { data: fileList } = await supabase.storage
-          .from('thumbnails')
-          .list(user.id, {
-            search: circuit.id, // Filter to this circuit's files
-          });
-
-        if (fileList && fileList.length > 0) {
-          // Extract version numbers from filenames like: {circuitId}-v{version}-{theme}.png
-          const versions = fileList
-            .map(file => {
-              const match = file.name.match(new RegExp(`${circuit.id}-v(\\d+)-`));
-              return match ? parseInt(match[1], 10) : 0;
-            })
-            .filter(v => v > 0);
-
-          if (versions.length > 0) {
-            storageVersion = Math.max(...versions);
-          }
-        }
-      } catch (storageError) {
-        console.warn('Could not check storage versions:', storageError);
-        // Continue with database version if storage check fails
-      }
-
-      // Use the highest version from either source
-      const currentVersion = Math.max(dbVersion, storageVersion);
+      const currentVersion = circuitData?.thumbnail_version || 0;
       const newVersion = currentVersion + 1;
 
-      console.log(`Version detection: DB=${dbVersion}, Storage=${storageVersion}, Using=${currentVersion}, Next=${newVersion}`);
+      console.log(`Version detection: DB version=${currentVersion}, Next=${newVersion}`);
 
       // Upload new thumbnails with incremented version
       const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', thumbnails.light, newVersion);

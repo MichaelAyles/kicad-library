@@ -9,6 +9,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SearchAutocomplete } from "@/components/SearchAutocomplete";
 import { searchCircuits, type SearchCircuit } from "@/lib/search";
+import { toR2ThumbnailUrl } from "@/lib/thumbnail-url";
 
 interface PopularTag {
   tag: string;
@@ -169,7 +170,7 @@ function SearchContent() {
                 >
                   <div className="aspect-video bg-muted relative overflow-hidden">
                     <img
-                      src={(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || '/placeholder-circuit.png'}
+                      src={toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || '/placeholder-circuit.png'}
                       alt={circuit.title}
                       className="w-full h-full object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
                     />

@@ -105,18 +105,6 @@ export async function getCircuits(
   excludeImported = false
 ): Promise<CircuitsResponse> {
   try {
-    // If excluding imported circuits, first get the importer user's ID
-    let importerUserId: string | null = null;
-    if (excludeImported) {
-      const { data: importerUser } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', 'circuitsnips-importer')
-        .single();
-
-      importerUserId = importerUser?.id || null;
-    }
-
     let query = supabase
       .from('circuits')
       .select(
@@ -128,9 +116,10 @@ export async function getCircuits(
       .limit(limit)
       .range(offset, offset + limit - 1);
 
-    // Exclude circuits from @circuitsnips-importer if requested
-    if (excludeImported && importerUserId) {
-      query = query.neq('user_id', importerUserId);
+    // Exclude bulk-imported circuits if requested (circuits with batch_import_id set)
+    if (excludeImported) {
+      console.log('[getCircuits] Filtering out bulk-imported circuits (batch_import_id IS NULL)');
+      query = query.is('batch_import_id', null);
     }
 
     // Apply sorting

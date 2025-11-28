@@ -4,14 +4,27 @@
  * POST /api/admin/regenerate-thumbnail
  *
  * Allows admins to regenerate thumbnails for circuits
- * Uses service role key to bypass RLS and upload to any user's storage folder
+ * Uploads to Cloudflare R2 storage
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createAnonClient } from '@supabase/supabase-js';
 import { isAdmin } from '@/lib/admin';
+
+// R2 client singleton
+function getR2Client() {
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+  });
+}
 
 // Force Node.js runtime for Buffer support
 export const runtime = 'nodejs';
@@ -166,19 +179,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check storage for actual highest version number
+    // Check R2 storage for actual highest version number
     let storageVersion = 0;
     try {
-      const { data: fileList } = await adminSupabase.storage
-        .from('thumbnails')
-        .list(userId, {
-          search: circuitId,
-        });
+      const r2 = getR2Client();
+      const listCommand = new ListObjectsV2Command({
+        Bucket: process.env.R2_BUCKET_NAME!,
+        Prefix: `thumbnails/${circuitId}-v`,
+      });
+      const listResult = await r2.send(listCommand);
 
-      if (fileList && fileList.length > 0) {
-        const versions = fileList
-          .map(file => {
-            const match = file.name.match(new RegExp(`${circuitId}-v(\\d+)-`));
+      if (listResult.Contents && listResult.Contents.length > 0) {
+        const versions = listResult.Contents
+          .map(obj => {
+            const match = obj.Key?.match(new RegExp(`${circuitId}-v(\\d+)-`));
             return match ? parseInt(match[1], 10) : 0;
           })
           .filter(v => v > 0);
@@ -188,7 +202,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (storageError) {
-      console.warn('Could not check storage versions:', storageError);
+      console.warn('Could not check R2 storage versions:', storageError);
       // Continue with database version if storage check fails
     }
 
@@ -240,32 +254,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Convert base64 to buffer for upload (with versioning)
+    // Convert base64 to buffer for upload to R2 (with versioning)
     const uploadThumbnail = async (base64Data: string, theme: 'light' | 'dark') => {
       // Remove data URL prefix if present
       const base64String = base64Data.replace(/^data:image\/\w+;base64,/, '');
       const buffer = Buffer.from(base64String, 'base64');
 
-      const filePath = `${userId}/${circuitId}-v${newVersion}-${theme}.png`;
+      const key = `thumbnails/${circuitId}-v${newVersion}-${theme}.png`;
 
-      // Upload using admin client (bypasses RLS)
-      // Use upsert: true to overwrite existing files if they exist
-      const { data, error } = await adminSupabase.storage
-        .from('thumbnails')
-        .upload(filePath, buffer, {
-          contentType: 'image/png',
-          upsert: true, // Overwrite if exists (useful after cleanup)
-        });
+      // Upload to R2
+      const r2 = getR2Client();
+      const putCommand = new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME!,
+        Key: key,
+        Body: buffer,
+        ContentType: 'image/png',
+      });
 
-      if (error) {
-        throw new Error(`[STORAGE] Failed to upload ${theme} thumbnail: ${error.message}`);
+      try {
+        await r2.send(putCommand);
+      } catch (error: any) {
+        throw new Error(`[STORAGE] Failed to upload ${theme} thumbnail to R2: ${error.message}`);
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = adminSupabase.storage
-        .from('thumbnails')
-        .getPublicUrl(filePath);
-
+      // Return public URL
+      const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
       return publicUrl;
     };
 

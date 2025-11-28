@@ -10,6 +10,7 @@ import { Footer } from '@/components/Footer';
 import { SearchAutocomplete } from '@/components/SearchAutocomplete';
 import { getCircuits, type Circuit } from '@/lib/circuits';
 import { searchCircuits, type SearchCircuit } from '@/lib/search';
+import { toR2ThumbnailUrl } from '@/lib/thumbnail-url';
 
 const CIRCUITS_PER_PAGE = 50;
 
@@ -334,8 +335,8 @@ function BrowsePageContent() {
           {!isLoading && circuits.length > 0 && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {circuits.map((circuit) => {
-                // Use theme-appropriate thumbnail
-                const thumbnailUrl = theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url;
+                // Use theme-appropriate thumbnail, transformed to R2 URL
+                const thumbnailUrl = toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url);
 
                 return (
                   <Link
