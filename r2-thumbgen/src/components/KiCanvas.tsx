@@ -26,11 +26,33 @@ interface KiCanvasProps {
   height?: string | number;
   /** Width of the viewer */
   width?: string | number;
+  /** Delay before rendering (to stagger multiple instances) */
+  delay?: number;
+}
+
+// Global render queue to prevent simultaneous KiCanvas renders
+let renderQueue: (() => void)[] = [];
+let isProcessing = false;
+
+function processQueue() {
+  if (isProcessing || renderQueue.length === 0) return;
+  isProcessing = true;
+
+  const next = renderQueue.shift();
+  if (next) {
+    next();
+    // Wait before processing next item
+    setTimeout(() => {
+      isProcessing = false;
+      processQueue();
+    }, 300);
+  }
 }
 
 /**
  * KiCanvas viewer component for R2 thumbgen
  * Uses the MichaelAyles fork which has proper theme attribute support
+ * Uses a global queue to prevent simultaneous renders which cause setTransform errors
  */
 export function KiCanvas({
   src,
@@ -38,32 +60,57 @@ export function KiCanvas({
   theme = 'kicad',
   height = '100%',
   width = '100%',
+  delay = 0,
 }: KiCanvasProps) {
-  const [mounted, setMounted] = useState(false);
+  const [ready, setReady] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Prevent hydration mismatch
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    setReady(false);
 
-  if (!mounted) {
-    return (
-      <div className="bg-gray-100 animate-pulse" style={{ height, width }} />
-    );
-  }
+    const queueRender = () => {
+      renderQueue.push(() => {
+        setReady(true);
+      });
+      processQueue();
+    };
 
-  // The MichaelAyles fork properly handles the theme attribute
-  // and propagates it to child schematic_app/board_app elements
+    // Add to queue with optional delay
+    const timer = setTimeout(queueRender, delay);
+
+    return () => {
+      clearTimeout(timer);
+      // Remove from queue if component unmounts
+      renderQueue = renderQueue.filter(fn => fn !== queueRender);
+    };
+  }, [src, delay]);
+
   return (
-    <kicanvas-embed
-      src={src}
-      controls={controls}
-      theme={theme}
+    <div
+      ref={containerRef}
       style={{
         width,
         height,
-        display: 'block',
+        minWidth: typeof width === 'number' ? width : undefined,
+        minHeight: typeof height === 'number' ? height : undefined,
       }}
-    />
+    >
+      {ready ? (
+        <kicanvas-embed
+          src={src}
+          controls={controls}
+          theme={theme}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+          }}
+        />
+      ) : (
+        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+    </div>
   );
 }

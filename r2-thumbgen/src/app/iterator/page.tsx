@@ -1,212 +1,445 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { CircuitWithUser, fetchAllCircuits, fetchCircuitById, CircuitDetail } from '@/lib/supabase';
 import { KiCanvas } from '@/components/KiCanvas';
 import { captureBothThumbnails, CapturedThumbnails } from '@/lib/thumbnail';
 
+const KICANVAS_HEIGHT = '400px';
+
+interface BenchmarkResult {
+  circuitId: string;
+  title: string;
+  light: string | null;
+  dark: string | null;
+  time: number;
+}
+
+interface UploadResult {
+  circuitId: string;
+  title: string;
+  success: boolean;
+  skipped?: boolean;
+  error?: string;
+  urls?: { light?: string; dark?: string };
+}
+
+interface R2Status {
+  circuitId: string;
+  hasR2Thumbnails: boolean;
+  light: { exists: boolean; url?: string; size?: number };
+  dark: { exists: boolean; url?: string; size?: number };
+}
+
 export default function CircuitIterator() {
   const [circuits, setCircuits] = useState<CircuitWithUser[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [currentCircuit, setCurrentCircuit] = useState<CircuitDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Current circuit detail
+  const [currentDetail, setCurrentDetail] = useState<CircuitDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  // R2 status - now using a Set for fast lookups
+  const [completeCircuitIds, setCompleteCircuitIds] = useState<Set<string>>(new Set());
+  const [r2ListLoading, setR2ListLoading] = useState(true);
+  const [currentR2Status, setCurrentR2Status] = useState<R2Status | null>(null);
+  const [r2Checking, setR2Checking] = useState(false);
+
+  // Capture state
+  const [captured, setCaptured] = useState<CapturedThumbnails | null>(null);
   const [capturing, setCapturing] = useState(false);
-  const [capturedThumbnails, setCapturedThumbnails] = useState<CapturedThumbnails | null>(null);
 
   // Benchmark state
-  const [benchmarking, setBenchmarking] = useState(false);
-  const [benchmarkResults, setBenchmarkResults] = useState<number[]>([]);
-  const [benchmarkCount, setBenchmarkCount] = useState(5);
-  const [benchmarkThumbnails, setBenchmarkThumbnails] = useState<Array<{
-    circuitId: string;
-    title: string;
-    light: string | null;
-    dark: string | null;
-    time: number;
-  }>>([]);
+  const [benchRunning, setBenchRunning] = useState(false);
+  const [benchProgress, setBenchProgress] = useState(0);
+  const [benchTotal, setBenchTotal] = useState(0);
+  const [benchResults, setBenchResults] = useState<BenchmarkResult[]>([]);
 
-  // Refs for KiCanvas containers
-  const lightCanvasRef = useRef<HTMLDivElement>(null);
-  const darkCanvasRef = useRef<HTMLDivElement>(null);
+  // Upload state
+  const [uploadRunning, setUploadRunning] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
+  const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
+  const [skipExisting, setSkipExisting] = useState(true);
 
-  // Load all circuits on mount
+  // Stop control
+  const stopRef = useRef(false);
+
+  // Check R2 for a single circuit
+  const checkR2Status = useCallback(async (circuitId: string): Promise<R2Status | null> => {
+    try {
+      const response = await fetch(`/api/check-r2-thumbnail?circuitId=${circuitId}`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (err) {
+      console.error('Failed to check R2 status:', err);
+      return null;
+    }
+  }, []);
+
+  // Load all circuits and R2 status on mount
   useEffect(() => {
-    async function loadCircuits() {
+    async function loadData() {
       try {
         setLoading(true);
-        const allCircuits = await fetchAllCircuits();
+        setR2ListLoading(true);
+
+        // Load circuits and R2 list in parallel
+        const [allCircuits, r2Response] = await Promise.all([
+          fetchAllCircuits(),
+          fetch('/api/list-r2-thumbnails').then((r) => r.json()),
+        ]);
+
         setCircuits(allCircuits);
-        if (allCircuits.length > 0) {
-          // Load first circuit detail
-          const detail = await fetchCircuitById(allCircuits[0].id);
-          setCurrentCircuit(detail);
+
+        if (r2Response.completeCircuitIds) {
+          setCompleteCircuitIds(new Set(r2Response.completeCircuitIds));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load circuits');
       } finally {
         setLoading(false);
+        setR2ListLoading(false);
       }
     }
-
-    loadCircuits();
+    loadData();
   }, []);
 
-  // Load circuit detail when index changes
+  // Refresh R2 list
+  const refreshR2List = useCallback(async () => {
+    setR2ListLoading(true);
+    try {
+      const response = await fetch('/api/list-r2-thumbnails');
+      const data = await response.json();
+      if (data.completeCircuitIds) {
+        setCompleteCircuitIds(new Set(data.completeCircuitIds));
+      }
+    } catch (err) {
+      console.error('Failed to refresh R2 list:', err);
+    } finally {
+      setR2ListLoading(false);
+    }
+  }, []);
+
+  // Load current circuit detail and R2 status when index changes
   useEffect(() => {
     if (circuits.length === 0) return;
 
-    async function loadCircuitDetail() {
+    const circuit = circuits[currentIndex];
+    if (!circuit) return;
+
+    async function loadDetail() {
+      setDetailLoading(true);
+      setCaptured(null);
+      setCurrentR2Status(null);
       try {
-        const circuit = circuits[currentIndex];
         const detail = await fetchCircuitById(circuit.id);
-        setCurrentCircuit(detail);
-        // Clear captured thumbnails when switching circuits
-        setCapturedThumbnails(null);
+        setCurrentDetail(detail);
       } catch (err) {
         console.error('Failed to load circuit detail:', err);
+        setCurrentDetail(null);
+      } finally {
+        setDetailLoading(false);
       }
     }
 
-    loadCircuitDetail();
-  }, [currentIndex, circuits]);
+    async function loadR2Status() {
+      setR2Checking(true);
+      try {
+        const status = await checkR2Status(circuit.id);
+        if (status) {
+          setCurrentR2Status(status);
+        }
+      } finally {
+        setR2Checking(false);
+      }
+    }
 
-  // Capture thumbnails handler - returns timing in ms
-  const handleCapture = async (): Promise<number> => {
-    if (capturing) return 0;
+    loadDetail();
+    loadR2Status();
+  }, [currentIndex, circuits, checkR2Status]);
 
-    const startTime = performance.now();
+  // Check if circuit has R2 thumbnails (instant lookup from Set)
+  const hasR2Thumbnails = useCallback(
+    (circuitId: string) => {
+      return completeCircuitIds.has(circuitId);
+    },
+    [completeCircuitIds]
+  );
+
+  // Find next circuit without R2 thumbnails (instant, no API calls)
+  const findNextWithoutR2Thumbs = useCallback(
+    (startIndex: number) => {
+      for (let i = startIndex; i < circuits.length; i++) {
+        if (!completeCircuitIds.has(circuits[i].id)) {
+          return i;
+        }
+      }
+      return -1;
+    },
+    [circuits, completeCircuitIds]
+  );
+
+  // Skip to next without R2 thumbs
+  const skipToNextWithoutR2Thumbs = useCallback(() => {
+    const nextIndex = findNextWithoutR2Thumbs(currentIndex + 1);
+    if (nextIndex >= 0) {
+      setCurrentIndex(nextIndex);
+    }
+  }, [currentIndex, findNextWithoutR2Thumbs]);
+
+  // Capture current circuit
+  const captureCurrentCircuit = useCallback(async (): Promise<CapturedThumbnails | null> => {
+    if (!currentDetail || capturing) return null;
+
     setCapturing(true);
-    setCapturedThumbnails(null);
-
     try {
-      // Wait a moment for KiCanvas to be fully rendered
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const thumbnails = await captureBothThumbnails(
-        lightCanvasRef.current,
-        darkCanvasRef.current
-      );
+      const lightContainer = document.querySelector('[data-capture-light]') as HTMLDivElement;
+      const darkContainer = document.querySelector('[data-capture-dark]') as HTMLDivElement;
 
-      setCapturedThumbnails(thumbnails);
-      const elapsed = performance.now() - startTime;
-      console.log(`[Iterator] Capture complete in ${elapsed.toFixed(0)}ms`);
-      return elapsed;
+      if (lightContainer && darkContainer) {
+        const result = await captureBothThumbnails(lightContainer, darkContainer);
+        setCaptured(result);
+        return result;
+      }
     } catch (err) {
-      console.error('[Iterator] Capture failed:', err);
-      return 0;
+      console.error('Capture failed:', err);
     } finally {
       setCapturing(false);
     }
-  };
+    return null;
+  }, [currentDetail, capturing]);
 
-  // Benchmark handler - captures N circuits and calculates average time
-  const handleBenchmark = async () => {
-    if (benchmarking || circuits.length === 0) return;
+  // Upload thumbnails to R2
+  const uploadThumbnails = useCallback(
+    async (
+      circuitId: string,
+      thumbnails: CapturedThumbnails
+    ): Promise<{ success: boolean; urls?: { light?: string; dark?: string }; error?: string }> => {
+      try {
+        const response = await fetch('/api/upload-thumbnail', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            circuitId,
+            lightDataUrl: thumbnails.light,
+            darkDataUrl: thumbnails.dark,
+          }),
+        });
 
-    setBenchmarking(true);
-    setBenchmarkResults([]);
-    setBenchmarkThumbnails([]);
-    const results: number[] = [];
-    const thumbs: typeof benchmarkThumbnails = [];
-    const startIndex = currentIndex;
+        const data = await response.json();
 
-    for (let i = 0; i < benchmarkCount && (startIndex + i) < circuits.length; i++) {
-      // Navigate to next circuit if not first
-      if (i > 0) {
-        setCurrentIndex(startIndex + i);
-        // Wait for circuit to load and KiCanvas to render
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } else {
-        // First one - just wait for render
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (!response.ok) {
+          return { success: false, error: data.error };
+        }
+
+        return { success: true, urls: data.urls };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Upload failed' };
       }
+    },
+    []
+  );
 
-      // Capture and measure
-      const startTime = performance.now();
-      setCapturing(true);
-      setCapturedThumbnails(null);
+  // Verify upload by checking R2 and update the set
+  const verifyUpload = useCallback(
+    async (circuitId: string) => {
+      const status = await checkR2Status(circuitId);
+      if (status) {
+        setCurrentR2Status(status);
+        // Add to the complete set if both exist
+        if (status.hasR2Thumbnails) {
+          setCompleteCircuitIds((prev) => new Set(Array.from(prev).concat(circuitId)));
+        }
+      }
+      return status;
+    },
+    [checkR2Status]
+  );
+
+  // Capture and upload single circuit
+  const captureAndUpload = useCallback(async () => {
+    if (!currentDetail) return;
+
+    const thumbnails = await captureCurrentCircuit();
+    if (!thumbnails) return;
+
+    const result = await uploadThumbnails(currentDetail.id, thumbnails);
+
+    // Verify the upload
+    if (result.success) {
+      await verifyUpload(currentDetail.id);
+    }
+
+    setUploadResults((prev) => [
+      ...prev,
+      {
+        circuitId: currentDetail.id,
+        title: circuits[currentIndex].title,
+        success: result.success,
+        error: result.error,
+        urls: result.urls,
+      },
+    ]);
+  }, [currentDetail, captureCurrentCircuit, uploadThumbnails, verifyUpload, circuits, currentIndex]);
+
+  // Stop running operation
+  const stopOperation = useCallback(() => {
+    stopRef.current = true;
+  }, []);
+
+  // Benchmark: capture multiple circuits (no upload)
+  const runBench = async (count: number) => {
+    if (benchRunning || circuits.length === 0) return;
+
+    stopRef.current = false;
+    setBenchRunning(true);
+    setBenchProgress(0);
+    setBenchTotal(count);
+    setBenchResults([]);
+
+    const results: BenchmarkResult[] = [];
+    const startIndex = currentIndex;
+    const endIndex = Math.min(startIndex + count, circuits.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      if (stopRef.current) break;
+
+      setCurrentIndex(i);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      const captureStart = performance.now();
 
       try {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const captured = await captureBothThumbnails(
-          lightCanvasRef.current,
-          darkCanvasRef.current
-        );
-        const elapsed = performance.now() - startTime;
+        const lightContainer = document.querySelector('[data-capture-light]') as HTMLDivElement;
+        const darkContainer = document.querySelector('[data-capture-dark]') as HTMLDivElement;
 
-        setCapturedThumbnails(captured);
-        results.push(elapsed);
-        setBenchmarkResults([...results]);
+        if (lightContainer && darkContainer) {
+          const capturedResult = await captureBothThumbnails(lightContainer, darkContainer);
+          const captureTime = performance.now() - captureStart;
 
-        // Store thumbnail for gallery
-        const circuit = circuits[startIndex + i];
-        thumbs.push({
+          results.push({
+            circuitId: circuits[i].id,
+            title: circuits[i].title,
+            light: capturedResult.light,
+            dark: capturedResult.dark,
+            time: captureTime,
+          });
+
+          setBenchProgress(results.length);
+          setBenchResults([...results]);
+        }
+      } catch (err) {
+        console.error(`Bench capture failed for ${circuits[i].title}:`, err);
+      }
+    }
+
+    setBenchRunning(false);
+  };
+
+  // Capture and upload multiple circuits
+  const runCaptureAndUpload = async (count: number | 'all') => {
+    if (uploadRunning || circuits.length === 0) return;
+
+    stopRef.current = false;
+    setUploadRunning(true);
+    setUploadProgress(0);
+    setUploadResults([]);
+
+    const results: UploadResult[] = [];
+    let processed = 0;
+    const totalToProcess = count === 'all' ? circuits.length - currentIndex : count;
+    setUploadTotal(totalToProcess);
+
+    let i = currentIndex;
+
+    while (processed < totalToProcess && i < circuits.length) {
+      if (stopRef.current) break;
+
+      const circuit = circuits[i];
+
+      // Skip if has R2 thumbnails and skipExisting is true
+      if (skipExisting && hasR2Thumbnails(circuit.id)) {
+        results.push({
           circuitId: circuit.id,
           title: circuit.title,
-          light: captured.light,
-          dark: captured.dark,
-          time: elapsed,
+          success: true,
+          skipped: true,
         });
-        setBenchmarkThumbnails([...thumbs]);
+        i++;
+        processed++;
+        setUploadProgress(processed);
+        setUploadResults([...results]);
+        continue;
+      }
 
-        console.log(`[Benchmark ${i + 1}/${benchmarkCount}] ${circuit.title}: ${elapsed.toFixed(0)}ms`);
+      setCurrentIndex(i);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      try {
+        const lightContainer = document.querySelector('[data-capture-light]') as HTMLDivElement;
+        const darkContainer = document.querySelector('[data-capture-dark]') as HTMLDivElement;
+
+        if (lightContainer && darkContainer) {
+          const thumbnails = await captureBothThumbnails(lightContainer, darkContainer);
+          setCaptured(thumbnails);
+
+          const uploadResult = await uploadThumbnails(circuit.id, thumbnails);
+
+          // Verify upload and update set
+          if (uploadResult.success) {
+            const status = await checkR2Status(circuit.id);
+            if (status) {
+              setCurrentR2Status(status);
+              if (status.hasR2Thumbnails) {
+                setCompleteCircuitIds((prev) => new Set(Array.from(prev).concat(circuit.id)));
+              }
+            }
+          }
+
+          results.push({
+            circuitId: circuit.id,
+            title: circuit.title,
+            success: uploadResult.success,
+            error: uploadResult.error,
+            urls: uploadResult.urls,
+          });
+        }
       } catch (err) {
-        console.error('[Benchmark] Capture failed:', err);
-      } finally {
-        setCapturing(false);
+        console.error(`Upload failed for ${circuit.title}:`, err);
+        results.push({
+          circuitId: circuit.id,
+          title: circuit.title,
+          success: false,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
       }
+
+      i++;
+      processed++;
+      setUploadProgress(processed);
+      setUploadResults([...results]);
     }
 
-    setBenchmarking(false);
-
-    // Calculate and log summary
-    if (results.length > 0) {
-      const avg = results.reduce((a, b) => a + b, 0) / results.length;
-      const totalCircuits = 4298;
-      const estimatedTotalMs = avg * totalCircuits;
-      const estimatedTotalMinutes = estimatedTotalMs / 1000 / 60;
-      const estimatedTotalHours = estimatedTotalMinutes / 60;
-
-      console.log('=== BENCHMARK RESULTS ===');
-      console.log(`Samples: ${results.length}`);
-      console.log(`Average per circuit: ${avg.toFixed(0)}ms`);
-      console.log(`Total circuits: ${totalCircuits}`);
-      console.log(`Estimated total time: ${estimatedTotalMinutes.toFixed(1)} minutes (${estimatedTotalHours.toFixed(2)} hours)`);
-    }
+    setUploadRunning(false);
   };
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') {
-        goToPrevious();
-      } else if (e.key === 'ArrowRight') {
-        goToNext();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, circuits.length]);
-
-  const goToNext = () => {
-    if (currentIndex < circuits.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
-  };
-
-  const goToPrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
+  // Navigation
   const goToIndex = (index: number) => {
     if (index >= 0 && index < circuits.length) {
       setCurrentIndex(index);
     }
   };
+
+  // Count circuits with/without R2 thumbnails (instant from Set)
+  const circuitsWithR2Thumbs = completeCircuitIds.size;
+  const circuitsWithoutR2Thumbs = circuits.length - circuitsWithR2Thumbs;
+
+  const isRunning = benchRunning || uploadRunning;
 
   if (loading) {
     return (
@@ -227,335 +460,418 @@ export default function CircuitIterator() {
     );
   }
 
-  if (circuits.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div>No circuits found</div>
-      </div>
-    );
-  }
-
-  if (!currentCircuit) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div>Loading circuit...</div>
-      </div>
-    );
-  }
-
-  // Create API URL for the schematic
-  // KiCanvas needs the URL to end with .kicad_sch extension
-  // Add cache-busting parameter to force fresh request
-  const schematicUrl = `/api/schematic/${currentCircuit.id}/${currentCircuit.slug}.kicad_sch?v=${Date.now()}`;
+  const currentCircuit = circuits[currentIndex];
+  const schematicUrl = currentDetail
+    ? `/api/schematic/${currentDetail.id}/${currentDetail.slug}.kicad_sch?v=${currentIndex}`
+    : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl font-bold">{currentCircuit.title}</h1>
-            <div className="flex gap-2">
-              <a
-                href={`https://circuitsnips.com/circuit/${currentCircuit.slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded transition-colors flex items-center gap-2"
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">Circuit Iterator</h1>
+            <div className="flex items-center gap-4">
+              <div className="text-sm">
+                <span className="text-gray-600">R2: </span>
+                <span className="font-medium text-green-600">{circuitsWithR2Thumbs} complete</span>
+                <span className="text-gray-400"> / </span>
+                <span className="font-medium text-red-600">{circuitsWithoutR2Thumbs} need thumbs</span>
+              </div>
+              <button
+                onClick={refreshR2List}
+                disabled={isRunning || r2ListLoading}
+                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300"
               >
-                View on CircuitSnips ↗
-              </a>
-              <a
-                href="/"
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded transition-colors"
-              >
-                ← Back to List
+                {r2ListLoading ? 'Loading...' : 'Refresh R2'}
+              </button>
+              <a href="/" className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">
+                ← Back
               </a>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-600">
-            <span>Slug: <code className="bg-gray-100 px-2 py-0.5 rounded">{currentCircuit.slug}</code></span>
-            <span>•</span>
-            <span>User: {currentCircuit.profile.username}</span>
-            <span>•</span>
-            <span>Created: {new Date(currentCircuit.created_at).toLocaleDateString()}</span>
-          </div>
-        </div>
-      </div>
 
-      {/* Navigation */}
-      <div className="max-w-7xl mx-auto mb-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between">
+          {/* Navigation */}
+          <div className="flex items-center justify-between gap-4 mb-4">
             <button
-              onClick={goToPrevious}
-              disabled={currentIndex === 0}
-              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+              onClick={() => goToIndex(currentIndex - 1)}
+              disabled={currentIndex === 0 || isRunning}
+              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 hover:bg-blue-600"
             >
               ← Previous
             </button>
 
             <div className="flex items-center gap-4">
-              <span className="text-sm">
+              <span className="font-medium">
                 Circuit {currentIndex + 1} of {circuits.length}
               </span>
               <input
                 type="number"
-                min="1"
+                min={1}
                 max={circuits.length}
                 value={currentIndex + 1}
                 onChange={(e) => goToIndex(parseInt(e.target.value) - 1)}
-                className="w-20 px-2 py-1 border rounded text-center"
+                disabled={isRunning}
+                className="w-24 px-2 py-1 border rounded text-center"
               />
               <button
-                onClick={handleCapture}
-                disabled={capturing || benchmarking}
-                className="px-4 py-2 bg-green-500 text-white rounded disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-green-600 transition-colors font-medium"
+                onClick={skipToNextWithoutR2Thumbs}
+                disabled={isRunning}
+                className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-gray-300"
               >
-                {capturing ? 'Capturing...' : 'Capture for R2'}
-              </button>
-              <button
-                onClick={handleBenchmark}
-                disabled={capturing || benchmarking}
-                className="px-4 py-2 bg-purple-500 text-white rounded disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-purple-600 transition-colors font-medium"
-              >
-                {benchmarking ? `Benchmarking (${benchmarkResults.length}/${benchmarkCount})...` : `Benchmark ${benchmarkCount}`}
+                Skip to Missing →
               </button>
             </div>
 
             <button
-              onClick={goToNext}
-              disabled={currentIndex === circuits.length - 1}
-              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+              onClick={() => goToIndex(currentIndex + 1)}
+              disabled={currentIndex >= circuits.length - 1 || isRunning}
+              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 hover:bg-blue-600"
             >
               Next →
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* Main Content - Schematics and Thumbnails */}
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 gap-4">
-          {/* Light Mode Column */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold bg-white rounded-lg shadow p-3">Light Mode</h2>
-
-            {/* KiCanvas Light */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <h3 className="font-medium mb-2">KiCanvas Preview (kicad theme)</h3>
-              <div ref={lightCanvasRef} className="border-2 border-gray-200 rounded">
-                <KiCanvas
-                  key={`light-${currentCircuit.id}`}
-                  src={schematicUrl}
-                  theme="kicad"
-                  controls="full"
-                  height="400px"
-                />
-              </div>
-            </div>
-
-            {/* Existing Thumbnail Light */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <h3 className="font-medium mb-2">Existing Thumbnail (Supabase)</h3>
-              {currentCircuit.thumbnail_light_url ? (
-                <img
-                  src={currentCircuit.thumbnail_light_url}
-                  alt="Light thumbnail"
-                  className="w-full border-2 border-gray-200 rounded"
-                />
-              ) : (
-                <div className="w-full h-64 bg-gray-100 border-2 border-gray-200 rounded flex items-center justify-center text-gray-500">
-                  No thumbnail
-                </div>
-              )}
-            </div>
-
-            {/* R2 Captured Thumbnail Light */}
-            <div className="bg-white rounded-lg shadow p-4 border-2 border-green-300">
-              <h3 className="font-medium mb-2 text-green-700">R2 Thumbnail (Captured)</h3>
-              {capturedThumbnails?.light ? (
-                <img
-                  src={capturedThumbnails.light}
-                  alt="R2 Light thumbnail"
-                  className="w-full border-2 border-green-200 rounded"
-                />
-              ) : (
-                <div className="w-full h-64 bg-green-50 border-2 border-green-200 rounded flex items-center justify-center text-green-500">
-                  {capturing ? 'Capturing...' : 'Click "Capture for R2" to generate'}
-                </div>
-              )}
-            </div>
+          {/* Options */}
+          <div className="flex items-center gap-4 mb-4 pb-4 border-b">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={skipExisting}
+                onChange={(e) => setSkipExisting(e.target.checked)}
+                disabled={isRunning}
+                className="w-4 h-4"
+              />
+              <span className="text-sm">Skip circuits that already have R2 thumbnails</span>
+            </label>
           </div>
 
-          {/* Dark Mode Column */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold bg-gray-800 text-white rounded-lg shadow p-3">Dark Mode</h2>
-
-            {/* KiCanvas Dark */}
-            <div className="bg-gray-800 rounded-lg shadow p-4">
-              <h3 className="font-medium mb-2 text-white">KiCanvas Preview (witchhazel theme)</h3>
-              <div ref={darkCanvasRef} className="border-2 border-gray-600 rounded">
-                <KiCanvas
-                  key={`dark-${currentCircuit.id}`}
-                  src={schematicUrl}
-                  theme="witchhazel"
-                  controls="full"
-                  height="400px"
-                />
-              </div>
-            </div>
-
-            {/* Existing Thumbnail Dark */}
-            <div className="bg-gray-800 rounded-lg shadow p-4">
-              <h3 className="font-medium mb-2 text-white">Existing Thumbnail (Supabase)</h3>
-              {currentCircuit.thumbnail_dark_url ? (
-                <img
-                  src={currentCircuit.thumbnail_dark_url}
-                  alt="Dark thumbnail"
-                  className="w-full border-2 border-gray-600 rounded"
-                />
-              ) : (
-                <div className="w-full h-64 bg-gray-900 border-2 border-gray-600 rounded flex items-center justify-center text-gray-500">
-                  No thumbnail
-                </div>
-              )}
-            </div>
-
-            {/* R2 Captured Thumbnail Dark */}
-            <div className="bg-gray-800 rounded-lg shadow p-4 border-2 border-green-500">
-              <h3 className="font-medium mb-2 text-green-400">R2 Thumbnail (Captured)</h3>
-              {capturedThumbnails?.dark ? (
-                <img
-                  src={capturedThumbnails.dark}
-                  alt="R2 Dark thumbnail"
-                  className="w-full border-2 border-green-600 rounded"
-                />
-              ) : (
-                <div className="w-full h-64 bg-gray-900 border-2 border-green-700 rounded flex items-center justify-center text-green-500">
-                  {capturing ? 'Capturing...' : 'Click "Capture for R2" to generate'}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* S-Expression Preview */}
-      <div className="max-w-7xl mx-auto mt-4">
-        <div className="bg-white rounded-lg shadow">
-          <details className="group">
-            <summary className="cursor-pointer p-4 hover:bg-gray-50 transition-colors flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-lg">S-Expression Preview</h3>
-                <p className="text-sm text-gray-600">View the raw KiCad schematic data</p>
-              </div>
-              <svg
-                className="w-5 h-5 transform group-open:rotate-180 transition-transform"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600 w-24">Capture:</span>
+              <button
+                onClick={captureCurrentCircuit}
+                disabled={capturing || !currentDetail || isRunning}
+                className="px-4 py-2 bg-green-500 text-white rounded disabled:bg-gray-400 hover:bg-green-600"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </summary>
-            <div className="border-t p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600">
-                  Length: {currentCircuit.raw_sexpr.length.toLocaleString()} characters
-                </span>
+                {capturing ? 'Capturing...' : 'Capture 1'}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600 w-24">Upload:</span>
+              <button
+                onClick={captureAndUpload}
+                disabled={capturing || !currentDetail || isRunning}
+                className="px-4 py-2 bg-indigo-500 text-white rounded disabled:bg-gray-400 hover:bg-indigo-600"
+              >
+                Capture & Upload 1
+              </button>
+              <button
+                onClick={() => runCaptureAndUpload(10)}
+                disabled={isRunning}
+                className="px-4 py-2 bg-indigo-600 text-white rounded disabled:bg-gray-400 hover:bg-indigo-700"
+              >
+                {uploadRunning && uploadTotal === 10 ? `${uploadProgress}/${uploadTotal}...` : 'Capture & Upload 10'}
+              </button>
+              <button
+                onClick={() => runCaptureAndUpload('all')}
+                disabled={isRunning}
+                className="px-4 py-2 bg-indigo-700 text-white rounded disabled:bg-gray-400 hover:bg-indigo-800"
+              >
+                {uploadRunning && uploadTotal > 10 ? `${uploadProgress}/${uploadTotal}...` : 'Capture & Upload All'}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600 w-24">Benchmark:</span>
+              <button
+                onClick={() => runBench(10)}
+                disabled={isRunning}
+                className="px-4 py-2 bg-purple-500 text-white rounded disabled:bg-gray-400 hover:bg-purple-600"
+              >
+                {benchRunning && benchTotal === 10 ? `${benchProgress}/${benchTotal}...` : 'Bench 10'}
+              </button>
+              <button
+                onClick={() => runBench(50)}
+                disabled={isRunning}
+                className="px-4 py-2 bg-purple-600 text-white rounded disabled:bg-gray-400 hover:bg-purple-700"
+              >
+                {benchRunning && benchTotal === 50 ? `${benchProgress}/${benchTotal}...` : 'Bench 50'}
+              </button>
+            </div>
+
+            {isRunning && (
+              <div className="flex items-center gap-3 pt-2">
+                <span className="text-sm text-gray-600 w-24"></span>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(currentCircuit.raw_sexpr);
-                    alert('S-expression copied to clipboard!');
-                  }}
-                  className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                  onClick={stopOperation}
+                  className="px-6 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-medium"
                 >
-                  Copy to Clipboard
+                  STOP
                 </button>
-              </div>
-              <pre className="text-xs font-mono bg-gray-900 text-green-400 p-4 rounded overflow-x-auto max-h-96 overflow-y-auto whitespace-pre">
-                {currentCircuit.raw_sexpr}
-              </pre>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      {/* Keyboard shortcuts hint */}
-      <div className="max-w-7xl mx-auto mt-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
-          <strong>Tip:</strong> Use arrow keys to navigate (← Previous, → Next)
-        </div>
-      </div>
-
-      {/* Benchmark Results */}
-      {benchmarkResults.length > 0 && (
-        <div className="max-w-7xl mx-auto mt-4">
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <h3 className="font-semibold text-purple-900 mb-2">Benchmark Results</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-              <div>
-                <p className="text-purple-700">Samples: <strong>{benchmarkResults.length}</strong></p>
-                <p className="text-purple-700">
-                  Average per circuit: <strong>{(benchmarkResults.reduce((a, b) => a + b, 0) / benchmarkResults.length).toFixed(0)}ms</strong>
-                </p>
-                <p className="text-purple-700">
-                  Individual times: {benchmarkResults.map(r => `${r.toFixed(0)}ms`).join(', ')}
-                </p>
-              </div>
-              <div>
-                <p className="text-purple-700">Total circuits: <strong>4,298</strong></p>
-                <p className="text-purple-700">
-                  Estimated total: <strong>
-                    {(() => {
-                      const avg = benchmarkResults.reduce((a, b) => a + b, 0) / benchmarkResults.length;
-                      const totalMs = avg * 4298;
-                      const hours = totalMs / 1000 / 60 / 60;
-                      const minutes = totalMs / 1000 / 60;
-                      return hours >= 1
-                        ? `${hours.toFixed(1)} hours`
-                        : `${minutes.toFixed(0)} minutes`;
-                    })()}
-                  </strong>
-                </p>
-              </div>
-            </div>
-
-            {/* Thumbnail Gallery */}
-            {benchmarkThumbnails.length > 0 && (
-              <div className="border-t border-purple-200 pt-4">
-                <h4 className="font-medium text-purple-900 mb-3">Captured Thumbnails ({benchmarkThumbnails.length * 2} total)</h4>
-                <div className="grid grid-cols-5 gap-3">
-                  {benchmarkThumbnails.map((thumb, idx) => (
-                    <div key={thumb.circuitId} className="space-y-2">
-                      <p className="text-xs text-purple-700 truncate font-medium" title={thumb.title}>
-                        {idx + 1}. {thumb.title}
-                      </p>
-                      <div className="space-y-1">
-                        {thumb.light && (
-                          <img
-                            src={thumb.light}
-                            alt={`${thumb.title} light`}
-                            className="w-full rounded border border-gray-300"
-                          />
-                        )}
-                        {thumb.dark && (
-                          <img
-                            src={thumb.dark}
-                            alt={`${thumb.title} dark`}
-                            className="w-full rounded border border-gray-600"
-                          />
-                        )}
-                      </div>
-                      <p className="text-xs text-purple-500">{thumb.time.toFixed(0)}ms</p>
-                    </div>
-                  ))}
-                </div>
+                <span className="text-sm text-gray-600">
+                  {benchRunning && `Benchmarking ${benchProgress}/${benchTotal}...`}
+                  {uploadRunning && `Uploading ${uploadProgress}/${uploadTotal}...`}
+                </span>
               </div>
             )}
           </div>
         </div>
-      )}
+
+        {/* Current Circuit */}
+        {currentCircuit && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold">{currentCircuit.title}</h2>
+                <p className="text-gray-600">
+                  @{currentCircuit.profile.username} •{' '}
+                  <span className="font-mono text-sm">{currentCircuit.slug}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {r2Checking ? (
+                  <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">
+                    Checking R2...
+                  </span>
+                ) : currentR2Status?.hasR2Thumbnails ? (
+                  <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                    In R2
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
+                    Not in R2
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {detailLoading ? (
+              <div className="h-[400px] flex items-center justify-center bg-gray-100 rounded">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto mb-2"></div>
+                  <p className="text-gray-500">Loading schematic...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-6">
+                {/* Light Mode */}
+                <div>
+                  <div className="text-sm font-medium text-gray-700 mb-2">Light Mode (kicad theme)</div>
+                  <div
+                    data-capture-light
+                    className="border-2 border-gray-300 rounded-lg overflow-hidden"
+                  >
+                    {schematicUrl ? (
+                      <KiCanvas
+                        key={`light-${currentCircuit.id}`}
+                        src={schematicUrl}
+                        theme="kicad"
+                        controls="none"
+                        height={KICANVAS_HEIGHT}
+                      />
+                    ) : (
+                      <div className="h-[400px] bg-gray-100 flex items-center justify-center">
+                        <p className="text-gray-500">Failed to load</p>
+                      </div>
+                    )}
+                  </div>
+                  {captured?.light && (
+                    <div className="mt-4">
+                      <div className="text-sm font-medium text-green-700 mb-2">Captured:</div>
+                      <img src={captured.light} alt="Light" className="w-full rounded-lg border-2 border-green-400" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Dark Mode */}
+                <div>
+                  <div className="text-sm font-medium text-gray-400 mb-2">Dark Mode (witchhazel theme)</div>
+                  <div
+                    data-capture-dark
+                    className="border-2 border-gray-600 rounded-lg overflow-hidden bg-gray-900"
+                  >
+                    {schematicUrl ? (
+                      <KiCanvas
+                        key={`dark-${currentCircuit.id}`}
+                        src={schematicUrl}
+                        theme="witchhazel"
+                        controls="none"
+                        height={KICANVAS_HEIGHT}
+                      />
+                    ) : (
+                      <div className="h-[400px] bg-gray-800 flex items-center justify-center">
+                        <p className="text-gray-500">Failed to load</p>
+                      </div>
+                    )}
+                  </div>
+                  {captured?.dark && (
+                    <div className="mt-4">
+                      <div className="text-sm font-medium text-green-500 mb-2">Captured:</div>
+                      <img src={captured.dark} alt="Dark" className="w-full rounded-lg border-2 border-green-500" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* R2 Preview */}
+            {currentR2Status?.hasR2Thumbnails && (
+              <div className="mt-6 pt-6 border-t">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4">R2 Preview (from Cloudflare R2)</h3>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <div className="text-sm font-medium text-blue-700 mb-2">
+                      Light ({((currentR2Status.light.size || 0) / 1024).toFixed(1)} KB)
+                    </div>
+                    <img
+                      src={`${currentR2Status.light.url}?t=${Date.now()}`}
+                      alt="R2 Light"
+                      className="w-full rounded-lg border-2 border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-blue-500 mb-2">
+                      Dark ({((currentR2Status.dark.size || 0) / 1024).toFixed(1)} KB)
+                    </div>
+                    <img
+                      src={`${currentR2Status.dark.url}?t=${Date.now()}`}
+                      alt="R2 Dark"
+                      className="w-full rounded-lg border-2 border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Upload Results */}
+        {uploadResults.length > 0 && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-semibold text-indigo-900 mb-4">
+              Upload Results ({uploadResults.length} processed)
+            </h3>
+
+            <div className="grid grid-cols-4 gap-4 text-sm mb-6">
+              <div className="bg-white p-3 rounded-lg">
+                <p className="text-indigo-600">Uploaded</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {uploadResults.filter((r) => r.success && !r.skipped).length}
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-lg">
+                <p className="text-indigo-600">Skipped</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {uploadResults.filter((r) => r.skipped).length}
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-lg">
+                <p className="text-indigo-600">Failed</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {uploadResults.filter((r) => !r.success).length}
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-lg">
+                <p className="text-indigo-600">Total</p>
+                <p className="text-2xl font-bold text-indigo-900">{uploadResults.length}</p>
+              </div>
+            </div>
+
+            <div className="max-h-[300px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-indigo-100 sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">#</th>
+                    <th className="text-left p-2">Title</th>
+                    <th className="text-left p-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {uploadResults.map((result, idx) => (
+                    <tr key={result.circuitId} className="border-b border-indigo-100">
+                      <td className="p-2">{idx + 1}</td>
+                      <td className="p-2 truncate max-w-[300px]" title={result.title}>
+                        {result.title}
+                      </td>
+                      <td className="p-2">
+                        {result.skipped ? (
+                          <span className="text-yellow-600">Skipped (in R2)</span>
+                        ) : result.success ? (
+                          <span className="text-green-600">Uploaded</span>
+                        ) : (
+                          <span className="text-red-600">Failed: {result.error}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Benchmark Results */}
+        {benchResults.length > 0 && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-purple-900 mb-4">
+              Benchmark Results ({benchResults.length} captured)
+            </h3>
+
+            <div className="grid grid-cols-3 gap-4 text-sm mb-6">
+              <div className="bg-white p-3 rounded-lg">
+                <p className="text-purple-600">Average Time</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {(benchResults.reduce((a, b) => a + b.time, 0) / benchResults.length).toFixed(0)}ms
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-lg">
+                <p className="text-purple-600">Total Time</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {(benchResults.reduce((a, b) => a + b.time, 0) / 1000).toFixed(1)}s
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-lg">
+                <p className="text-purple-600">Est. for {circuitsWithoutR2Thumbs}</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {(
+                    ((benchResults.reduce((a, b) => a + b.time, 0) / benchResults.length) *
+                      circuitsWithoutR2Thumbs) /
+                    1000 /
+                    60
+                  ).toFixed(1)}{' '}
+                  min
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-purple-200 pt-4">
+              <h4 className="font-medium text-purple-900 mb-4">Thumbnails ({benchResults.length * 2})</h4>
+              <div className="grid grid-cols-4 gap-4 max-h-[500px] overflow-y-auto">
+                {benchResults.map((result, idx) => (
+                  <div key={result.circuitId} className="bg-white rounded-lg p-3 border border-purple-200">
+                    <p className="text-sm text-purple-800 truncate font-medium mb-2" title={result.title}>
+                      {idx + 1}. {result.title}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {result.light && (
+                        <img src={result.light} alt="Light" className="w-full rounded border border-gray-300" />
+                      )}
+                      {result.dark && (
+                        <img src={result.dark} alt="Dark" className="w-full rounded border border-gray-600" />
+                      )}
+                    </div>
+                    <p className="text-xs text-purple-500 mt-2">{result.time.toFixed(0)}ms</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

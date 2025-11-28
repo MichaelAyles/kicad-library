@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchCircuitById } from '@/lib/supabase';
 import { isClipboardSnippet, wrapSnippetToFullFile, removeHierarchicalSheets } from '@/lib/kicad-parser';
 
+/**
+ * Fix unescaped quotes in comment fields that break KiCanvas parser
+ * e.g. (comment 3 "License: BSD 3-Clause "New" or "Revised" License")
+ * becomes (comment 3 "License: BSD 3-Clause 'New' or 'Revised' License")
+ */
+function fixUnescapedQuotesInComments(sexpr: string): string {
+  // Match comment fields and replace inner quotes with single quotes
+  return sexpr.replace(
+    /\(comment\s+\d+\s+"([^)]*)"\)/g,
+    (match, content) => {
+      // Check if there are unescaped quotes inside (quotes not at start/end)
+      if (content.includes('"')) {
+        // Replace inner quotes with single quotes
+        const fixed = content.replace(/"/g, "'");
+        return match.replace(content, fixed);
+      }
+      return match;
+    }
+  );
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string; filename: string } }
@@ -36,6 +57,9 @@ export async function GET(
 
     // Remove hierarchical sheet references to prevent KiCanvas from trying to load non-existent files
     schematicContent = removeHierarchicalSheets(schematicContent);
+
+    // Fix unescaped quotes in comments that break KiCanvas parser
+    schematicContent = fixUnescapedQuotesInComments(schematicContent);
 
     // Return the S-expression as a .kicad_sch file
     // KiCanvas expects the Content-Type to be text/plain for .kicad_sch files
