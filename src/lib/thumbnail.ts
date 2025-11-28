@@ -310,7 +310,8 @@ export function dataURLtoBlob(dataURL: string): Blob {
 }
 
 /**
- * Upload thumbnail to Supabase Storage with versioning
+ * Upload thumbnail to R2 storage
+ * @deprecated Use uploadThumbnailsToR2 for new uploads - this is kept for backwards compatibility
  */
 export async function uploadThumbnail(
   supabase: any,
@@ -320,25 +321,49 @@ export async function uploadThumbnail(
   dataURL: string,
   version: number = 1
 ): Promise<string> {
-  const blob = dataURLtoBlob(dataURL);
-  // Store in user's folder with version: {userId}/{circuitId}-v{version}-{theme}.png
-  const fileName = `${userId}/${circuitId}-v${version}-${theme}.png`;
+  // Upload to R2 via API
+  const response = await fetch('/api/upload-thumbnail', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      circuitId,
+      lightDataUrl: theme === 'light' ? dataURL : undefined,
+      darkDataUrl: theme === 'dark' ? dataURL : undefined,
+    }),
+  });
 
-  const { data, error } = await supabase.storage
-    .from('thumbnails')
-    .upload(fileName, blob, {
-      contentType: 'image/png',
-      upsert: true, // Allow overwrite when regenerating thumbnails
-    });
+  const data = await response.json();
 
-  if (error) {
-    throw new Error(`Failed to upload ${theme} thumbnail: ${error.message}`);
+  if (!response.ok) {
+    throw new Error(`Failed to upload ${theme} thumbnail: ${data.error}`);
   }
 
-  // Get public URL
-  const { data: urlData } = supabase.storage
-    .from('thumbnails')
-    .getPublicUrl(fileName);
+  return theme === 'light' ? data.urls.light : data.urls.dark;
+}
 
-  return urlData.publicUrl;
+/**
+ * Upload both thumbnails to R2 storage in a single request
+ */
+export async function uploadThumbnailsToR2(
+  circuitId: string,
+  lightDataUrl: string,
+  darkDataUrl: string
+): Promise<{ light: string; dark: string }> {
+  const response = await fetch('/api/upload-thumbnail', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      circuitId,
+      lightDataUrl,
+      darkDataUrl,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(`Failed to upload thumbnails: ${data.error}`);
+  }
+
+  return data.urls;
 }
