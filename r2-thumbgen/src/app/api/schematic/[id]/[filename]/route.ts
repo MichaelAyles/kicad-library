@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCircuitById } from '@/lib/supabase';
-import { isClipboardSnippet, wrapSnippetToFullFile } from '@/lib/kicad-parser';
+import { isClipboardSnippet, wrapSnippetToFullFile, removeHierarchicalSheets } from '@/lib/kicad-parser';
 
 export async function GET(
   request: NextRequest,
@@ -33,6 +33,9 @@ export async function GET(
     } else {
       console.log(`[API] Already a full file - no wrapping needed`);
     }
+
+    // Remove hierarchical sheet references to prevent KiCanvas from trying to load non-existent files
+    schematicContent = removeHierarchicalSheets(schematicContent);
 
     // Return the S-expression as a .kicad_sch file
     // KiCanvas expects the Content-Type to be text/plain for .kicad_sch files

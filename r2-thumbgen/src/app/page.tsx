@@ -12,6 +12,14 @@ interface Stats {
   uniqueUsers: number;
 }
 
+interface R2Status {
+  connected: boolean;
+  bucket?: string;
+  publicUrl?: string;
+  objectCount?: number;
+  error?: string;
+}
+
 export default function Home() {
   const [circuits, setCircuits] = useState<CircuitWithUser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -19,6 +27,25 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [filterUser, setFilterUser] = useState<string>('');
   const [showMissingOnly, setShowMissingOnly] = useState(false);
+  const [r2Status, setR2Status] = useState<R2Status | null>(null);
+  const [r2Loading, setR2Loading] = useState(true);
+
+  // Test R2 connection on mount
+  useEffect(() => {
+    async function testR2() {
+      try {
+        setR2Loading(true);
+        const response = await fetch('/api/test-r2');
+        const data = await response.json();
+        setR2Status(data);
+      } catch (err) {
+        setR2Status({ connected: false, error: 'Failed to test R2 connection' });
+      } finally {
+        setR2Loading(false);
+      }
+    }
+    testR2();
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -39,7 +66,7 @@ export default function Home() {
 
   const filteredCircuits = circuits.filter(circuit => {
     const matchesUser = !filterUser || circuit.profile.username.toLowerCase().includes(filterUser.toLowerCase());
-    const matchesMissing = !showMissingOnly || (!circuit.thumbnail_light || !circuit.thumbnail_dark);
+    const matchesMissing = !showMissingOnly || (!circuit.thumbnail_light_url || !circuit.thumbnail_dark_url);
     return matchesUser && matchesMissing;
   });
 
@@ -71,7 +98,45 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">R2 Thumbnail Generator</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-4xl font-bold">R2 Thumbnail Generator</h1>
+          <a
+            href="/iterator"
+            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+          >
+            Open Circuit Iterator →
+          </a>
+        </div>
+
+        {/* R2 Connection Status */}
+        <div className={`rounded-lg shadow p-4 mb-8 ${
+          r2Loading ? 'bg-gray-100' :
+          r2Status?.connected ? 'bg-green-50 border border-green-200' :
+          'bg-red-50 border border-red-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            {r2Loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-gray-600">Testing R2 connection...</span>
+              </>
+            ) : r2Status?.connected ? (
+              <>
+                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                <span className="text-green-800 font-medium">Connected to R2 successfully</span>
+                <span className="text-green-600 text-sm">
+                  • Bucket: {r2Status.bucket} • Objects: {r2Status.objectCount}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                <span className="text-red-800 font-medium">R2 connection failed</span>
+                <span className="text-red-600 text-sm">• {r2Status?.error}</span>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Statistics */}
         {stats && (
@@ -170,14 +235,14 @@ export default function Home() {
                           <td className="py-2 px-4">{circuit.title}</td>
                           <td className="py-2 px-4 font-mono text-xs">{circuit.slug}</td>
                           <td className="py-2 px-4 text-center">
-                            {circuit.thumbnail_light ? (
+                            {circuit.thumbnail_light_url ? (
                               <span className="text-green-600">✓</span>
                             ) : (
                               <span className="text-red-600">✗</span>
                             )}
                           </td>
                           <td className="py-2 px-4 text-center">
-                            {circuit.thumbnail_dark ? (
+                            {circuit.thumbnail_dark_url ? (
                               <span className="text-green-600">✓</span>
                             ) : (
                               <span className="text-red-600">✗</span>

@@ -14,6 +14,18 @@ export default function CircuitIterator() {
   const [capturing, setCapturing] = useState(false);
   const [capturedThumbnails, setCapturedThumbnails] = useState<CapturedThumbnails | null>(null);
 
+  // Benchmark state
+  const [benchmarking, setBenchmarking] = useState(false);
+  const [benchmarkResults, setBenchmarkResults] = useState<number[]>([]);
+  const [benchmarkCount, setBenchmarkCount] = useState(5);
+  const [benchmarkThumbnails, setBenchmarkThumbnails] = useState<Array<{
+    circuitId: string;
+    title: string;
+    light: string | null;
+    dark: string | null;
+    time: number;
+  }>>([]);
+
   // Refs for KiCanvas containers
   const lightCanvasRef = useRef<HTMLDivElement>(null);
   const darkCanvasRef = useRef<HTMLDivElement>(null);
@@ -59,10 +71,11 @@ export default function CircuitIterator() {
     loadCircuitDetail();
   }, [currentIndex, circuits]);
 
-  // Capture thumbnails handler
-  const handleCapture = async () => {
-    if (capturing) return;
+  // Capture thumbnails handler - returns timing in ms
+  const handleCapture = async (): Promise<number> => {
+    if (capturing) return 0;
 
+    const startTime = performance.now();
     setCapturing(true);
     setCapturedThumbnails(null);
 
@@ -76,12 +89,90 @@ export default function CircuitIterator() {
       );
 
       setCapturedThumbnails(thumbnails);
-      console.log('[Iterator] Capture complete:', thumbnails);
+      const elapsed = performance.now() - startTime;
+      console.log(`[Iterator] Capture complete in ${elapsed.toFixed(0)}ms`);
+      return elapsed;
     } catch (err) {
       console.error('[Iterator] Capture failed:', err);
-      alert('Capture failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      return 0;
     } finally {
       setCapturing(false);
+    }
+  };
+
+  // Benchmark handler - captures N circuits and calculates average time
+  const handleBenchmark = async () => {
+    if (benchmarking || circuits.length === 0) return;
+
+    setBenchmarking(true);
+    setBenchmarkResults([]);
+    setBenchmarkThumbnails([]);
+    const results: number[] = [];
+    const thumbs: typeof benchmarkThumbnails = [];
+    const startIndex = currentIndex;
+
+    for (let i = 0; i < benchmarkCount && (startIndex + i) < circuits.length; i++) {
+      // Navigate to next circuit if not first
+      if (i > 0) {
+        setCurrentIndex(startIndex + i);
+        // Wait for circuit to load and KiCanvas to render
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        // First one - just wait for render
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // Capture and measure
+      const startTime = performance.now();
+      setCapturing(true);
+      setCapturedThumbnails(null);
+
+      try {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const captured = await captureBothThumbnails(
+          lightCanvasRef.current,
+          darkCanvasRef.current
+        );
+        const elapsed = performance.now() - startTime;
+
+        setCapturedThumbnails(captured);
+        results.push(elapsed);
+        setBenchmarkResults([...results]);
+
+        // Store thumbnail for gallery
+        const circuit = circuits[startIndex + i];
+        thumbs.push({
+          circuitId: circuit.id,
+          title: circuit.title,
+          light: captured.light,
+          dark: captured.dark,
+          time: elapsed,
+        });
+        setBenchmarkThumbnails([...thumbs]);
+
+        console.log(`[Benchmark ${i + 1}/${benchmarkCount}] ${circuit.title}: ${elapsed.toFixed(0)}ms`);
+      } catch (err) {
+        console.error('[Benchmark] Capture failed:', err);
+      } finally {
+        setCapturing(false);
+      }
+    }
+
+    setBenchmarking(false);
+
+    // Calculate and log summary
+    if (results.length > 0) {
+      const avg = results.reduce((a, b) => a + b, 0) / results.length;
+      const totalCircuits = 4298;
+      const estimatedTotalMs = avg * totalCircuits;
+      const estimatedTotalMinutes = estimatedTotalMs / 1000 / 60;
+      const estimatedTotalHours = estimatedTotalMinutes / 60;
+
+      console.log('=== BENCHMARK RESULTS ===');
+      console.log(`Samples: ${results.length}`);
+      console.log(`Average per circuit: ${avg.toFixed(0)}ms`);
+      console.log(`Total circuits: ${totalCircuits}`);
+      console.log(`Estimated total time: ${estimatedTotalMinutes.toFixed(1)} minutes (${estimatedTotalHours.toFixed(2)} hours)`);
     }
   };
 
@@ -217,10 +308,17 @@ export default function CircuitIterator() {
               />
               <button
                 onClick={handleCapture}
-                disabled={capturing}
+                disabled={capturing || benchmarking}
                 className="px-4 py-2 bg-green-500 text-white rounded disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-green-600 transition-colors font-medium"
               >
                 {capturing ? 'Capturing...' : 'Capture for R2'}
+              </button>
+              <button
+                onClick={handleBenchmark}
+                disabled={capturing || benchmarking}
+                className="px-4 py-2 bg-purple-500 text-white rounded disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-purple-600 transition-colors font-medium"
+              >
+                {benchmarking ? `Benchmarking (${benchmarkResults.length}/${benchmarkCount})...` : `Benchmark ${benchmarkCount}`}
               </button>
             </div>
 
@@ -389,6 +487,75 @@ export default function CircuitIterator() {
           <strong>Tip:</strong> Use arrow keys to navigate (← Previous, → Next)
         </div>
       </div>
+
+      {/* Benchmark Results */}
+      {benchmarkResults.length > 0 && (
+        <div className="max-w-7xl mx-auto mt-4">
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <h3 className="font-semibold text-purple-900 mb-2">Benchmark Results</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+              <div>
+                <p className="text-purple-700">Samples: <strong>{benchmarkResults.length}</strong></p>
+                <p className="text-purple-700">
+                  Average per circuit: <strong>{(benchmarkResults.reduce((a, b) => a + b, 0) / benchmarkResults.length).toFixed(0)}ms</strong>
+                </p>
+                <p className="text-purple-700">
+                  Individual times: {benchmarkResults.map(r => `${r.toFixed(0)}ms`).join(', ')}
+                </p>
+              </div>
+              <div>
+                <p className="text-purple-700">Total circuits: <strong>4,298</strong></p>
+                <p className="text-purple-700">
+                  Estimated total: <strong>
+                    {(() => {
+                      const avg = benchmarkResults.reduce((a, b) => a + b, 0) / benchmarkResults.length;
+                      const totalMs = avg * 4298;
+                      const hours = totalMs / 1000 / 60 / 60;
+                      const minutes = totalMs / 1000 / 60;
+                      return hours >= 1
+                        ? `${hours.toFixed(1)} hours`
+                        : `${minutes.toFixed(0)} minutes`;
+                    })()}
+                  </strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Thumbnail Gallery */}
+            {benchmarkThumbnails.length > 0 && (
+              <div className="border-t border-purple-200 pt-4">
+                <h4 className="font-medium text-purple-900 mb-3">Captured Thumbnails ({benchmarkThumbnails.length * 2} total)</h4>
+                <div className="grid grid-cols-5 gap-3">
+                  {benchmarkThumbnails.map((thumb, idx) => (
+                    <div key={thumb.circuitId} className="space-y-2">
+                      <p className="text-xs text-purple-700 truncate font-medium" title={thumb.title}>
+                        {idx + 1}. {thumb.title}
+                      </p>
+                      <div className="space-y-1">
+                        {thumb.light && (
+                          <img
+                            src={thumb.light}
+                            alt={`${thumb.title} light`}
+                            className="w-full rounded border border-gray-300"
+                          />
+                        )}
+                        {thumb.dark && (
+                          <img
+                            src={thumb.dark}
+                            alt={`${thumb.title} dark`}
+                            className="w-full rounded border border-gray-600"
+                          />
+                        )}
+                      </div>
+                      <p className="text-xs text-purple-500">{thumb.time.toFixed(0)}ms</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

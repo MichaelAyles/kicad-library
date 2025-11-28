@@ -56,3 +56,24 @@ export function wrapSnippetToFullFile(snippet: string, options?: {
 ${snippet}
 )`;
 }
+
+/**
+ * Remove hierarchical sheet instances from schematic
+ * This prevents KiCanvas from trying to load non-existent nested sheet files
+ *
+ * Removes:
+ * - (sheet_instances ...) blocks which contain references to other sheets
+ * - Individual (sheet ...) elements (hierarchical sheet symbols on schematic)
+ */
+export function removeHierarchicalSheets(sexpr: string): string {
+  // Remove (sheet_instances ...) blocks which contain references to other sheets
+  const sheetInstancesRegex = /\(sheet_instances[^)]*(?:\([^)]*\)[^)]*)*\)/g;
+  let result = sexpr.replace(sheetInstancesRegex, '');
+
+  // Remove individual (sheet ...) elements (hierarchical sheet symbols on schematic)
+  // Match (sheet ... ) including nested parentheses
+  const sheetRegex = /\(sheet\s+[^(]*(?:\([^)]*\)[^(]*)*\)/g;
+  result = result.replace(sheetRegex, '');
+
+  return result;
+}
