@@ -193,3 +193,7 @@ temp/
 
 # Scraper data directory (large files, not in version control)
 /data/
+
+# Claude Code
+CLAUDE.md
+.claude/
