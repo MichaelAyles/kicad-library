@@ -138,7 +138,7 @@ Before committing:
 ## Links
 
 - **Live site**: https://circuitsnips.com
-- **Blog post**: [Building CircuitSnips](https://michaelayles.com)
+- **Blog post**: [Building CircuitSnips](https://www.mikeayles.com/#circuitsnips-com)
 - **Report bugs**: [GitHub Issues](https://github.com/MichaelAyles/kicad-library/issues)
 
 ## Contact
