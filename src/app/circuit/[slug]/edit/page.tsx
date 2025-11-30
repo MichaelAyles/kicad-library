@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Loader, X, Trash2, Camera, History } from "lucide-reac
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { KiCanvas } from "@/components/KiCanvas";
+import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
@@ -519,32 +520,25 @@ export default function EditCircuitPage() {
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
                 placeholder="e.g., LM358 Op-Amp Circuit"
-                maxLength={100}
+                maxLength={150}
                 required
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                {title.length}/100 characters
+              <p className={`text-xs mt-1 ${title.length >= 135 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+                {title.length}/150 characters
               </p>
             </div>
 
             {/* Description */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium mb-2">
-                Description <span className="text-destructive">*</span>
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background min-h-[120px]"
-                placeholder="Describe what this circuit does, its key features, and how to use it..."
-                maxLength={1000}
-                required
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {description.length}/1000 characters
-              </p>
-            </div>
+            <MarkdownEditor
+              label="Description"
+              required
+              value={description}
+              onChange={setDescription}
+              maxLength={10000}
+              placeholder="Describe what this circuit does, its key features, and how to use it... (Markdown supported)"
+              minRows={5}
+              maxRows={15}
+            />
 
             {/* Tags */}
             <div>

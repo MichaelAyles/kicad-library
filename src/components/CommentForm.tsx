@@ -139,15 +139,15 @@ export function CommentForm({
               placeholder={placeholder}
               className="w-full px-4 py-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
               rows={parentCommentId ? 2 : 3}
-              maxLength={5000}
+              maxLength={10000}
               disabled={isSubmitting}
               autoFocus={autoFocus}
             />
           )}
 
           <div className="flex justify-between items-center mt-2">
-            <span className="text-xs text-muted-foreground">
-              {content.length}/5000 • Markdown supported
+            <span className={`text-xs ${content.length >= 9000 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+              {content.length.toLocaleString()}/10,000 • Markdown supported
             </span>
             <div className="flex gap-2">
               {onCancel && (

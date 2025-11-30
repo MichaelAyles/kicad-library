@@ -75,6 +75,9 @@ export async function getCircuitComments(circuitId: string, userId?: string): Pr
   }
 }
 
+// Maximum comment length
+const MAX_COMMENT_LENGTH = 10000;
+
 /**
  * Create a new comment or reply
  */
@@ -83,13 +86,22 @@ export async function createComment(input: CreateCommentInput): Promise<Comment>
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User must be authenticated to comment');
 
+    // Validate content length
+    const trimmedContent = input.content.trim();
+    if (!trimmedContent) {
+      throw new Error('Comment cannot be empty');
+    }
+    if (trimmedContent.length > MAX_COMMENT_LENGTH) {
+      throw new Error(`Comment must be ${MAX_COMMENT_LENGTH.toLocaleString()} characters or less`);
+    }
+
     const { data, error } = await supabase
       .from('circuit_comments')
       .insert({
         circuit_id: input.circuit_id,
         user_id: user.id,
         parent_comment_id: input.parent_comment_id || null,
-        content: input.content,
+        content: trimmedContent,
       })
       .select(`
         *,
@@ -116,9 +128,18 @@ export async function createComment(input: CreateCommentInput): Promise<Comment>
  */
 export async function updateComment(commentId: string, input: UpdateCommentInput): Promise<Comment> {
   try {
+    // Validate content length
+    const trimmedContent = input.content.trim();
+    if (!trimmedContent) {
+      throw new Error('Comment cannot be empty');
+    }
+    if (trimmedContent.length > MAX_COMMENT_LENGTH) {
+      throw new Error(`Comment must be ${MAX_COMMENT_LENGTH.toLocaleString()} characters or less`);
+    }
+
     const { data, error } = await supabase
       .from('circuit_comments')
-      .update({ content: input.content })
+      .update({ content: trimmedContent })
       .eq('id', commentId)
       .select(`
         *,

@@ -74,17 +74,17 @@ export async function PUT(
       }
 
       // Validate title length
-      if (title.length > 100) {
+      if (title.length > 150) {
         return NextResponse.json(
-          { error: 'Title must be 100 characters or less' },
+          { error: 'Title must be 150 characters or less' },
           { status: 400 }
         );
       }
 
       // Validate description length
-      if (description.length > 1000) {
+      if (description.length > 10000) {
         return NextResponse.json(
-          { error: 'Description must be 1000 characters or less' },
+          { error: 'Description must be 10,000 characters or less' },
           { status: 400 }
         );
       }
