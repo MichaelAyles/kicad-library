@@ -10,6 +10,7 @@ declare global {
       'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
         src?: string;
         controls?: 'none' | 'basic' | 'full';
+        theme?: string;
       }, HTMLElement>;
     }
   }
@@ -28,6 +29,8 @@ interface KiCanvasProps {
   src?: string;
   /** Controls level */
   controls?: 'none' | 'basic' | 'full';
+  /** Explicit theme - 'kicad' for light, 'witchhazel' for dark. If not set, syncs with page theme */
+  theme?: 'kicad' | 'witchhazel';
   /** Additional styling */
   className?: string;
   /** Height of the viewer */
@@ -63,6 +66,7 @@ export function KiCanvas({
   slug,
   src,
   controls = 'basic',
+  theme: explicitTheme,
   className = '',
   height = '100%',
   width = '100%',
@@ -70,7 +74,7 @@ export function KiCanvas({
   onCopy,
 }: KiCanvasProps) {
   const [mounted, setMounted] = useState(false);
-  const { theme, resolvedTheme } = useTheme();
+  const { theme: pageTheme, resolvedTheme } = useTheme();
   const viewerRef = useRef<KiCanvasElement>(null);
 
   // Prevent hydration mismatch
@@ -78,19 +82,24 @@ export function KiCanvas({
     setMounted(true);
   }, []);
 
-  // Sync theme with KiCanvas
+  // Determine the KiCanvas theme to use
+  // If explicit theme is provided, use it directly
+  // Otherwise, sync with page theme
+  const kicanvasTheme = explicitTheme || ((resolvedTheme || pageTheme) === 'dark' ? 'witchhazel' : 'kicad');
+
+  // Sync theme with KiCanvas (only needed when not using explicit theme via attribute)
   useEffect(() => {
+    // If explicit theme is set, it's handled via the theme attribute
+    if (explicitTheme) return;
     if (!mounted || !viewerRef.current) return;
 
     const viewer = viewerRef.current;
-    const currentTheme = resolvedTheme || theme;
-    const kicanvasTheme = currentTheme === 'dark' ? 'witchhazel' : 'kicad';
 
     // Function to set theme on the viewer
     const setViewerTheme = () => {
       // Set theme as a property (not attribute!)
       viewer.theme = kicanvasTheme;
-      console.log(`KiCanvas theme updated to: ${kicanvasTheme} (page theme: ${currentTheme})`);
+      console.log(`KiCanvas theme updated to: ${kicanvasTheme} (page theme: ${resolvedTheme || pageTheme})`);
     };
 
     // Check if viewer is already loaded
@@ -110,7 +119,7 @@ export function KiCanvas({
         viewer.removeEventListener('kicanvas:load', handleLoad as any);
       };
     }
-  }, [mounted, theme, resolvedTheme]);
+  }, [mounted, pageTheme, resolvedTheme, explicitTheme, kicanvasTheme]);
 
   // Track Ctrl+C copies from the viewer
   useEffect(() => {
@@ -163,6 +172,7 @@ export function KiCanvas({
       ref={viewerRef as any}
       src={schematicUrl}
       controls={controls}
+      theme={kicanvasTheme}
       className={className}
       style={{
         width,
@@ -180,6 +190,7 @@ export function KiCanvasCard({
   slug,
   src,
   controls = 'full',
+  theme,
   height = '500px',
   circuitId,
   onCopy,
@@ -190,6 +201,7 @@ export function KiCanvasCard({
         slug={slug}
         src={src}
         controls={controls}
+        theme={theme}
         height="100%"
         width="100%"
         circuitId={circuitId}

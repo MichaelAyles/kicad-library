@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Loader, X, Trash2, Camera, History } from "lucide-react";
-import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { KiCanvas } from "@/components/KiCanvas";
@@ -43,7 +42,6 @@ export default function EditCircuitPage() {
   const router = useRouter();
   const slug = params?.slug as string;
   const { user, isLoading: authLoading } = useAuth();
-  const { theme, setTheme } = useTheme();
 
   const [circuit, setCircuit] = useState<Circuit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +55,8 @@ export default function EditCircuitPage() {
   const [isRegeneratingThumbnails, setIsRegeneratingThumbnails] = useState(false);
   const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const viewerRef = useRef<HTMLDivElement>(null);
+  const lightContainerRef = useRef<HTMLDivElement>(null);
+  const darkContainerRef = useRef<HTMLDivElement>(null);
 
   // Thumbnail version history
   const [thumbnailHistory, setThumbnailHistory] = useState<any[]>([]);
@@ -289,24 +288,22 @@ export default function EditCircuitPage() {
   const handleCaptureThumbnails = async () => {
     if (!circuit || !user || !previewUrl) return;
 
+    if (!lightContainerRef.current || !darkContainerRef.current) {
+      setError('Viewers not ready. Please wait for both previews to load.');
+      return;
+    }
+
     setIsRegeneratingThumbnails(true);
     setError(null);
 
     try {
-      // Wait for viewer to be ready
+      // Wait for viewers to be ready
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Capture thumbnails
-      const kicanvasElement = viewerRef.current;
-      if (!kicanvasElement) {
-        throw new Error('Viewer element not found');
-      }
-
-      const currentTheme = theme === 'dark' ? 'dark' : 'light';
+      // Capture thumbnails from both containers
       const thumbnails = await captureThumbnails(
-        kicanvasElement,
-        currentTheme,
-        (newTheme) => setTheme(newTheme)
+        lightContainerRef.current,
+        darkContainerRef.current
       );
 
       const supabase = createClient();
@@ -701,14 +698,45 @@ export default function EditCircuitPage() {
 
             {showThumbnailPreview && previewUrl ? (
               <div className="mb-4">
-                <p className="text-sm font-medium mb-2">Preview (verify this looks correct before capturing):</p>
-                <div className="bg-background rounded-md overflow-hidden border" style={{ height: '400px' }} ref={viewerRef}>
-                  <KiCanvas
-                    src={previewUrl}
-                    controls="basic"
-                    height="100%"
-                    width="100%"
-                  />
+                <p className="text-sm font-medium mb-3">Live Previews (thumbnails will be captured from these):</p>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Light Mode Preview */}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Light Mode (kicad theme)</p>
+                    <div
+                      ref={lightContainerRef}
+                      className="rounded-md overflow-hidden border-2 border-gray-300"
+                      style={{ height: '300px' }}
+                    >
+                      <KiCanvas
+                        key={`light-${previewUrl}`}
+                        src={previewUrl}
+                        theme="kicad"
+                        controls="none"
+                        height="100%"
+                        width="100%"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dark Mode Preview */}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Dark Mode (witchhazel theme)</p>
+                    <div
+                      ref={darkContainerRef}
+                      className="rounded-md overflow-hidden border-2 border-gray-600 bg-gray-900"
+                      style={{ height: '300px' }}
+                    >
+                      <KiCanvas
+                        key={`dark-${previewUrl}`}
+                        src={previewUrl}
+                        theme="witchhazel"
+                        controls="none"
+                        height="100%"
+                        width="100%"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}
