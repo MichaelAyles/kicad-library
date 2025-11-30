@@ -24,6 +24,7 @@ import {
   Heart,
   Shield
 } from 'lucide-react';
+import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 
 interface UserStats {
   circuitsUploaded: number;
@@ -287,6 +288,13 @@ function ProfileContent() {
                     <span>Joined {new Date(profileUser.created_at || '').toLocaleDateString()}</span>
                   </div>
                 </div>
+
+                {/* Bio */}
+                {profileUser.bio && (
+                  <div className="mb-4 text-sm">
+                    <MarkdownRenderer content={profileUser.bio} />
+                  </div>
+                )}
 
                 {/* Action Buttons */}
                 {isViewingOwnProfile && (

@@ -169,15 +169,15 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
                   onChange={(e) => setEditContent(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                   rows={3}
-                  maxLength={5000}
+                  maxLength={10000}
                   disabled={isSubmitting}
                   placeholder="Supports **bold**, *italic*, `code`, and [links](url)"
                 />
               )}
 
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">
-                  {editContent.length}/5000 • Markdown supported
+                <span className={`text-xs ${editContent.length >= 9000 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+                  {editContent.length.toLocaleString()}/10,000 • Markdown supported
                 </span>
                 <div className="flex gap-2">
                   <button

@@ -18,6 +18,7 @@ import {
   ArrowLeft,
   Trash2
 } from 'lucide-react';
+import { MarkdownEditor } from '@/components/MarkdownEditor';
 
 interface ProfileData {
   username: string;
@@ -275,21 +276,16 @@ export default function SettingsPage() {
 
             {/* Bio */}
             <div className="mb-4">
-              <label htmlFor="bio" className="block text-sm font-medium mb-2">
-                Bio
-              </label>
-              <textarea
-                id="bio"
+              <MarkdownEditor
+                label="Bio"
                 value={profile?.bio || ''}
-                onChange={(e) => setProfile(prev => prev ? { ...prev, bio: e.target.value } : null)}
-                className="w-full px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                placeholder="Tell us about yourself..."
-                rows={4}
-                maxLength={500}
+                onChange={(value) => setProfile(prev => prev ? { ...prev, bio: value } : null)}
+                maxLength={10000}
+                placeholder="Tell us about yourself... (Markdown supported)"
+                minRows={4}
+                maxRows={8}
+                disabled={isSaving}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                {profile?.bio?.length || 0}/500 characters
-              </p>
             </div>
 
             {/* Website */}

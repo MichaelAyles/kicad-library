@@ -8,6 +8,7 @@ import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "next-themes";
 import { KiCanvas } from "@/components/KiCanvas";
+import { MarkdownEditor } from "@/components/MarkdownEditor";
 import {
   validateSExpression,
   generateSlug,
@@ -622,8 +623,12 @@ export default function UploadPage() {
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="LM358 Dual Op-Amp Circuit"
                     required
+                    maxLength={150}
                     className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
                   />
+                  <p className={`text-xs mt-1 text-right ${title.length >= 135 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+                    {title.length} / 150
+                  </p>
                 </div>
 
                 {/* URL Slug */}
@@ -644,18 +649,15 @@ export default function UploadPage() {
                 </div>
 
                 {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe what this circuit does..."
-                    rows={4}
-                    className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-y bg-background"
-                  />
-                </div>
+                <MarkdownEditor
+                  label="Description"
+                  value={description}
+                  onChange={setDescription}
+                  maxLength={10000}
+                  placeholder="Describe what this circuit does... (Markdown supported)"
+                  minRows={4}
+                  maxRows={12}
+                />
 
                 {/* Category */}
                 <div>
