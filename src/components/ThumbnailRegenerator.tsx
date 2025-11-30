@@ -34,7 +34,6 @@ export function ThumbnailRegenerator() {
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [selectedCircuits, setSelectedCircuits] = useState<Set<string>>(new Set());
   const [previewCircuitId, setPreviewCircuitId] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -43,7 +42,8 @@ export function ThumbnailRegenerator() {
   const [hasMore, setHasMore] = useState(true);
   const [forceRegenMode, setForceRegenMode] = useState<'without' | 'all'>('without');
   const PAGE_SIZE = 100;
-  const kicanvasRef = useRef<HTMLDivElement>(null);
+  const lightContainerRef = useRef<HTMLDivElement>(null);
+  const darkContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch thumbnail statistics from database
   const fetchThumbnailStats = async (importerUserId: string) => {
@@ -240,19 +240,17 @@ export function ThumbnailRegenerator() {
         throw new Error('Circuit data is not a valid KiCad S-expression');
       }
 
-      // Get KiCanvas element (smart waiting is now handled in captureThumbnails)
-      const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
-      if (!kicanvasElement) {
-        throw new Error('KiCanvas element not found - viewer may not have loaded');
+      // Get KiCanvas containers for light and dark modes
+      if (!lightContainerRef.current || !darkContainerRef.current) {
+        throw new Error('KiCanvas containers not found - viewers may not have loaded');
       }
 
-      // Capture thumbnails (now uses smart polling + single dark mode capture)
+      // Capture thumbnails from both containers
       let thumbnailResult;
       try {
         thumbnailResult = await captureThumbnails(
-          kicanvasElement,
-          theme,
-          setTheme
+          lightContainerRef.current,
+          darkContainerRef.current
         );
       } catch (captureError: any) {
         // Check if it's a KiCanvas parsing error
@@ -522,17 +520,15 @@ export function ThumbnailRegenerator() {
             throw new Error('Circuit data is not a valid KiCad S-expression');
           }
 
-          // Get KiCanvas element (smart waiting is now handled in captureThumbnails)
-          const kicanvasElement = kicanvasRef.current?.querySelector('kicanvas-embed') as HTMLElement;
-          if (!kicanvasElement) {
-            throw new Error('KiCanvas element not found');
+          // Get KiCanvas containers for light and dark modes
+          if (!lightContainerRef.current || !darkContainerRef.current) {
+            throw new Error('KiCanvas containers not found');
           }
 
-          // Capture thumbnails (now uses smart polling + single dark mode capture)
+          // Capture thumbnails from both containers
           const thumbnailResult = await captureThumbnails(
-            kicanvasElement,
-            theme,
-            setTheme
+            lightContainerRef.current,
+            darkContainerRef.current
           );
 
           if (!thumbnailResult.light || !thumbnailResult.dark) {
@@ -1052,14 +1048,27 @@ export function ThumbnailRegenerator() {
         )}
       </div>
 
-      {/* Hidden KiCanvas Renderer - Uses opacity instead of display:none to maintain dimensions */}
+      {/* Hidden KiCanvas Renderers - Two canvases for light and dark themes */}
       {isProcessing && currentIndex < circuits.length && (
-        <div className="fixed -top-[9999px] -left-[9999px] opacity-0 pointer-events-none" style={{ width: '800px', height: '600px' }}>
-          <div ref={kicanvasRef} style={{ width: '100%', height: '100%' }}>
+        <div className="fixed -top-[9999px] -left-[9999px] opacity-0 pointer-events-none" style={{ width: '1600px', height: '600px' }}>
+          {/* Light Mode Canvas */}
+          <div ref={lightContainerRef} style={{ width: '800px', height: '600px', display: 'inline-block' }}>
             <KiCanvas
-              key={circuits[currentIndex].slug}
+              key={`light-${circuits[currentIndex].slug}`}
               slug={circuits[currentIndex].slug}
-              controls="basic"
+              theme="kicad"
+              controls="none"
+              height="100%"
+              width="100%"
+            />
+          </div>
+          {/* Dark Mode Canvas */}
+          <div ref={darkContainerRef} style={{ width: '800px', height: '600px', display: 'inline-block' }}>
+            <KiCanvas
+              key={`dark-${circuits[currentIndex].slug}`}
+              slug={circuits[currentIndex].slug}
+              theme="witchhazel"
+              controls="none"
               height="100%"
               width="100%"
             />

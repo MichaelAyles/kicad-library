@@ -6,7 +6,6 @@ import { Upload, AlertCircle, CheckCircle2, Eye, Loader, Camera } from "lucide-r
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
-import { useTheme } from "next-themes";
 import { KiCanvas } from "@/components/KiCanvas";
 import {
   validateSExpression,
@@ -20,12 +19,13 @@ import {
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 
+const KICANVAS_HEIGHT = '350px';
+
 type UploadStep = 'paste' | 'preview' | 'metadata' | 'thumbnails' | 'uploading' | 'success';
 
 export default function UploadPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { theme, setTheme } = useTheme();
   const supabase = createClient();
 
   // Redirect if not logged in
@@ -35,15 +35,8 @@ export default function UploadPage() {
     }
   }, [user, authLoading, router]);
 
-  // Load KiCanvas library for preview
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !document.querySelector('script[src*="kicanvas"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/kicanvas@0.7.4/dist/kicanvas.min.js';
-      script.type = 'module';
-      document.head.appendChild(script);
-    }
-  }, []);
+  // Note: KiCanvas is loaded globally from /kicanvas/kicanvas.js in layout.tsx
+  // This is the modded version with proper theme attribute support
 
   // Form state
   const [currentStep, setCurrentStep] = useState<UploadStep>('paste');
@@ -78,6 +71,8 @@ export default function UploadPage() {
 
   // Refs
   const viewerRef = useRef<HTMLDivElement>(null);
+  const lightContainerRef = useRef<HTMLDivElement>(null);
+  const darkContainerRef = useRef<HTMLDivElement>(null);
 
   // Generate URL from title
   useEffect(() => {
@@ -183,27 +178,22 @@ export default function UploadPage() {
     setCurrentStep('thumbnails');
   };
 
-  // Step 4: Capture thumbnails
+  // Step 4: Capture thumbnails from two KiCanvas components (light and dark themes)
   const handleCaptureThumbnails = async () => {
-    if (!viewerRef.current) {
-      alert("Viewer not ready");
-      return;
-    }
-
-    const kicanvasElement = viewerRef.current.querySelector('kicanvas-embed') as HTMLElement;
-    if (!kicanvasElement) {
-      alert("KiCanvas viewer not found");
+    if (!lightContainerRef.current || !darkContainerRef.current) {
+      alert("Viewers not ready. Please wait for both previews to load.");
       return;
     }
 
     setIsCapturing(true);
 
     try {
-      const currentTheme = theme === 'dark' ? 'dark' : 'light';
+      // Wait a moment for KiCanvas to fully render
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const thumbnails = await captureThumbnails(
-        kicanvasElement,
-        currentTheme,
-        (newTheme) => setTheme(newTheme)
+        lightContainerRef.current,
+        darkContainerRef.current
       );
 
       setLightThumbnail(thumbnails.light);
@@ -808,51 +798,88 @@ export default function UploadPage() {
             <div className="bg-card border rounded-lg p-6">
               <h2 className="text-2xl font-semibold mb-4">Generate Thumbnails</h2>
               <p className="text-muted-foreground mb-4">
-                Click to automatically capture thumbnails in both light and dark modes.
+                Both light and dark theme previews are shown below. Click to capture and publish.
               </p>
 
               {lightThumbnail && darkThumbnail ? (
                 <div className="grid md:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <p className="text-sm font-medium mb-2">Light Mode</p>
+                    <p className="text-sm font-medium mb-2">Light Mode (Captured)</p>
                     <img src={lightThumbnail} alt="Light thumbnail" className="w-full border rounded" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium mb-2">Dark Mode</p>
+                    <p className="text-sm font-medium mb-2">Dark Mode (Captured)</p>
                     <img src={darkThumbnail} alt="Dark thumbnail" className="w-full border rounded" />
                   </div>
                 </div>
               ) : (
                 <div className="mb-4">
-                  <p className="text-sm font-medium mb-2">Preview (thumbnails will be captured from this):</p>
-                  <div className="bg-background rounded-md overflow-hidden border" style={{ height: '450px' }} ref={viewerRef}>
-                    {isLoadingPreview ? (
-                      <div className="w-full h-full flex items-center justify-center bg-muted/20">
-                        <div className="text-center">
-                          <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">Loading preview...</p>
-                        </div>
+                  <p className="text-sm font-medium mb-3">Live Previews (thumbnails will be captured from these):</p>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {/* Light Mode Preview */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Light Mode (kicad theme)</p>
+                      <div
+                        ref={lightContainerRef}
+                        className="rounded-md overflow-hidden border-2 border-gray-300"
+                        style={{ height: KICANVAS_HEIGHT }}
+                      >
+                        {isLoadingPreview ? (
+                          <div className="w-full h-full flex items-center justify-center bg-white">
+                            <div className="text-center">
+                              <Loader className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-400" />
+                              <p className="text-xs text-gray-500">Loading...</p>
+                            </div>
+                          </div>
+                        ) : previewUrl ? (
+                          <KiCanvas
+                            key={`light-${previewUrl}`}
+                            src={previewUrl}
+                            theme="kicad"
+                            controls="none"
+                            height="100%"
+                            width="100%"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                            <p className="text-xs text-gray-500">Preview not available</p>
+                          </div>
+                        )}
                       </div>
-                    ) : previewUrl ? (
-                      <KiCanvas
-                        key={`thumbnail-viewer-${previewUrl}`}
-                        src={previewUrl}
-                        controls="basic"
-                        height="100%"
-                        width="100%"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-muted/20">
-                        <div className="text-center text-muted-foreground">
-                          <Camera className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                          <p className="text-sm">Preview not available</p>
-                        </div>
+                    </div>
+
+                    {/* Dark Mode Preview */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Dark Mode (witchhazel theme)</p>
+                      <div
+                        ref={darkContainerRef}
+                        className="rounded-md overflow-hidden border-2 border-gray-600 bg-gray-900"
+                        style={{ height: KICANVAS_HEIGHT }}
+                      >
+                        {isLoadingPreview ? (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                            <div className="text-center">
+                              <Loader className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-500" />
+                              <p className="text-xs text-gray-500">Loading...</p>
+                            </div>
+                          </div>
+                        ) : previewUrl ? (
+                          <KiCanvas
+                            key={`dark-${previewUrl}`}
+                            src={previewUrl}
+                            theme="witchhazel"
+                            controls="none"
+                            height="100%"
+                            width="100%"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                            <p className="text-xs text-gray-500">Preview not available</p>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Preview URL: {previewUrl || 'Not loaded'}
-                  </p>
                 </div>
               )}
 
