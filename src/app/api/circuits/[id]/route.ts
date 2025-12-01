@@ -54,6 +54,7 @@ export async function PUT(
       category,
       license,
       is_public,
+      sheet_size,
       thumbnail_light_url,
       thumbnail_dark_url,
       thumbnail_version,
@@ -139,6 +140,17 @@ export async function PUT(
       updateData.category = category || null;
       updateData.license = license;
       updateData.is_public = is_public !== undefined ? is_public : true;
+
+      // Update sheet_size if provided (can be null, A4, A3, or A2)
+      if (sheet_size !== undefined) {
+        if (sheet_size !== null && !["A4", "A3", "A2"].includes(sheet_size)) {
+          return NextResponse.json(
+            { error: "Invalid sheet_size. Must be A4, A3, A2, or null" },
+            { status: 400 },
+          );
+        }
+        updateData.sheet_size = sheet_size;
+      }
 
       // Also update thumbnails if provided
       if (thumbnail_light_url)

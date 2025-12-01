@@ -119,6 +119,9 @@ CREATE TABLE IF NOT EXISTS public.circuits (
   -- Visibility
   is_public BOOLEAN DEFAULT true,
 
+  -- Sheet size override (A4, A3, A2) - null means auto-detect from bounding box
+  sheet_size TEXT CHECK (sheet_size IS NULL OR sheet_size IN ('A4', 'A3', 'A2')),
+
   -- GitHub import attribution (for circuits imported by bot)
   github_owner TEXT, -- GitHub username of original repo owner
   github_repo TEXT,  -- GitHub repository name
@@ -166,6 +169,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name='circuits' AND column_name='github_repo') THEN
     ALTER TABLE public.circuits ADD COLUMN github_repo TEXT;
+  END IF;
+
+  -- Add sheet_size for user-specified paper size override
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='sheet_size') THEN
+    ALTER TABLE public.circuits ADD COLUMN sheet_size TEXT CHECK (sheet_size IS NULL OR sheet_size IN ('A4', 'A3', 'A2'));
   END IF;
 
   -- Make file_path nullable if not already

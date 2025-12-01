@@ -26,6 +26,7 @@ import {
   isClipboardSnippet,
   validateSExpression,
   selectSheetSize,
+  type SheetSize,
 } from "@/lib/kicad-parser";
 
 const LICENSES = [
@@ -86,6 +87,7 @@ export default function EditCircuitPage() {
   const [category, setCategory] = useState("");
   const [license, setLicense] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [sheetSize, setSheetSize] = useState<SheetSize | null>(null);
 
   // Check if user is admin
   useEffect(() => {
@@ -143,6 +145,7 @@ export default function EditCircuitPage() {
         setCategory(circuitData.category || "");
         setLicense(circuitData.license);
         setIsPublic(circuitData.is_public);
+        setSheetSize((circuitData.sheet_size as SheetSize) || null);
         setIsLoading(false);
       } catch (err) {
         console.error("Failed to load circuit:", err);
@@ -215,6 +218,7 @@ export default function EditCircuitPage() {
           category: category || null,
           license,
           is_public: isPublic,
+          sheet_size: sheetSize,
         }),
       });
 
@@ -711,6 +715,35 @@ export default function EditCircuitPage() {
               </label>
               <p className="text-xs text-muted-foreground mt-1 ml-6">
                 Public circuits can be discovered and copied by anyone
+              </p>
+            </div>
+
+            {/* Sheet Size */}
+            <div>
+              <label
+                htmlFor="sheet-size"
+                className="block text-sm font-medium mb-2"
+              >
+                Sheet Size
+              </label>
+              <select
+                id="sheet-size"
+                value={sheetSize || ""}
+                onChange={(e) =>
+                  setSheetSize(
+                    e.target.value ? (e.target.value as SheetSize) : null,
+                  )
+                }
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+              >
+                <option value="">Auto-detect from bounding box</option>
+                <option value="A4">A4</option>
+                <option value="A3">A3</option>
+                <option value="A2">A2</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Override the automatic sheet size detection for the schematic
+                preview
               </p>
             </div>
 

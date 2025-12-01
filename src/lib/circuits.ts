@@ -93,6 +93,7 @@ export interface Circuit {
   thumbnail_version: number;
   is_public: boolean;
   is_featured: boolean;
+  sheet_size: string | null; // A4, A3, A2, or null for auto-detect
   github_owner: string | null;
   github_repo: string | null;
   created_at: string;

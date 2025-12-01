@@ -5,6 +5,7 @@ import {
   removeHierarchicalSheets,
   validateSExpression,
   selectSheetSize,
+  type SheetSize,
 } from "@/lib/kicad-parser";
 import { getCircuitBySlug } from "@/lib/circuits";
 
@@ -109,12 +110,18 @@ export async function GET(
     let schematicFile: string;
     if (isClipboardSnippet(rawData)) {
       // It's a snippet - wrap it for serving as .kicad_sch file
-      // First, calculate the appropriate sheet size based on bounding box
-      const validation = validateSExpression(rawData);
-      const paperSize =
-        validation.valid && validation.metadata
-          ? selectSheetSize(validation.metadata.boundingBox).size
-          : "A4";
+      // Use stored sheet_size if available, otherwise auto-detect from bounding box
+      let paperSize: SheetSize = "A4";
+      if (circuit.sheet_size) {
+        // User specified a sheet size override
+        paperSize = circuit.sheet_size as SheetSize;
+      } else {
+        // Auto-detect from bounding box
+        const validation = validateSExpression(rawData);
+        if (validation.valid && validation.metadata) {
+          paperSize = selectSheetSize(validation.metadata.boundingBox).size;
+        }
+      }
 
       schematicFile = wrapSnippetToFullFile(rawData, {
         title: circuit.title,

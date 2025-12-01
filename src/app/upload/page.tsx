@@ -321,6 +321,7 @@ export default function UploadPage() {
         license,
         raw_sexpr: sexpr, // Store original format (snippet or full file as entered)
         is_public: isPublic,
+        sheet_size: sheetSizeOverride, // Store user's sheet size override (null = auto-detect)
         // view_count, copy_count, favorite_count default to 0 in schema
       };
 
