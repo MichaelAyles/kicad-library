@@ -19,8 +19,6 @@ import { MarkdownEditor } from "@/components/MarkdownEditor";
 import {
   validateSExpression,
   generateSlug,
-  suggestTags,
-  suggestCategory,
   wrapSnippetToFullFile,
   selectSheetSize,
   type ParsedMetadata,
@@ -189,24 +187,6 @@ export default function UploadPage() {
           setFullFileSexpr(wrapped);
         } else {
           setFullFileSexpr(sexpr);
-        }
-
-        // Auto-suggest metadata
-        if (!title) {
-          const firstComp = result.metadata.components[0];
-          if (firstComp) {
-            setTitle(
-              `${firstComp.value} ${firstComp.lib_id.split(":")[1] || "Circuit"}`,
-            );
-          }
-        }
-
-        if (tags.length === 0) {
-          setTags(suggestTags(result.metadata));
-        }
-
-        if (category === "General") {
-          setCategory(suggestCategory(result.metadata));
         }
 
         setCurrentStep("preview");
