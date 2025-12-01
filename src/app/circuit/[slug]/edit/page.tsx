@@ -270,16 +270,15 @@ export default function EditCircuitPage() {
       if (isClipboardSnippet(circuit.raw_sexpr)) {
         // Calculate the appropriate sheet size based on bounding box
         const validation = validateSExpression(circuit.raw_sexpr);
-        const sizeResult =
+        const paperSize =
           validation.valid && validation.metadata
-            ? selectSheetSize(validation.metadata.boundingBox)
-            : { size: "A4" as const, offset: { x: 0, y: 0 } };
+            ? selectSheetSize(validation.metadata.boundingBox).size
+            : "A4";
 
         fullFile = wrapSnippetToFullFile(circuit.raw_sexpr, {
           title: circuit.title,
           uuid: circuit.id,
-          paperSize: sizeResult.size,
-          offset: sizeResult.offset,
+          paperSize,
         });
       }
 

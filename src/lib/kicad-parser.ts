@@ -102,18 +102,13 @@ export interface SheetSizeResult {
   recommended: SheetSize;
   isOversized: boolean;
   boundingBox: { width: number; height: number };
-  offset: { x: number; y: number }; // Offset needed to fit content on page
 }
-
-// Page margin - KiCad sheets have content starting around 12.7mm from edges
-const PAGE_MARGIN = 15; // Use 15mm margin for safety
 
 /**
  * Select the appropriate sheet size based on bounding box dimensions
- * Also calculates the offset needed to fit content within the page frame
  *
  * @param boundingBox - The min/max coordinates of the schematic content
- * @returns Sheet size selection result with recommendation, oversized flag, and offset
+ * @returns Sheet size selection result with recommendation and oversized flag
  */
 export function selectSheetSize(boundingBox: {
   minX: number;
@@ -124,60 +119,42 @@ export function selectSheetSize(boundingBox: {
   const width = boundingBox.maxX - boundingBox.minX;
   const height = boundingBox.maxY - boundingBox.minY;
 
-  // Determine which sheet size fits the content
-  let size: SheetSize;
-  let sheetWidth: number;
-  let sheetHeight: number;
-  let isOversized = false;
-
+  // Check if fits in A4
   if (width <= SHEET_SIZES.A4.width && height <= SHEET_SIZES.A4.height) {
-    size = "A4";
-    sheetWidth = SHEET_SIZES.A4.width;
-    sheetHeight = SHEET_SIZES.A4.height;
-  } else if (
-    width <= SHEET_SIZES.A3.width &&
-    height <= SHEET_SIZES.A3.height
-  ) {
-    size = "A3";
-    sheetWidth = SHEET_SIZES.A3.width;
-    sheetHeight = SHEET_SIZES.A3.height;
-  } else if (
-    width <= SHEET_SIZES.A2.width &&
-    height <= SHEET_SIZES.A2.height
-  ) {
-    size = "A2";
-    sheetWidth = SHEET_SIZES.A2.width;
-    sheetHeight = SHEET_SIZES.A2.height;
-  } else {
-    // Too large - use A2 but flag as oversized
-    size = "A2";
-    sheetWidth = SHEET_SIZES.A2.width;
-    sheetHeight = SHEET_SIZES.A2.height;
-    isOversized = true;
+    return {
+      size: "A4",
+      recommended: "A4",
+      isOversized: false,
+      boundingBox: { width, height },
+    };
   }
 
-  // Calculate offset needed to center content on page
-  // Target: place content starting at PAGE_MARGIN from edges
-  // If minX < PAGE_MARGIN, we need to shift right (positive offset)
-  // If minY < PAGE_MARGIN, we need to shift down (positive offset)
-  const targetMinX = PAGE_MARGIN;
-  const targetMinY = PAGE_MARGIN;
+  // Check if fits in A3
+  if (width <= SHEET_SIZES.A3.width && height <= SHEET_SIZES.A3.height) {
+    return {
+      size: "A3",
+      recommended: "A3",
+      isOversized: false,
+      boundingBox: { width, height },
+    };
+  }
 
-  // Calculate how much to shift to place minX/minY at target position
-  // Then center the remaining space
-  const availableWidth = sheetWidth - width;
-  const availableHeight = sheetHeight - height;
+  // Check if fits in A2
+  if (width <= SHEET_SIZES.A2.width && height <= SHEET_SIZES.A2.height) {
+    return {
+      size: "A2",
+      recommended: "A2",
+      isOversized: false,
+      boundingBox: { width, height },
+    };
+  }
 
-  // Center the content, but ensure it stays within margins
-  const offsetX = Math.max(targetMinX, availableWidth / 2) - boundingBox.minX;
-  const offsetY = Math.max(targetMinY, availableHeight / 2) - boundingBox.minY;
-
+  // Too large - use A2 but flag as oversized
   return {
-    size,
-    recommended: size,
-    isOversized,
+    size: "A2",
+    recommended: "A2",
+    isOversized: true,
     boundingBox: { width, height },
-    offset: { x: offsetX, y: offsetY },
   };
 }
 
@@ -217,62 +194,6 @@ export function isClipboardSnippet(sexpr: string): boolean {
 // ============================================================================
 
 /**
- * Translate all coordinates in a schematic snippet by the given offset
- * This shifts all (at X Y) and (xy X Y) coordinates
- */
-export function translateSnippetCoordinates(
-  snippet: string,
-  offsetX: number,
-  offsetY: number,
-): string {
-  if (offsetX === 0 && offsetY === 0) {
-    return snippet;
-  }
-
-  // Match (at X Y ...) patterns - used for component positions
-  let result = snippet.replace(
-    /\(at\s+(-?[\d.]+)\s+(-?[\d.]+)/g,
-    (match, x, y) => {
-      const newX = (parseFloat(x) + offsetX).toFixed(2);
-      const newY = (parseFloat(y) + offsetY).toFixed(2);
-      return `(at ${newX} ${newY}`;
-    },
-  );
-
-  // Match (xy X Y) patterns - used for wire endpoints
-  result = result.replace(
-    /\(xy\s+(-?[\d.]+)\s+(-?[\d.]+)\)/g,
-    (match, x, y) => {
-      const newX = (parseFloat(x) + offsetX).toFixed(2);
-      const newY = (parseFloat(y) + offsetY).toFixed(2);
-      return `(xy ${newX} ${newY})`;
-    },
-  );
-
-  // Match (start X Y) patterns - used for some elements
-  result = result.replace(
-    /\(start\s+(-?[\d.]+)\s+(-?[\d.]+)\)/g,
-    (match, x, y) => {
-      const newX = (parseFloat(x) + offsetX).toFixed(2);
-      const newY = (parseFloat(y) + offsetY).toFixed(2);
-      return `(start ${newX} ${newY})`;
-    },
-  );
-
-  // Match (end X Y) patterns - used for some elements
-  result = result.replace(
-    /\(end\s+(-?[\d.]+)\s+(-?[\d.]+)\)/g,
-    (match, x, y) => {
-      const newX = (parseFloat(x) + offsetX).toFixed(2);
-      const newY = (parseFloat(y) + offsetY).toFixed(2);
-      return `(end ${newX} ${newY})`;
-    },
-  );
-
-  return result;
-}
-
-/**
  * Wrap a clipboard snippet into a complete .kicad_sch file structure
  * This is needed for KiCanvas viewer and for downloads
  *
@@ -284,22 +205,11 @@ export function wrapSnippetToFullFile(
     title?: string;
     uuid?: string;
     paperSize?: SheetSize;
-    offset?: { x: number; y: number };
   },
 ): string {
   const uuid = options?.uuid || `circuit-${Date.now()}`;
   const title = options?.title || "Circuit Snippet";
   const paperSize = options?.paperSize || "A4";
-
-  // Apply coordinate offset if provided
-  let processedSnippet = snippet;
-  if (options?.offset && (options.offset.x !== 0 || options.offset.y !== 0)) {
-    processedSnippet = translateSnippetCoordinates(
-      snippet,
-      options.offset.x,
-      options.offset.y,
-    );
-  }
 
   // Create a complete KiCad schematic file structure
   // Version 20231120 is KiCad 8.0 format
@@ -319,7 +229,7 @@ export function wrapSnippetToFullFile(
     (company "CircuitSnips")
   )
 
-${processedSnippet}
+${snippet}
 )`;
 }
 

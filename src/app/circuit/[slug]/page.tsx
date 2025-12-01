@@ -132,19 +132,13 @@ export default function CircuitDetailPage() {
     if (isClipboardSnippet(rawSexpr)) {
       // It's a snippet - use as-is for copy, wrap for preview/download
       // Calculate the appropriate sheet size based on bounding box
-      const sizeResult =
+      const paperSize =
         validation.valid && validation.metadata
-          ? selectSheetSize(validation.metadata.boundingBox)
-          : { size: "A4" as const, offset: { x: 0, y: 0 } };
+          ? selectSheetSize(validation.metadata.boundingBox).size
+          : "A4";
 
       setSnippetData(rawSexpr);
-      setFullFileData(
-        wrapSnippetToFullFile(rawSexpr, {
-          title,
-          paperSize: sizeResult.size,
-          offset: sizeResult.offset,
-        }),
-      );
+      setFullFileData(wrapSnippetToFullFile(rawSexpr, { title, paperSize }));
     } else {
       // It's a full file - extract snippet for copy, use as-is for preview/download
       setSnippetData(extractSnippetFromFullFile(rawSexpr));
