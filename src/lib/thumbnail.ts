@@ -5,7 +5,7 @@
  * Uses native canvas export with html2canvas fallback
  */
 
-import html2canvas from 'html2canvas';
+import html2canvas from "html2canvas";
 
 // Configuration constants
 export const THUMBNAIL_CONFIG = {
@@ -32,7 +32,7 @@ const KICANVAS_ERROR_COLOR = { r: 0, g: 255, b: 255 }; // #00FFFF
 
 export interface ThumbnailResult {
   light: string; // base64 data URL
-  dark: string;  // base64 data URL
+  dark: string; // base64 data URL
 }
 
 /**
@@ -40,7 +40,7 @@ export interface ThumbnailResult {
  * Returns true if the image appears to be invalid/error state
  */
 function isInvalidCapture(canvas: HTMLCanvasElement): boolean {
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   if (!ctx) return true;
 
   // Sample pixels at various points across the canvas
@@ -59,7 +59,12 @@ function isInvalidCapture(canvas: HTMLCanvasElement): boolean {
   let cyanCount = 0;
 
   for (const point of samplePoints) {
-    const pixel = ctx.getImageData(Math.floor(point.x), Math.floor(point.y), 1, 1).data;
+    const pixel = ctx.getImageData(
+      Math.floor(point.x),
+      Math.floor(point.y),
+      1,
+      1,
+    ).data;
     const color = { r: pixel[0], g: pixel[1], b: pixel[2] };
 
     // Check if this pixel is the cyan error color (with some tolerance)
@@ -71,7 +76,7 @@ function isInvalidCapture(canvas: HTMLCanvasElement): boolean {
 
   // Only flag as invalid if MOST samples are the specific cyan error color
   if (cyanCount >= samplePoints.length - 1) {
-    console.log('[Capture] Detected cyan error color - invalid capture');
+    console.log("[Capture] Detected cyan error color - invalid capture");
     return true;
   }
 
@@ -81,18 +86,22 @@ function isInvalidCapture(canvas: HTMLCanvasElement): boolean {
 /**
  * Recursively search for canvas in shadow DOMs (up to maxDepth levels)
  */
-function findCanvasInShadowDOM(root: Element | ShadowRoot, depth = 0, maxDepth = 5): HTMLCanvasElement | null {
+function findCanvasInShadowDOM(
+  root: Element | ShadowRoot,
+  depth = 0,
+  maxDepth = 5,
+): HTMLCanvasElement | null {
   if (depth > maxDepth) return null;
 
   // Check for canvas directly
-  const canvas = root.querySelector('canvas');
+  const canvas = root.querySelector("canvas");
   if (canvas) {
     console.log(`[FindCanvas] Found canvas at depth ${depth}`);
     return canvas;
   }
 
   // Search in shadow roots of all elements
-  const elements = root.querySelectorAll('*');
+  const elements = root.querySelectorAll("*");
   for (const el of Array.from(elements)) {
     if (el.shadowRoot) {
       const found = findCanvasInShadowDOM(el.shadowRoot, depth + 1, maxDepth);
@@ -108,7 +117,7 @@ function findCanvasInShadowDOM(root: Element | ShadowRoot, depth = 0, maxDepth =
  */
 function findKiCanvasCanvas(kicanvasEmbed: Element): HTMLCanvasElement | null {
   // Try direct child first
-  const directCanvas = kicanvasEmbed.querySelector('canvas');
+  const directCanvas = kicanvasEmbed.querySelector("canvas");
   if (directCanvas) {
     return directCanvas;
   }
@@ -120,7 +129,7 @@ function findKiCanvasCanvas(kicanvasEmbed: Element): HTMLCanvasElement | null {
   }
 
   // Try to find kicanvas-viewer or kicanvas-schematic inside
-  const viewers = ['kicanvas-viewer', 'kicanvas-schematic', 'kicanvas-app'];
+  const viewers = ["kicanvas-viewer", "kicanvas-schematic", "kicanvas-app"];
   for (const viewerTag of viewers) {
     let viewer = kicanvasEmbed.querySelector(viewerTag);
     if (!viewer && kicanvasEmbed.shadowRoot) {
@@ -142,16 +151,26 @@ function findKiCanvasCanvas(kicanvasEmbed: Element): HTMLCanvasElement | null {
  */
 async function waitForCanvas(
   kicanvasEmbed: Element,
-  mode: string
+  mode: string,
 ): Promise<HTMLCanvasElement | null> {
-  for (let attempt = 1; attempt <= RENDER_CONFIG.CANVAS_WAIT_ATTEMPTS; attempt++) {
+  for (
+    let attempt = 1;
+    attempt <= RENDER_CONFIG.CANVAS_WAIT_ATTEMPTS;
+    attempt++
+  ) {
     const canvas = findKiCanvasCanvas(kicanvasEmbed);
     if (canvas && canvas.width > 0 && canvas.height > 0) {
-      console.log(`[Capture] ${mode}: Canvas ready on attempt ${attempt}: ${canvas.width}x${canvas.height}`);
+      console.log(
+        `[Capture] ${mode}: Canvas ready on attempt ${attempt}: ${canvas.width}x${canvas.height}`,
+      );
       return canvas;
     }
-    console.log(`[Capture] ${mode}: Attempt ${attempt}/${RENDER_CONFIG.CANVAS_WAIT_ATTEMPTS} - canvas not ready yet`);
-    await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.CANVAS_WAIT_DELAY));
+    console.log(
+      `[Capture] ${mode}: Attempt ${attempt}/${RENDER_CONFIG.CANVAS_WAIT_ATTEMPTS} - canvas not ready yet`,
+    );
+    await new Promise((resolve) =>
+      setTimeout(resolve, RENDER_CONFIG.CANVAS_WAIT_DELAY),
+    );
   }
   return null;
 }
@@ -161,56 +180,70 @@ async function waitForCanvas(
  */
 async function captureKiCanvasElement(
   containerElement: HTMLElement,
-  mode: 'light' | 'dark' = 'light'
+  mode: "light" | "dark" = "light",
 ): Promise<string> {
   console.log(`[Capture] Starting ${mode} mode capture...`);
 
   // Find the kicanvas-embed element
-  const kicanvasEmbed = containerElement.querySelector('kicanvas-embed');
+  const kicanvasEmbed = containerElement.querySelector("kicanvas-embed");
   if (!kicanvasEmbed) {
     console.error(`[Capture] ${mode}: kicanvas-embed element not found`);
-    throw new Error('kicanvas-embed element not found in container');
+    throw new Error("kicanvas-embed element not found in container");
   }
 
   // Try to click to dismiss any overlay
   (kicanvasEmbed as HTMLElement).click();
-  await new Promise(resolve => setTimeout(resolve, RENDER_CONFIG.OVERLAY_DISMISS_WAIT));
+  await new Promise((resolve) =>
+    setTimeout(resolve, RENDER_CONFIG.OVERLAY_DISMISS_WAIT),
+  );
 
   // Try to find and capture the canvas with retries
   const sourceCanvas = await waitForCanvas(kicanvasEmbed, mode);
-  console.log(`[Capture] ${mode}: Final canvas state:`, !!sourceCanvas, sourceCanvas ? `${sourceCanvas.width}x${sourceCanvas.height}` : 'N/A');
+  console.log(
+    `[Capture] ${mode}: Final canvas state:`,
+    !!sourceCanvas,
+    sourceCanvas ? `${sourceCanvas.width}x${sourceCanvas.height}` : "N/A",
+  );
 
   if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
-    console.log('[Capture] Using native canvas export');
+    console.log("[Capture] Using native canvas export");
 
     // Check if source canvas is valid (not cyan error color)
     if (isInvalidCapture(sourceCanvas)) {
-      console.error(`[Capture] ${mode}: Source canvas appears to be error state (cyan)`);
-      throw new Error('Canvas shows error state (cyan color)');
+      console.error(
+        `[Capture] ${mode}: Source canvas appears to be error state (cyan)`,
+      );
+      throw new Error("Canvas shows error state (cyan color)");
     }
 
     // Create output canvas at target dimensions
-    const resizedCanvas = document.createElement('canvas');
+    const resizedCanvas = document.createElement("canvas");
     resizedCanvas.width = THUMBNAIL_CONFIG.WIDTH;
     resizedCanvas.height = THUMBNAIL_CONFIG.HEIGHT;
 
-    const ctx = resizedCanvas.getContext('2d');
+    const ctx = resizedCanvas.getContext("2d");
     if (!ctx) {
-      throw new Error('Could not get canvas context');
+      throw new Error("Could not get canvas context");
     }
 
     // Draw the source canvas scaled to target dimensions
     ctx.drawImage(
       sourceCanvas,
-      0, 0, sourceCanvas.width, sourceCanvas.height,
-      0, 0, THUMBNAIL_CONFIG.WIDTH, THUMBNAIL_CONFIG.HEIGHT
+      0,
+      0,
+      sourceCanvas.width,
+      sourceCanvas.height,
+      0,
+      0,
+      THUMBNAIL_CONFIG.WIDTH,
+      THUMBNAIL_CONFIG.HEIGHT,
     );
 
-    return resizedCanvas.toDataURL('image/png', THUMBNAIL_CONFIG.QUALITY);
+    return resizedCanvas.toDataURL("image/png", THUMBNAIL_CONFIG.QUALITY);
   }
 
   // Fallback to html2canvas
-  console.log('[Capture] Falling back to html2canvas');
+  console.log("[Capture] Falling back to html2canvas");
   const capturedCanvas = await html2canvas(containerElement, {
     backgroundColor: null,
     scale: THUMBNAIL_CONFIG.SCALE,
@@ -223,32 +256,40 @@ async function captureKiCanvasElement(
   });
 
   if (capturedCanvas.width === 0 || capturedCanvas.height === 0) {
-    throw new Error('Captured canvas has zero dimensions');
+    throw new Error("Captured canvas has zero dimensions");
   }
 
   // Check if html2canvas result is valid (not cyan error color)
   if (isInvalidCapture(capturedCanvas)) {
-    console.error(`[Capture] ${mode}: html2canvas result appears to be error state (cyan)`);
-    throw new Error('Canvas shows error state (cyan color)');
+    console.error(
+      `[Capture] ${mode}: html2canvas result appears to be error state (cyan)`,
+    );
+    throw new Error("Canvas shows error state (cyan color)");
   }
 
   // Create output canvas at target dimensions
-  const resizedCanvas = document.createElement('canvas');
+  const resizedCanvas = document.createElement("canvas");
   resizedCanvas.width = THUMBNAIL_CONFIG.WIDTH;
   resizedCanvas.height = THUMBNAIL_CONFIG.HEIGHT;
 
-  const ctx = resizedCanvas.getContext('2d');
+  const ctx = resizedCanvas.getContext("2d");
   if (!ctx) {
-    throw new Error('Could not get canvas context');
+    throw new Error("Could not get canvas context");
   }
 
   ctx.drawImage(
     capturedCanvas,
-    0, 0, capturedCanvas.width, capturedCanvas.height,
-    0, 0, THUMBNAIL_CONFIG.WIDTH, THUMBNAIL_CONFIG.HEIGHT
+    0,
+    0,
+    capturedCanvas.width,
+    capturedCanvas.height,
+    0,
+    0,
+    THUMBNAIL_CONFIG.WIDTH,
+    THUMBNAIL_CONFIG.HEIGHT,
   );
 
-  return resizedCanvas.toDataURL('image/png', THUMBNAIL_CONFIG.QUALITY);
+  return resizedCanvas.toDataURL("image/png", THUMBNAIL_CONFIG.QUALITY);
 }
 
 /**
@@ -259,36 +300,49 @@ async function captureKiCanvasElement(
  */
 export async function captureThumbnails(
   lightContainer: HTMLElement | null,
-  darkContainer: HTMLElement | null
+  darkContainer: HTMLElement | null,
 ): Promise<ThumbnailResult> {
   let light: string | null = null;
   let dark: string | null = null;
 
-  console.log('[Capture] Starting dual capture, light:', !!lightContainer, 'dark:', !!darkContainer);
+  console.log(
+    "[Capture] Starting dual capture, light:",
+    !!lightContainer,
+    "dark:",
+    !!darkContainer,
+  );
 
   if (lightContainer) {
     try {
-      light = await captureKiCanvasElement(lightContainer, 'light');
-      console.log('[Capture] Light mode result:', light ? `${light.length} chars` : 'NULL');
+      light = await captureKiCanvasElement(lightContainer, "light");
+      console.log(
+        "[Capture] Light mode result:",
+        light ? `${light.length} chars` : "NULL",
+      );
     } catch (err) {
-      console.error('[Capture] Light mode capture failed:', err);
+      console.error("[Capture] Light mode capture failed:", err);
     }
   }
 
   if (darkContainer) {
     try {
-      dark = await captureKiCanvasElement(darkContainer, 'dark');
-      console.log('[Capture] Dark mode result:', dark ? `${dark.length} chars` : 'NULL');
+      dark = await captureKiCanvasElement(darkContainer, "dark");
+      console.log(
+        "[Capture] Dark mode result:",
+        dark ? `${dark.length} chars` : "NULL",
+      );
     } catch (err) {
-      console.error('[Capture] Dark mode capture failed:', err);
+      console.error("[Capture] Dark mode capture failed:", err);
     }
   }
 
   if (!light || !dark) {
-    throw new Error(`Failed to capture thumbnails. Light: ${!!light}, Dark: ${!!dark}`);
+    throw new Error(
+      `Failed to capture thumbnails. Light: ${!!light}, Dark: ${!!dark}`,
+    );
   }
 
-  console.log('[Capture] Dual capture complete!');
+  console.log("[Capture] Dual capture complete!");
   return { light, dark };
 }
 
@@ -296,9 +350,9 @@ export async function captureThumbnails(
  * Convert base64 data URL to Blob for upload
  */
 export function dataURLtoBlob(dataURL: string): Blob {
-  const arr = dataURL.split(',');
+  const arr = dataURL.split(",");
   const mimeMatch = arr[0].match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const mime = mimeMatch ? mimeMatch[1] : "image/png";
   const bstr = atob(arr[1]);
   let n = bstr.length;
   const u8arr = new Uint8Array(n);
@@ -318,18 +372,18 @@ export async function uploadThumbnail(
   supabase: any,
   userId: string,
   circuitId: string,
-  theme: 'light' | 'dark',
+  theme: "light" | "dark",
   dataURL: string,
-  version: number = 1
+  version: number = 1,
 ): Promise<string> {
   // Upload to R2 via API
-  const response = await fetch('/api/upload-thumbnail', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await fetch("/api/upload-thumbnail", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       circuitId,
-      lightDataUrl: theme === 'light' ? dataURL : undefined,
-      darkDataUrl: theme === 'dark' ? dataURL : undefined,
+      lightDataUrl: theme === "light" ? dataURL : undefined,
+      darkDataUrl: theme === "dark" ? dataURL : undefined,
     }),
   });
 
@@ -339,7 +393,7 @@ export async function uploadThumbnail(
     throw new Error(`Failed to upload ${theme} thumbnail: ${data.error}`);
   }
 
-  return theme === 'light' ? data.urls.light : data.urls.dark;
+  return theme === "light" ? data.urls.light : data.urls.dark;
 }
 
 /**
@@ -348,11 +402,11 @@ export async function uploadThumbnail(
 export async function uploadThumbnailsToR2(
   circuitId: string,
   lightDataUrl: string,
-  darkDataUrl: string
+  darkDataUrl: string,
 ): Promise<{ light: string; dark: string }> {
-  const response = await fetch('/api/upload-thumbnail', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await fetch("/api/upload-thumbnail", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       circuitId,
       lightDataUrl,

@@ -51,15 +51,66 @@ interface ToolbarButton {
 }
 
 const toolbarButtons: ToolbarButton[] = [
-  { icon: <Bold className="w-4 h-4" />, label: "Bold", action: "wrap", before: "**", after: "**" },
-  { icon: <Italic className="w-4 h-4" />, label: "Italic", action: "wrap", before: "*", after: "*" },
-  { icon: <Strikethrough className="w-4 h-4" />, label: "Strikethrough", action: "wrap", before: "~~", after: "~~" },
-  { icon: <Code className="w-4 h-4" />, label: "Inline code", action: "wrap", before: "`", after: "`" },
-  { icon: <FileCode className="w-4 h-4" />, label: "Code block", action: "block", before: "```\n", after: "\n```" },
-  { icon: <Link className="w-4 h-4" />, label: "Link", action: "wrap", before: "[", after: "](url)" },
-  { icon: <List className="w-4 h-4" />, label: "Bullet list", action: "prefix", before: "- " },
-  { icon: <ListOrdered className="w-4 h-4" />, label: "Numbered list", action: "prefix", before: "1. " },
-  { icon: <Quote className="w-4 h-4" />, label: "Quote", action: "prefix", before: "> " },
+  {
+    icon: <Bold className="w-4 h-4" />,
+    label: "Bold",
+    action: "wrap",
+    before: "**",
+    after: "**",
+  },
+  {
+    icon: <Italic className="w-4 h-4" />,
+    label: "Italic",
+    action: "wrap",
+    before: "*",
+    after: "*",
+  },
+  {
+    icon: <Strikethrough className="w-4 h-4" />,
+    label: "Strikethrough",
+    action: "wrap",
+    before: "~~",
+    after: "~~",
+  },
+  {
+    icon: <Code className="w-4 h-4" />,
+    label: "Inline code",
+    action: "wrap",
+    before: "`",
+    after: "`",
+  },
+  {
+    icon: <FileCode className="w-4 h-4" />,
+    label: "Code block",
+    action: "block",
+    before: "```\n",
+    after: "\n```",
+  },
+  {
+    icon: <Link className="w-4 h-4" />,
+    label: "Link",
+    action: "wrap",
+    before: "[",
+    after: "](url)",
+  },
+  {
+    icon: <List className="w-4 h-4" />,
+    label: "Bullet list",
+    action: "prefix",
+    before: "- ",
+  },
+  {
+    icon: <ListOrdered className="w-4 h-4" />,
+    label: "Numbered list",
+    action: "prefix",
+    before: "1. ",
+  },
+  {
+    icon: <Quote className="w-4 h-4" />,
+    label: "Quote",
+    action: "prefix",
+    before: "> ",
+  },
 ];
 
 const helpContent = `## Markdown Quick Reference
@@ -126,7 +177,12 @@ export function MarkdownEditor({
   // Calculate character count and warning level
   const charCount = value.length;
   const charPercentage = (charCount / maxLength) * 100;
-  const charWarning = charPercentage >= 90 ? "error" : charPercentage >= 75 ? "warning" : "normal";
+  const charWarning =
+    charPercentage >= 90
+      ? "error"
+      : charPercentage >= 75
+        ? "warning"
+        : "normal";
 
   // Insert text at cursor position
   const insertText = useCallback(
@@ -146,7 +202,12 @@ export function MarkdownEditor({
       if (button.action === "wrap") {
         // Wrap selected text or insert placeholder
         const textToWrap = selectedText || "text";
-        newText = beforeText + button.before + textToWrap + (button.after || "") + afterText;
+        newText =
+          beforeText +
+          button.before +
+          textToWrap +
+          (button.after || "") +
+          afterText;
         newCursorPos = start + button.before.length + textToWrap.length;
       } else if (button.action === "prefix") {
         // Add prefix at line start
@@ -157,8 +218,10 @@ export function MarkdownEditor({
         newCursorPos = start + button.before.length;
       } else {
         // Block: insert on new lines
-        const needsNewlineBefore = beforeText.length > 0 && !beforeText.endsWith("\n");
-        const needsNewlineAfter = afterText.length > 0 && !afterText.startsWith("\n");
+        const needsNewlineBefore =
+          beforeText.length > 0 && !beforeText.endsWith("\n");
+        const needsNewlineAfter =
+          afterText.length > 0 && !afterText.startsWith("\n");
         const textToInsert = selectedText || "code";
         newText =
           beforeText +
@@ -168,7 +231,11 @@ export function MarkdownEditor({
           (button.after || "") +
           (needsNewlineAfter ? "\n" : "") +
           afterText;
-        newCursorPos = beforeText.length + (needsNewlineBefore ? 1 : 0) + button.before.length + textToInsert.length;
+        newCursorPos =
+          beforeText.length +
+          (needsNewlineBefore ? 1 : 0) +
+          button.before.length +
+          textToInsert.length;
       }
 
       // Check max length
@@ -184,7 +251,7 @@ export function MarkdownEditor({
         textarea.setSelectionRange(newCursorPos, newCursorPos);
       }, 0);
     },
-    [value, onChange, maxLength]
+    [value, onChange, maxLength],
   );
 
   // Handle keyboard shortcuts
@@ -204,7 +271,7 @@ export function MarkdownEditor({
         }
       }
     },
-    [mode, insertText]
+    [mode, insertText],
   );
 
   const tabs: { id: EditorMode; label: string; icon?: React.ReactNode }[] = [
@@ -284,7 +351,10 @@ export function MarkdownEditor({
               disabled={disabled}
               rows={minRows}
               className="w-full px-3 py-2 text-sm bg-transparent resize-y focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ minHeight: `${minRows * 1.5}rem`, maxHeight: `${maxRows * 1.5}rem` }}
+              style={{
+                minHeight: `${minRows * 1.5}rem`,
+                maxHeight: `${maxRows * 1.5}rem`,
+              }}
             />
           )}
 
@@ -296,7 +366,9 @@ export function MarkdownEditor({
               {value ? (
                 <MarkdownRenderer content={value} />
               ) : (
-                <p className="text-muted-foreground text-sm italic">Nothing to preview</p>
+                <p className="text-muted-foreground text-sm italic">
+                  Nothing to preview
+                </p>
               )}
             </div>
           )}
@@ -318,8 +390,8 @@ export function MarkdownEditor({
               charWarning === "error"
                 ? "text-red-500 font-semibold"
                 : charWarning === "warning"
-                ? "text-yellow-500"
-                : "text-muted-foreground"
+                  ? "text-yellow-500"
+                  : "text-muted-foreground"
             }`}
           >
             {charCount.toLocaleString()} / {maxLength.toLocaleString()}

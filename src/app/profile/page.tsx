@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { useTheme } from 'next-themes';
-import { Header } from '@/components/Header';
-import { Footer } from '@/components/Footer';
-import { useAuth } from '@/hooks/useAuth';
-import { createClient } from '@/lib/supabase/client';
-import { isAdmin } from '@/lib/admin';
-import { toR2ThumbnailUrl } from '@/lib/thumbnail-url';
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useTheme } from "next-themes";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/lib/supabase/client";
+import { isAdmin } from "@/lib/admin";
+import { toR2ThumbnailUrl } from "@/lib/thumbnail-url";
 import {
   User as UserIcon,
   Mail,
@@ -22,9 +22,9 @@ import {
   Loader,
   Eye,
   Heart,
-  Shield
-} from 'lucide-react';
-import { MarkdownRenderer } from '@/components/MarkdownRenderer';
+  Shield,
+} from "lucide-react";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
 interface UserStats {
   circuitsUploaded: number;
@@ -51,7 +51,7 @@ function getTimeAgo(dateString: string): string {
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
@@ -79,7 +79,7 @@ function ProfileContent() {
   const supabase = createClient();
 
   // Get username from query params or use logged-in user
-  const usernameParam = searchParams.get('user');
+  const usernameParam = searchParams.get("user");
 
   // Load the profile user (either from query param or logged-in user)
   useEffect(() => {
@@ -87,14 +87,14 @@ function ProfileContent() {
       if (usernameParam) {
         // Viewing someone else's profile
         const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('username', usernameParam)
+          .from("profiles")
+          .select("*")
+          .eq("username", usernameParam)
           .single();
 
         if (error || !data) {
           // User not found, redirect to 404 or own profile
-          router.push('/profile');
+          router.push("/profile");
           return;
         }
 
@@ -103,14 +103,14 @@ function ProfileContent() {
       } else {
         // Viewing own profile
         if (!authLoading && !user) {
-          router.push('/login');
+          router.push("/login");
           return;
         }
         if (user) {
           const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
             .single();
 
           if (data) {
@@ -143,23 +143,24 @@ function ProfileContent() {
       try {
         // Get circuit count using count query (not limited to 1000)
         const { count: circuitCount, error: countError } = await supabase
-          .from('circuits')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', profileUser.id);
+          .from("circuits")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", profileUser.id);
 
         if (countError) throw countError;
 
         // Fetch all circuits in batches to calculate total copies and favorites
-        let allCircuits: Array<{ copy_count: number; favorite_count: number }> = [];
+        let allCircuits: Array<{ copy_count: number; favorite_count: number }> =
+          [];
         let hasMore = true;
         let offset = 0;
         const batchSize = 1000;
 
         while (hasMore) {
           const { data: batch, error: batchError } = await supabase
-            .from('circuits')
-            .select('copy_count, favorite_count')
-            .eq('user_id', profileUser.id)
+            .from("circuits")
+            .select("copy_count, favorite_count")
+            .eq("user_id", profileUser.id)
             .range(offset, offset + batchSize - 1);
 
           if (batchError) throw batchError;
@@ -175,13 +176,19 @@ function ProfileContent() {
 
         const stats: UserStats = {
           circuitsUploaded: circuitCount || 0,
-          totalCopies: allCircuits.reduce((sum, c) => sum + (c.copy_count || 0), 0),
-          totalFavorites: allCircuits.reduce((sum, c) => sum + (c.favorite_count || 0), 0),
+          totalCopies: allCircuits.reduce(
+            (sum, c) => sum + (c.copy_count || 0),
+            0,
+          ),
+          totalFavorites: allCircuits.reduce(
+            (sum, c) => sum + (c.favorite_count || 0),
+            0,
+          ),
         };
 
         setStats(stats);
       } catch (error) {
-        console.error('Error loading user stats:', error);
+        console.error("Error loading user stats:", error);
       } finally {
         setIsLoadingStats(false);
       }
@@ -197,17 +204,19 @@ function ProfileContent() {
 
       try {
         const { data, error } = await supabase
-          .from('circuits')
-          .select('id, slug, title, description, view_count, copy_count, favorite_count, created_at, thumbnail_light_url, thumbnail_dark_url')
-          .eq('user_id', profileUser.id)
-          .order('created_at', { ascending: false })
+          .from("circuits")
+          .select(
+            "id, slug, title, description, view_count, copy_count, favorite_count, created_at, thumbnail_light_url, thumbnail_dark_url",
+          )
+          .eq("user_id", profileUser.id)
+          .order("created_at", { ascending: false })
           .limit(10);
 
         if (error) throw error;
 
         setCircuits(data || []);
       } catch (error) {
-        console.error('Error loading circuits:', error);
+        console.error("Error loading circuits:", error);
       } finally {
         setIsLoadingCircuits(false);
       }
@@ -231,7 +240,9 @@ function ProfileContent() {
   const githubUsername = profileUser.username;
   const githubAvatar = profileUser.avatar_url;
   const fullName = profileUser.full_name || profileUser.username;
-  const githubUrl = githubUsername ? `https://github.com/${githubUsername}` : null;
+  const githubUrl = githubUsername
+    ? `https://github.com/${githubUsername}`
+    : null;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -247,7 +258,7 @@ function ProfileContent() {
                 {githubAvatar ? (
                   <img
                     src={githubAvatar}
-                    alt={fullName || 'Profile'}
+                    alt={fullName || "Profile"}
                     className="w-24 h-24 rounded-full border-2 border-primary/20"
                   />
                 ) : (
@@ -259,7 +270,9 @@ function ProfileContent() {
 
               {/* Profile Info */}
               <div className="flex-1">
-                <h1 className="text-3xl font-bold mb-2">{fullName || 'CircuitSnips User'}</h1>
+                <h1 className="text-3xl font-bold mb-2">
+                  {fullName || "CircuitSnips User"}
+                </h1>
 
                 <div className="flex flex-col gap-2 text-sm text-muted-foreground mb-4">
                   {githubUsername && (
@@ -285,7 +298,12 @@ function ProfileContent() {
 
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    <span>Joined {new Date(profileUser.created_at || '').toLocaleDateString()}</span>
+                    <span>
+                      Joined{" "}
+                      {new Date(
+                        profileUser.created_at || "",
+                      ).toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
 
@@ -334,7 +352,7 @@ function ProfileContent() {
                 <h3 className="font-semibold">Circuits Uploaded</h3>
               </div>
               <p className="text-3xl font-bold">
-                {isLoadingStats ? '-' : stats?.circuitsUploaded || 0}
+                {isLoadingStats ? "-" : stats?.circuitsUploaded || 0}
               </p>
             </div>
 
@@ -344,7 +362,7 @@ function ProfileContent() {
                 <h3 className="font-semibold">Total Copies</h3>
               </div>
               <p className="text-3xl font-bold">
-                {isLoadingStats ? '-' : stats?.totalCopies || 0}
+                {isLoadingStats ? "-" : stats?.totalCopies || 0}
               </p>
             </div>
 
@@ -354,7 +372,7 @@ function ProfileContent() {
                 <h3 className="font-semibold">Total Favorites</h3>
               </div>
               <p className="text-3xl font-bold">
-                {isLoadingStats ? '-' : stats?.totalFavorites || 0}
+                {isLoadingStats ? "-" : stats?.totalFavorites || 0}
               </p>
             </div>
           </div>
@@ -365,7 +383,9 @@ function ProfileContent() {
               <div className="flex items-center gap-3">
                 <Activity className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold">
-                  {isViewingOwnProfile ? 'Your Circuits' : `${fullName}'s Circuits`}
+                  {isViewingOwnProfile
+                    ? "Your Circuits"
+                    : `${fullName}'s Circuits`}
                 </h2>
               </div>
               {isViewingOwnProfile && circuits.length > 0 && (
@@ -386,7 +406,9 @@ function ProfileContent() {
               <div className="text-center py-12 text-muted-foreground">
                 <Upload className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p className="mb-2">
-                  {isViewingOwnProfile ? 'No circuits uploaded yet' : `${fullName} hasn't uploaded any circuits yet`}
+                  {isViewingOwnProfile
+                    ? "No circuits uploaded yet"
+                    : `${fullName} hasn't uploaded any circuits yet`}
                 </p>
                 {isViewingOwnProfile && (
                   <Link
@@ -400,7 +422,11 @@ function ProfileContent() {
             ) : (
               <div className="space-y-4">
                 {circuits.map((circuit) => {
-                  const thumbnailUrl = toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url);
+                  const thumbnailUrl = toR2ThumbnailUrl(
+                    theme === "dark"
+                      ? circuit.thumbnail_dark_url
+                      : circuit.thumbnail_light_url,
+                  );
                   const timeAgo = getTimeAgo(circuit.created_at);
 
                   return (
@@ -471,14 +497,16 @@ function ProfileContent() {
 
 export default function ProfilePage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col min-h-screen bg-background">
-        <Header />
-        <main className="flex-1 flex items-center justify-center">
-          <Loader className="w-8 h-8 animate-spin text-primary" />
-        </main>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex flex-col min-h-screen bg-background">
+          <Header />
+          <main className="flex-1 flex items-center justify-center">
+            <Loader className="w-8 h-8 animate-spin text-primary" />
+          </main>
+        </div>
+      }
+    >
       <ProfileContent />
     </Suspense>
   );

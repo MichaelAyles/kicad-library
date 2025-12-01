@@ -5,7 +5,7 @@
  * with collision handling
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Generate a slug from subcircuit name and repo name
@@ -17,7 +17,10 @@ import { SupabaseClient } from '@supabase/supabase-js';
  * @param repoName - Repository name (without owner)
  * @returns Sanitized slug
  */
-export function generateBaseSlug(subcircuitName: string, repoName: string): string {
+export function generateBaseSlug(
+  subcircuitName: string,
+  repoName: string,
+): string {
   // Combine name and repo
   const combined = `${subcircuitName} ${repoName}`;
 
@@ -32,19 +35,21 @@ export function generateBaseSlug(subcircuitName: string, repoName: string): stri
  * - No leading/trailing hyphens
  */
 export function sanitizeSlug(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    // Replace non-alphanumeric with hyphens
-    .replace(/[^a-z0-9]+/g, '-')
-    // Remove consecutive hyphens
-    .replace(/-+/g, '-')
-    // Remove leading/trailing hyphens
-    .replace(/^-|-$/g, '')
-    // Limit length to 100 characters
-    .substring(0, 100)
-    // Remove trailing hyphen if truncation created one
-    .replace(/-$/g, '');
+  return (
+    input
+      .toLowerCase()
+      .trim()
+      // Replace non-alphanumeric with hyphens
+      .replace(/[^a-z0-9]+/g, "-")
+      // Remove consecutive hyphens
+      .replace(/-+/g, "-")
+      // Remove leading/trailing hyphens
+      .replace(/^-|-$/g, "")
+      // Limit length to 100 characters
+      .substring(0, 100)
+      // Remove trailing hyphen if truncation created one
+      .replace(/-$/g, "")
+  );
 }
 
 /**
@@ -60,15 +65,15 @@ export function sanitizeSlug(input: string): string {
 export async function generateUniqueSlug(
   supabase: SupabaseClient,
   subcircuitName: string,
-  repoName: string
+  repoName: string,
 ): Promise<string> {
   const baseSlug = generateBaseSlug(subcircuitName, repoName);
 
   // Check if base slug exists
   const { data: existing } = await supabase
-    .from('circuits')
-    .select('slug')
-    .eq('slug', baseSlug)
+    .from("circuits")
+    .select("slug")
+    .eq("slug", baseSlug)
     .maybeSingle();
 
   // If no collision, return base slug
@@ -82,9 +87,9 @@ export async function generateUniqueSlug(
 
   while (counter < 100) {
     const { data: collision } = await supabase
-      .from('circuits')
-      .select('slug')
-      .eq('slug', uniqueSlug)
+      .from("circuits")
+      .select("slug")
+      .eq("slug", uniqueSlug)
       .maybeSingle();
 
     if (!collision) {
@@ -113,7 +118,7 @@ export function isValidSlug(slug: string): boolean {
     slug.length > 0 &&
     slug.length <= 100 &&
     slugRegex.test(slug) &&
-    !slug.startsWith('-') &&
-    !slug.endsWith('-')
+    !slug.startsWith("-") &&
+    !slug.endsWith("-")
   );
 }

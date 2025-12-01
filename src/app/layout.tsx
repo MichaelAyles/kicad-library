@@ -9,12 +9,22 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "CircuitSnips - Share KiCad Subcircuits",
-  description: "Open-source platform for sharing and discovering reusable KiCad schematic subcircuits. Copy-paste circuits for your electronics projects.",
-  keywords: ["KiCad", "electronics", "schematics", "open source hardware", "circuits", "PCB", "electronic design"],
+  description:
+    "Open-source platform for sharing and discovering reusable KiCad schematic subcircuits. Copy-paste circuits for your electronics projects.",
+  keywords: [
+    "KiCad",
+    "electronics",
+    "schematics",
+    "open source hardware",
+    "circuits",
+    "PCB",
+    "electronic design",
+  ],
   authors: [{ name: "CircuitSnips", url: "https://circuitsnips.com" }],
   openGraph: {
     title: "CircuitSnips - Share KiCad Subcircuits",
-    description: "Open-source platform for sharing reusable KiCad schematic subcircuits",
+    description:
+      "Open-source platform for sharing reusable KiCad schematic subcircuits",
     url: "https://circuitsnips.com",
     siteName: "CircuitSnips",
     type: "website",
@@ -22,7 +32,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "CircuitSnips - Share KiCad Subcircuits",
-    description: "Open-source platform for sharing reusable KiCad schematic subcircuits",
+    description:
+      "Open-source platform for sharing reusable KiCad schematic subcircuits",
   },
 };
 
@@ -39,9 +50,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ThemeProvider>
-          <div className="min-h-screen flex flex-col">
-            {children}
-          </div>
+          <div className="min-h-screen flex flex-col">{children}</div>
           <CookieNotice />
         </ThemeProvider>
         <Analytics />

@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 // Force dynamic rendering since we use Supabase client (accesses cookies)
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -10,25 +10,25 @@ export async function GET() {
 
     // Get stats from global_stats table (single row, super fast)
     const { data: globalStats, error: statsError } = await supabase
-      .from('global_stats')
-      .select('total_circuits, total_copies, total_users, last_synced_at')
-      .eq('id', 1)
+      .from("global_stats")
+      .select("total_circuits, total_copies, total_users, last_synced_at")
+      .eq("id", 1)
       .single();
 
     if (statsError) {
-      console.error('Error fetching global stats:', statsError);
+      console.error("Error fetching global stats:", statsError);
 
       // Fallback to old method if global_stats doesn't exist yet
-      console.log('Falling back to aggregation method...');
+      console.log("Falling back to aggregation method...");
 
       const { count: circuitCount } = await supabase
-        .from('circuits')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_public', true);
+        .from("circuits")
+        .select("*", { count: "exact", head: true })
+        .eq("is_public", true);
 
       const { count: makerCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
+        .from("profiles")
+        .select("*", { count: "exact", head: true });
 
       return NextResponse.json({
         circuits: circuitCount || 0,
@@ -44,10 +44,10 @@ export async function GET() {
       lastSynced: globalStats.last_synced_at,
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    console.error("Error fetching stats:", error);
     return NextResponse.json(
-      { error: 'Failed to fetch stats' },
-      { status: 500 }
+      { error: "Failed to fetch stats" },
+      { status: 500 },
     );
   }
 }

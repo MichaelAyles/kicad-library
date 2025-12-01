@@ -1,21 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
 
-    const query = searchParams.get('q') || '';
-    const category = searchParams.get('category') || '';
-    const tag = searchParams.get('tag') || '';
-    const license = searchParams.get('license') || '';
-    const sort = searchParams.get('sort') || 'relevance';
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
-    const excludeImported = searchParams.get('excludeImported') === 'true';
+    const query = searchParams.get("q") || "";
+    const category = searchParams.get("category") || "";
+    const tag = searchParams.get("tag") || "";
+    const license = searchParams.get("license") || "";
+    const sort = searchParams.get("sort") || "relevance";
+    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const excludeImported = searchParams.get("excludeImported") === "true";
 
     // Build base query
     let circuits: any[] = [];
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
       // Search with weights: tags (highest), title (medium), description (lowest)
       // Using custom SQL to leverage ts_rank with weighted search_vector
-      const { data, error } = await supabase.rpc('search_circuits_weighted', {
+      const { data, error } = await supabase.rpc("search_circuits_weighted", {
         search_query: searchQuery,
         filter_category: category || null,
         filter_tag: tag || null,
@@ -35,15 +35,19 @@ export async function GET(request: NextRequest) {
         exclude_user_id: null, // Deprecated - using exclude_imported instead
         exclude_imported: excludeImported,
         result_limit: Math.min(limit, 100),
-        result_offset: offset
+        result_offset: offset,
       });
 
       if (error) {
-        console.error('Weighted search error, falling back to simple search:', error);
+        console.error(
+          "Weighted search error, falling back to simple search:",
+          error,
+        );
         // Fallback to simple pattern matching if RPC fails
         let fallbackQuery = supabase
-          .from('circuits')
-          .select(`
+          .from("circuits")
+          .select(
+            `
             id,
             slug,
             title,
@@ -61,18 +65,24 @@ export async function GET(request: NextRequest) {
               username,
               avatar_url
             )
-          `)
-          .eq('is_public', true)
-          .or(`tags.cs.{${searchQuery}},title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+          `,
+          )
+          .eq("is_public", true)
+          .or(
+            `tags.cs.{${searchQuery}},title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`,
+          );
 
-        if (category) fallbackQuery = fallbackQuery.eq('category', category);
-        if (tag) fallbackQuery = fallbackQuery.contains('tags', [tag]);
-        if (license) fallbackQuery = fallbackQuery.eq('license', license);
+        if (category) fallbackQuery = fallbackQuery.eq("category", category);
+        if (tag) fallbackQuery = fallbackQuery.contains("tags", [tag]);
+        if (license) fallbackQuery = fallbackQuery.eq("license", license);
         if (excludeImported) {
-          fallbackQuery = fallbackQuery.is('batch_import_id', null);
+          fallbackQuery = fallbackQuery.is("batch_import_id", null);
         }
 
-        fallbackQuery = fallbackQuery.range(offset, offset + Math.min(limit, 100) - 1);
+        fallbackQuery = fallbackQuery.range(
+          offset,
+          offset + Math.min(limit, 100) - 1,
+        );
 
         const fallbackResult = await fallbackQuery;
         circuits = fallbackResult.data || [];
@@ -82,8 +92,9 @@ export async function GET(request: NextRequest) {
     } else {
       // No search query - just apply filters
       let supabaseQuery = supabase
-        .from('circuits')
-        .select(`
+        .from("circuits")
+        .select(
+          `
           id,
           slug,
           title,
@@ -101,33 +112,40 @@ export async function GET(request: NextRequest) {
             username,
             avatar_url
           )
-        `)
-        .eq('is_public', true);
+        `,
+        )
+        .eq("is_public", true);
 
-      if (category) supabaseQuery = supabaseQuery.eq('category', category);
-      if (tag) supabaseQuery = supabaseQuery.contains('tags', [tag]);
-      if (license) supabaseQuery = supabaseQuery.eq('license', license);
+      if (category) supabaseQuery = supabaseQuery.eq("category", category);
+      if (tag) supabaseQuery = supabaseQuery.contains("tags", [tag]);
+      if (license) supabaseQuery = supabaseQuery.eq("license", license);
       if (excludeImported) {
-        supabaseQuery = supabaseQuery.is('batch_import_id', null);
+        supabaseQuery = supabaseQuery.is("batch_import_id", null);
       }
 
-      supabaseQuery = supabaseQuery.range(offset, offset + Math.min(limit, 100) - 1);
+      supabaseQuery = supabaseQuery.range(
+        offset,
+        offset + Math.min(limit, 100) - 1,
+      );
 
       const { data } = await supabaseQuery;
       circuits = data || [];
     }
 
     // Apply sorting (only for non-search queries, search results are pre-sorted by relevance)
-    if (!query || sort !== 'relevance') {
+    if (!query || sort !== "relevance") {
       circuits = circuits.sort((a, b) => {
         switch (sort) {
-          case 'recent':
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-          case 'popular':
+          case "recent":
+            return (
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+            );
+          case "popular":
             return (b.copy_count || 0) - (a.copy_count || 0);
-          case 'views':
+          case "views":
             return (b.view_count || 0) - (a.view_count || 0);
-          case 'favorites':
+          case "favorites":
             return (b.favorite_count || 0) - (a.favorite_count || 0);
           default:
             // For relevance, results are already sorted by weighted search
@@ -141,10 +159,10 @@ export async function GET(request: NextRequest) {
       count: circuits?.length || 0,
     });
   } catch (error) {
-    console.error('Error in search API:', error);
+    console.error("Error in search API:", error);
     return NextResponse.json(
-      { error: 'Failed to search circuits' },
-      { status: 500 }
+      { error: "Failed to search circuits" },
+      { status: 500 },
     );
   }
 }

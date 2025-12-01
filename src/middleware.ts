@@ -1,6 +1,10 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
-import { checkRateLimit, RateLimitPresets, type RateLimitConfig } from '@/lib/rate-limit';
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import {
+  checkRateLimit,
+  RateLimitPresets,
+  type RateLimitConfig,
+} from "@/lib/rate-limit";
 
 /**
  * Middleware to:
@@ -14,15 +18,16 @@ export async function middleware(request: NextRequest) {
   let rateLimitResult = null;
 
   // Apply rate limiting to API routes
-  if (request.nextUrl.pathname.startsWith('/api/')) {
-    const ip = request.ip ?? request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    const ip =
+      request.ip ?? request.headers.get("x-forwarded-for") ?? "127.0.0.1";
     const identifier = `api:${ip}`;
 
     // Use different limits for different endpoints
     let config: RateLimitConfig = RateLimitPresets.MODERATE; // Default: 30 req/min
 
     // Stricter limits for resource-intensive endpoints
-    if (request.nextUrl.pathname.startsWith('/api/preview')) {
+    if (request.nextUrl.pathname.startsWith("/api/preview")) {
       config = RateLimitPresets.STRICT; // 10 req/10s for preview generation
     }
 
@@ -31,21 +36,23 @@ export async function middleware(request: NextRequest) {
     if (!rateLimitResult.success) {
       return new NextResponse(
         JSON.stringify({
-          error: 'Too Many Requests',
-          message: 'You have exceeded the rate limit. Please try again later.',
+          error: "Too Many Requests",
+          message: "You have exceeded the rate limit. Please try again later.",
           limit: rateLimitResult.limit,
           reset: new Date(rateLimitResult.reset).toISOString(),
         }),
         {
           status: 429,
           headers: {
-            'Content-Type': 'application/json',
-            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
-            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-            'X-RateLimit-Reset': rateLimitResult.reset.toString(),
-            'Retry-After': Math.ceil((rateLimitResult.reset - Date.now()) / 1000).toString(),
+            "Content-Type": "application/json",
+            "X-RateLimit-Limit": rateLimitResult.limit.toString(),
+            "X-RateLimit-Remaining": rateLimitResult.remaining.toString(),
+            "X-RateLimit-Reset": rateLimitResult.reset.toString(),
+            "Retry-After": Math.ceil(
+              (rateLimitResult.reset - Date.now()) / 1000,
+            ).toString(),
           },
-        }
+        },
       );
     }
   }
@@ -85,7 +92,7 @@ export async function middleware(request: NextRequest) {
         remove(name: string, options: CookieOptions) {
           request.cookies.set({
             name,
-            value: '',
+            value: "",
             ...options,
           });
           response = NextResponse.next({
@@ -95,12 +102,12 @@ export async function middleware(request: NextRequest) {
           });
           response.cookies.set({
             name,
-            value: '',
+            value: "",
             ...options,
           });
         },
       },
-    }
+    },
   );
 
   // Refresh session if expired
@@ -108,9 +115,12 @@ export async function middleware(request: NextRequest) {
 
   // Add rate limit headers to successful API requests
   if (rateLimitResult) {
-    response.headers.set('X-RateLimit-Limit', rateLimitResult.limit.toString());
-    response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
-    response.headers.set('X-RateLimit-Reset', rateLimitResult.reset.toString());
+    response.headers.set("X-RateLimit-Limit", rateLimitResult.limit.toString());
+    response.headers.set(
+      "X-RateLimit-Remaining",
+      rateLimitResult.remaining.toString(),
+    );
+    response.headers.set("X-RateLimit-Reset", rateLimitResult.reset.toString());
   }
 
   return response;
@@ -125,6 +135,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

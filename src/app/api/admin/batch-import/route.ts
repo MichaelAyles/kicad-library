@@ -7,17 +7,20 @@
  * Requires admin authentication
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { verifyAdminKey } from '@/lib/admin-auth';
-import { validateImportBatch, ImportRecord } from '@/lib/batch-import/validator';
-import { transformToCircuit } from '@/lib/batch-import/transformer';
-import { generateUniqueSlug } from '@/lib/batch-import/slug-generator';
-import { addGitHubAttribution } from '@/lib/kicad-parser';
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyAdminKey } from "@/lib/admin-auth";
+import {
+  validateImportBatch,
+  ImportRecord,
+} from "@/lib/batch-import/validator";
+import { transformToCircuit } from "@/lib/batch-import/transformer";
+import { generateUniqueSlug } from "@/lib/batch-import/slug-generator";
+import { addGitHubAttribution } from "@/lib/kicad-parser";
 
 interface ImportResult {
   source_file_id: string;
-  status: 'success' | 'skipped' | 'error';
+  status: "success" | "skipped" | "error";
   circuit_id?: string;
   slug?: string;
   reason?: string;
@@ -27,11 +30,11 @@ interface ImportResult {
 export async function POST(request: NextRequest) {
   try {
     // 1. Verify admin authentication
-    const authHeader = request.headers.get('Authorization');
+    const authHeader = request.headers.get("Authorization");
     if (!verifyAdminKey(authHeader)) {
       return NextResponse.json(
-        { error: 'Unauthorized - Invalid admin API key' },
-        { status: 401 }
+        { error: "Unauthorized - Invalid admin API key" },
+        { status: 401 },
       );
     }
 
@@ -42,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!records) {
       return NextResponse.json(
         { error: 'Missing "records" array in request body' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -51,19 +54,16 @@ export async function POST(request: NextRequest) {
     try {
       validationResults = validateImportBatch(records);
     } catch (error: any) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     // 4. Get bot user ID from environment
     const botUserId = process.env.BOT_USER_ID;
     if (!botUserId) {
-      console.error('BOT_USER_ID not configured in environment variables');
+      console.error("BOT_USER_ID not configured in environment variables");
       return NextResponse.json(
-        { error: 'Server configuration error - BOT_USER_ID not set' },
-        { status: 500 }
+        { error: "Server configuration error - BOT_USER_ID not set" },
+        { status: 500 },
       );
     }
 
@@ -84,8 +84,8 @@ export async function POST(request: NextRequest) {
       if (!validation.valid) {
         results.push({
           source_file_id: record.source_file_id || `unknown-${i}`,
-          status: 'error',
-          error: validation.errors.join(', '),
+          status: "error",
+          error: validation.errors.join(", "),
         });
         failedCount++;
         continue;
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
         const slug = await generateUniqueSlug(
           supabase,
           record.subcircuit.name,
-          record.repo_name
+          record.repo_name,
         );
 
         // Add GitHub attribution to S-expression
@@ -113,22 +113,22 @@ export async function POST(request: NextRequest) {
         const circuitData = transformToCircuit(
           { ...record, raw_sexpr: attributedSexpr },
           slug,
-          botUserId
+          botUserId,
         );
 
         // Insert into database
         const { data: insertedCircuit, error: insertError } = await supabase
-          .from('circuits')
+          .from("circuits")
           .insert(circuitData)
-          .select('id, slug')
+          .select("id, slug")
           .single();
 
         if (insertError) {
           // Check if it's a duplicate slug error
-          if (insertError.code === '23505') {
+          if (insertError.code === "23505") {
             results.push({
               source_file_id: record.source_file_id,
-              status: 'skipped',
+              status: "skipped",
               reason: `Duplicate slug: ${slug}`,
             });
             skippedCount++;
@@ -138,18 +138,21 @@ export async function POST(request: NextRequest) {
         } else {
           results.push({
             source_file_id: record.source_file_id,
-            status: 'success',
+            status: "success",
             circuit_id: insertedCircuit.id,
             slug: insertedCircuit.slug,
           });
           importedCount++;
         }
       } catch (error: any) {
-        console.error(`Error importing record ${record.source_file_id}:`, error);
+        console.error(
+          `Error importing record ${record.source_file_id}:`,
+          error,
+        );
         results.push({
           source_file_id: record.source_file_id,
-          status: 'error',
-          error: error.message || 'Unknown error',
+          status: "error",
+          error: error.message || "Unknown error",
         });
         failedCount++;
       }
@@ -168,10 +171,10 @@ export async function POST(request: NextRequest) {
       details: results,
     });
   } catch (error: any) {
-    console.error('Error in batch import:', error);
+    console.error("Error in batch import:", error);
     return NextResponse.json(
-      { error: 'Internal server error', message: error.message },
-      { status: 500 }
+      { error: "Internal server error", message: error.message },
+      { status: 500 },
     );
   }
 }
@@ -181,28 +184,28 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   return NextResponse.json({
-    endpoint: 'POST /api/admin/batch-import',
-    description: 'Batch import circuits from external scrapers',
-    authentication: 'Bearer token in Authorization header',
+    endpoint: "POST /api/admin/batch-import",
+    description: "Batch import circuits from external scrapers",
+    authentication: "Bearer token in Authorization header",
     request_format: {
       records: [
         {
-          source_file_id: 'string',
-          repo_owner: 'string',
-          repo_name: 'string',
-          repo_url: 'string',
-          repo_license: 'string',
-          file_path: 'string',
-          raw_sexpr: 'string (KiCad S-expression)',
-          component_count: 'number',
-          classification_score: 'number (0-10)',
+          source_file_id: "string",
+          repo_owner: "string",
+          repo_name: "string",
+          repo_url: "string",
+          repo_license: "string",
+          file_path: "string",
+          raw_sexpr: "string (KiCad S-expression)",
+          component_count: "number",
+          classification_score: "number (0-10)",
           subcircuit: {
-            name: 'string (max 100 chars)',
-            description: 'string',
-            components: 'string (optional)',
-            useCase: 'string (optional)',
-            notes: 'string (optional)',
-            tags: ['array of strings (max 10, each max 30 chars)'],
+            name: "string (max 100 chars)",
+            description: "string",
+            components: "string (optional)",
+            useCase: "string (optional)",
+            notes: "string (optional)",
+            tags: ["array of strings (max 10, each max 30 chars)"],
           },
         },
       ],
@@ -215,22 +218,22 @@ export async function GET() {
       tag_max_length: 30,
     },
     response_format: {
-      success: 'boolean',
-      batch_id: 'string',
+      success: "boolean",
+      batch_id: "string",
       results: {
-        total: 'number',
-        imported: 'number',
-        skipped: 'number',
-        failed: 'number',
+        total: "number",
+        imported: "number",
+        skipped: "number",
+        failed: "number",
       },
       details: [
         {
-          source_file_id: 'string',
-          status: 'success | skipped | error',
-          circuit_id: 'string (if success)',
-          slug: 'string (if success)',
-          reason: 'string (if skipped)',
-          error: 'string (if error)',
+          source_file_id: "string",
+          status: "success | skipped | error",
+          circuit_id: "string (if success)",
+          slug: "string (if success)",
+          reason: "string (if skipped)",
+          error: "string (if error)",
         },
       ],
     },

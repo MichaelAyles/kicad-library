@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -9,12 +9,12 @@ export async function GET() {
 
     // Get all circuits with their tags
     const { data: circuits, error } = await supabase
-      .from('circuits')
-      .select('tags')
-      .eq('is_public', true);
+      .from("circuits")
+      .select("tags")
+      .eq("is_public", true);
 
     if (error) {
-      console.error('Error fetching circuits:', error);
+      console.error("Error fetching circuits:", error);
       throw error;
     }
 
@@ -26,7 +26,10 @@ export async function GET() {
         circuit.tags.forEach((tag: string) => {
           const normalizedTag = tag.toLowerCase().trim();
           if (normalizedTag) {
-            tagCounts.set(normalizedTag, (tagCounts.get(normalizedTag) || 0) + 1);
+            tagCounts.set(
+              normalizedTag,
+              (tagCounts.get(normalizedTag) || 0) + 1,
+            );
           }
         });
       }
@@ -42,10 +45,10 @@ export async function GET() {
       tags: popularTags,
     });
   } catch (error) {
-    console.error('Error in tags API:', error);
+    console.error("Error in tags API:", error);
     return NextResponse.json(
-      { error: 'Failed to fetch popular tags' },
-      { status: 500 }
+      { error: "Failed to fetch popular tags" },
+      { status: 500 },
     );
   }
 }

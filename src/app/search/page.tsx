@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
@@ -23,9 +23,9 @@ function SearchContent() {
   const [circuits, setCircuits] = useState<SearchCircuit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [sort, setSort] = useState<'relevance' | 'recent' | 'popular' | 'views' | 'favorites'>(
-    (searchParams.get('sort') as any) || 'relevance'
-  );
+  const [sort, setSort] = useState<
+    "relevance" | "recent" | "popular" | "views" | "favorites"
+  >((searchParams.get("sort") as any) || "relevance");
   const [hideImported, setHideImported] = useState(false);
   const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
 
@@ -35,17 +35,17 @@ function SearchContent() {
 
     try {
       const { circuits: results } = await searchCircuits({
-        query: searchParams.get('q') || undefined,
-        category: searchParams.get('category') || undefined,
-        tag: searchParams.get('tag') || undefined,
-        license: searchParams.get('license') || undefined,
+        query: searchParams.get("q") || undefined,
+        category: searchParams.get("category") || undefined,
+        tag: searchParams.get("tag") || undefined,
+        license: searchParams.get("license") || undefined,
         sort,
         excludeImported: hideImported,
       });
 
       setCircuits(results);
     } catch (error) {
-      console.error('Search error:', error);
+      console.error("Search error:", error);
       setCircuits([]);
     } finally {
       setLoading(false);
@@ -53,9 +53,9 @@ function SearchContent() {
   }, [searchParams, sort, hideImported]);
 
   useEffect(() => {
-    const q = searchParams.get('q');
-    const category = searchParams.get('category');
-    const tag = searchParams.get('tag');
+    const q = searchParams.get("q");
+    const category = searchParams.get("category");
+    const tag = searchParams.get("tag");
 
     if (q || category || tag) {
       performSearch();
@@ -66,23 +66,25 @@ function SearchContent() {
   useEffect(() => {
     const fetchPopularTags = async () => {
       try {
-        const response = await fetch('/api/tags');
+        const response = await fetch("/api/tags");
         const data = await response.json();
         if (response.ok) {
           setPopularTags(data.tags || []);
         }
       } catch (error) {
-        console.error('Error fetching popular tags:', error);
+        console.error("Error fetching popular tags:", error);
       }
     };
 
     fetchPopularTags();
   }, []);
 
-  const handleSortChange = (newSort: 'relevance' | 'recent' | 'popular' | 'views' | 'favorites') => {
+  const handleSortChange = (
+    newSort: "relevance" | "recent" | "popular" | "views" | "favorites",
+  ) => {
     setSort(newSort);
     const params = new URLSearchParams(searchParams.toString());
-    params.set('sort', newSort);
+    params.set("sort", newSort);
     router.push(`/search?${params.toString()}`);
   };
 
@@ -111,14 +113,24 @@ function SearchContent() {
           {searched && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
               <p className="text-muted-foreground">
-                {circuits.length} {circuits.length === 1 ? 'result' : 'results'} found
+                {circuits.length} {circuits.length === 1 ? "result" : "results"}{" "}
+                found
               </p>
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <div className="flex items-center gap-2">
                   <SortDesc className="w-4 h-4 text-muted-foreground" />
                   <select
                     value={sort}
-                    onChange={(e) => handleSortChange(e.target.value as 'relevance' | 'recent' | 'popular' | 'views' | 'favorites')}
+                    onChange={(e) =>
+                      handleSortChange(
+                        e.target.value as
+                          | "relevance"
+                          | "recent"
+                          | "popular"
+                          | "views"
+                          | "favorites",
+                      )
+                    }
                     className="px-3 py-1 border rounded-md bg-background text-sm"
                   >
                     <option value="relevance">Relevance</option>
@@ -155,7 +167,9 @@ function SearchContent() {
           {loading && (
             <div className="text-center py-12">
               <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-              <p className="mt-4 text-muted-foreground">Searching circuits...</p>
+              <p className="mt-4 text-muted-foreground">
+                Searching circuits...
+              </p>
             </div>
           )}
 
@@ -170,7 +184,13 @@ function SearchContent() {
                 >
                   <div className="aspect-video bg-muted relative overflow-hidden">
                     <img
-                      src={toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || '/placeholder-circuit.png'}
+                      src={
+                        toR2ThumbnailUrl(
+                          theme === "dark"
+                            ? circuit.thumbnail_dark_url
+                            : circuit.thumbnail_light_url,
+                        ) || "/placeholder-circuit.png"
+                      }
                       alt={circuit.title}
                       className="w-full h-full object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
                     />
@@ -184,7 +204,9 @@ function SearchContent() {
                     </p>
                     <div className="flex items-center gap-2 mb-3">
                       <img
-                        src={circuit.profiles.avatar_url || '/default-avatar.png'}
+                        src={
+                          circuit.profiles.avatar_url || "/default-avatar.png"
+                        }
                         alt={circuit.profiles.username}
                         className="w-6 h-6 rounded-full"
                       />
@@ -218,7 +240,8 @@ function SearchContent() {
               <SearchIcon className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-xl font-semibold mb-2">No circuits found</h3>
               <p className="text-muted-foreground mb-6">
-                Try adjusting your search terms or browse popular categories below
+                Try adjusting your search terms or browse popular categories
+                below
               </p>
             </div>
           )}
@@ -227,7 +250,9 @@ function SearchContent() {
           {(!searched || circuits.length === 0) && (
             <>
               <div className="mb-12">
-                <h2 className="text-lg font-semibold mb-4">Popular Categories</h2>
+                <h2 className="text-lg font-semibold mb-4">
+                  Popular Categories
+                </h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
                     "Power Supply",
@@ -262,11 +287,15 @@ function SearchContent() {
                         className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm hover:bg-primary/20 transition-colors flex items-center gap-1"
                       >
                         <span>{tagData.tag}</span>
-                        <span className="text-xs opacity-60">({tagData.count})</span>
+                        <span className="text-xs opacity-60">
+                          ({tagData.count})
+                        </span>
                       </Link>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">Loading popular tags...</p>
+                    <p className="text-sm text-muted-foreground">
+                      Loading popular tags...
+                    </p>
                   )}
                 </div>
               </div>
@@ -277,9 +306,18 @@ function SearchContent() {
           <div className="mt-12 p-6 bg-muted/30 rounded-lg">
             <h3 className="font-semibold mb-2">Search Tips</h3>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Search by component name (e.g., &quot;LM358&quot;, &quot;ESP32&quot;)</li>
-              <li>• Search by function (e.g., &quot;voltage regulator&quot;, &quot;amplifier&quot;)</li>
-              <li>• Use tags to filter results (e.g., &quot;power&quot;, &quot;usb&quot;)</li>
+              <li>
+                • Search by component name (e.g., &quot;LM358&quot;,
+                &quot;ESP32&quot;)
+              </li>
+              <li>
+                • Search by function (e.g., &quot;voltage regulator&quot;,
+                &quot;amplifier&quot;)
+              </li>
+              <li>
+                • Use tags to filter results (e.g., &quot;power&quot;,
+                &quot;usb&quot;)
+              </li>
               <li>• Click categories for common circuit types</li>
             </ul>
           </div>
@@ -293,18 +331,20 @@ function SearchContent() {
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-4 text-muted-foreground">Loading search...</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex flex-col min-h-screen">
+          <Header />
+          <main className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <p className="mt-4 text-muted-foreground">Loading search...</p>
+            </div>
+          </main>
+          <Footer />
+        </div>
+      }
+    >
       <SearchContent />
     </Suspense>
   );

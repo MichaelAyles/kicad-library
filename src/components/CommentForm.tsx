@@ -129,7 +129,9 @@ export function CommentForm({
               {content.trim() ? (
                 <MarkdownRenderer content={content} />
               ) : (
-                <p className="text-sm text-muted-foreground italic">Nothing to preview</p>
+                <p className="text-sm text-muted-foreground italic">
+                  Nothing to preview
+                </p>
               )}
             </div>
           ) : (
@@ -146,7 +148,9 @@ export function CommentForm({
           )}
 
           <div className="flex justify-between items-center mt-2">
-            <span className={`text-xs ${content.length >= 9000 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+            <span
+              className={`text-xs ${content.length >= 9000 ? "text-yellow-500" : "text-muted-foreground"}`}
+            >
               {content.length.toLocaleString()}/10,000 • Markdown supported
             </span>
             <div className="flex gap-2">
@@ -167,7 +171,11 @@ export function CommentForm({
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
               >
                 <Send className="w-4 h-4" />
-                {isSubmitting ? "Posting..." : parentCommentId ? "Reply" : "Comment"}
+                {isSubmitting
+                  ? "Posting..."
+                  : parentCommentId
+                    ? "Reply"
+                    : "Comment"}
               </button>
             </div>
           </div>

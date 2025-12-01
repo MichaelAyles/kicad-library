@@ -3,7 +3,15 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Loader, X, Trash2, Camera, History } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  Loader,
+  X,
+  Trash2,
+  Camera,
+  History,
+} from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { KiCanvas } from "@/components/KiCanvas";
@@ -13,7 +21,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
-import { wrapSnippetToFullFile, isClipboardSnippet } from "@/lib/kicad-parser";
+import {
+  wrapSnippetToFullFile,
+  isClipboardSnippet,
+  validateSExpression,
+  selectSheetSize,
+} from "@/lib/kicad-parser";
 
 const LICENSES = [
   "CERN-OHL-S-2.0",
@@ -53,7 +66,8 @@ export default function EditCircuitPage() {
   const [isUserAdmin, setIsUserAdmin] = useState(false);
 
   // Thumbnail regeneration state
-  const [isRegeneratingThumbnails, setIsRegeneratingThumbnails] = useState(false);
+  const [isRegeneratingThumbnails, setIsRegeneratingThumbnails] =
+    useState(false);
   const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const lightContainerRef = useRef<HTMLDivElement>(null);
@@ -113,7 +127,7 @@ export default function EditCircuitPage() {
           userId: user?.id,
           circuitUserId: circuitData.user_id,
           isOwner,
-          isAdmin: userIsAdmin
+          isAdmin: userIsAdmin,
         });
 
         if (!user || (!isOwner && !userIsAdmin)) {
@@ -254,9 +268,17 @@ export default function EditCircuitPage() {
       // Create preview URL from raw sexpr
       let fullFile = circuit.raw_sexpr;
       if (isClipboardSnippet(circuit.raw_sexpr)) {
+        // Calculate the appropriate sheet size based on bounding box
+        const validation = validateSExpression(circuit.raw_sexpr);
+        const paperSize =
+          validation.valid && validation.metadata
+            ? selectSheetSize(validation.metadata.boundingBox).size
+            : "A4";
+
         fullFile = wrapSnippetToFullFile(circuit.raw_sexpr, {
           title: circuit.title,
-          uuid: circuit.id
+          uuid: circuit.id,
+          paperSize,
         });
       }
 
@@ -265,22 +287,22 @@ export default function EditCircuitPage() {
       const previewId = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('previews')
+        .from("previews")
         .upload(`${previewId}.kicad_sch`, fullFile, {
-          contentType: 'text/plain',
+          contentType: "text/plain",
           upsert: true,
         });
 
       if (uploadError) {
-        throw new Error('Failed to create preview');
+        throw new Error("Failed to create preview");
       }
 
       const newPreviewUrl = `/api/preview/preview.kicad_sch?id=${previewId}`;
       setPreviewUrl(newPreviewUrl);
       setShowThumbnailPreview(true);
     } catch (err) {
-      console.error('Failed to load preview:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load preview');
+      console.error("Failed to load preview:", err);
+      setError(err instanceof Error ? err.message : "Failed to load preview");
     } finally {
       setIsRegeneratingThumbnails(false);
     }
@@ -290,7 +312,7 @@ export default function EditCircuitPage() {
     if (!circuit || !user || !previewUrl) return;
 
     if (!lightContainerRef.current || !darkContainerRef.current) {
-      setError('Viewers not ready. Please wait for both previews to load.');
+      setError("Viewers not ready. Please wait for both previews to load.");
       return;
     }
 
@@ -299,35 +321,53 @@ export default function EditCircuitPage() {
 
     try {
       // Wait for viewers to be ready
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Capture thumbnails from both containers
       const thumbnails = await captureThumbnails(
         lightContainerRef.current,
-        darkContainerRef.current
+        darkContainerRef.current,
       );
 
       const supabase = createClient();
 
       // Fetch current thumbnail version from database
       const { data: circuitData, error: fetchError } = await supabase
-        .from('circuits')
-        .select('thumbnail_version')
-        .eq('id', circuit.id)
+        .from("circuits")
+        .select("thumbnail_version")
+        .eq("id", circuit.id)
         .single();
 
       if (fetchError) {
-        throw new Error(`Failed to fetch circuit version: ${fetchError.message}`);
+        throw new Error(
+          `Failed to fetch circuit version: ${fetchError.message}`,
+        );
       }
 
       const currentVersion = circuitData?.thumbnail_version || 0;
       const newVersion = currentVersion + 1;
 
-      console.log(`Version detection: DB version=${currentVersion}, Next=${newVersion}`);
+      console.log(
+        `Version detection: DB version=${currentVersion}, Next=${newVersion}`,
+      );
 
       // Upload new thumbnails with incremented version
-      const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', thumbnails.light, newVersion);
-      const darkUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'dark', thumbnails.dark, newVersion);
+      const lightUrl = await uploadThumbnail(
+        supabase,
+        user.id,
+        circuit.id,
+        "light",
+        thumbnails.light,
+        newVersion,
+      );
+      const darkUrl = await uploadThumbnail(
+        supabase,
+        user.id,
+        circuit.id,
+        "dark",
+        thumbnails.dark,
+        newVersion,
+      );
 
       // Update circuit with new thumbnail URLs and version
       const response = await fetch(`/api/circuits/${circuit.id}`, {
@@ -343,12 +383,14 @@ export default function EditCircuitPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update thumbnails');
+        throw new Error("Failed to update thumbnails");
       }
 
       // Clean up preview
-      const previewId = previewUrl.split('id=')[1];
-      await supabase.storage.from('previews').remove([`${previewId}.kicad_sch`]);
+      const previewId = previewUrl.split("id=")[1];
+      await supabase.storage
+        .from("previews")
+        .remove([`${previewId}.kicad_sch`]);
 
       setShowThumbnailPreview(false);
       setPreviewUrl(null);
@@ -357,8 +399,10 @@ export default function EditCircuitPage() {
       // This ensures fresh data is loaded from the database
       router.push(`/circuit/${slug}`);
     } catch (err) {
-      console.error('Failed to capture thumbnails:', err);
-      setError(err instanceof Error ? err.message : 'Failed to capture thumbnails');
+      console.error("Failed to capture thumbnails:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to capture thumbnails",
+      );
     } finally {
       setIsRegeneratingThumbnails(false);
     }
@@ -372,25 +416,32 @@ export default function EditCircuitPage() {
     try {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from('thumbnail_history')
-        .select('*')
-        .eq('circuit_id', circuit.id)
-        .order('version', { ascending: false });
+        .from("thumbnail_history")
+        .select("*")
+        .eq("circuit_id", circuit.id)
+        .order("version", { ascending: false });
 
       if (error) throw error;
 
       setThumbnailHistory(data || []);
       setShowVersionSelector(true);
     } catch (err) {
-      console.error('Failed to load thumbnail history:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load thumbnail history');
+      console.error("Failed to load thumbnail history:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load thumbnail history",
+      );
     } finally {
       setIsLoadingHistory(false);
     }
   };
 
   // Set active thumbnail version
-  const setActiveVersion = async (versionId: string, version: number, lightUrl: string, darkUrl: string) => {
+  const setActiveVersion = async (
+    versionId: string,
+    version: number,
+    lightUrl: string,
+    darkUrl: string,
+  ) => {
     if (!circuit) return;
 
     try {
@@ -398,25 +449,25 @@ export default function EditCircuitPage() {
 
       // Mark all versions as not current
       await supabase
-        .from('thumbnail_history')
+        .from("thumbnail_history")
         .update({ is_current: false })
-        .eq('circuit_id', circuit.id);
+        .eq("circuit_id", circuit.id);
 
       // Mark selected version as current
       await supabase
-        .from('thumbnail_history')
+        .from("thumbnail_history")
         .update({ is_current: true })
-        .eq('id', versionId);
+        .eq("id", versionId);
 
       // Update circuit with selected thumbnail URLs and version
       const { error: updateError } = await supabase
-        .from('circuits')
+        .from("circuits")
         .update({
           thumbnail_light_url: lightUrl,
           thumbnail_dark_url: darkUrl,
           thumbnail_version: version,
         })
-        .eq('id', circuit.id);
+        .eq("id", circuit.id);
 
       if (updateError) throw updateError;
 
@@ -431,8 +482,10 @@ export default function EditCircuitPage() {
 
       alert(`Thumbnail version ${version} is now active`);
     } catch (err) {
-      console.error('Failed to set active version:', err);
-      setError(err instanceof Error ? err.message : 'Failed to set active version');
+      console.error("Failed to set active version:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to set active version",
+      );
     }
   };
 
@@ -468,7 +521,9 @@ export default function EditCircuitPage() {
             </Link>
             <div className="bg-card border rounded-lg p-12 text-center">
               <h1 className="text-2xl font-bold mb-2">Cannot Edit Circuit</h1>
-              <p className="text-muted-foreground mb-6">{error || "An error occurred"}</p>
+              <p className="text-muted-foreground mb-6">
+                {error || "An error occurred"}
+              </p>
               <Link
                 href="/browse"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
@@ -502,7 +557,8 @@ export default function EditCircuitPage() {
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-2">Edit Circuit</h1>
             <p className="text-muted-foreground">
-              Update metadata for your circuit. The schematic data cannot be changed.
+              Update metadata for your circuit. The schematic data cannot be
+              changed.
             </p>
           </div>
 
@@ -523,7 +579,9 @@ export default function EditCircuitPage() {
                 maxLength={150}
                 required
               />
-              <p className={`text-xs mt-1 ${title.length >= 135 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+              <p
+                className={`text-xs mt-1 ${title.length >= 135 ? "text-yellow-500" : "text-muted-foreground"}`}
+              >
                 {title.length}/150 characters
               </p>
             </div>
@@ -589,7 +647,10 @@ export default function EditCircuitPage() {
 
             {/* Category */}
             <div>
-              <label htmlFor="category" className="block text-sm font-medium mb-2">
+              <label
+                htmlFor="category"
+                className="block text-sm font-medium mb-2"
+              >
                 Category
               </label>
               <select
@@ -609,7 +670,10 @@ export default function EditCircuitPage() {
 
             {/* License */}
             <div>
-              <label htmlFor="license" className="block text-sm font-medium mb-2">
+              <label
+                htmlFor="license"
+                className="block text-sm font-medium mb-2"
+              >
                 License <span className="text-destructive">*</span>
               </label>
               <select
@@ -627,7 +691,8 @@ export default function EditCircuitPage() {
                 ))}
               </select>
               <p className="text-xs text-muted-foreground mt-1">
-                Choose an open source hardware license. Cannot be changed after upload.
+                Choose an open source hardware license. Cannot be changed after
+                upload.
               </p>
             </div>
 
@@ -640,7 +705,9 @@ export default function EditCircuitPage() {
                   onChange={(e) => setIsPublic(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm font-medium">Make this circuit public</span>
+                <span className="text-sm font-medium">
+                  Make this circuit public
+                </span>
               </label>
               <p className="text-xs text-muted-foreground mt-1 ml-6">
                 Public circuits can be discovered and copied by anyone
@@ -685,22 +752,30 @@ export default function EditCircuitPage() {
 
           {/* Regenerate Thumbnails Section */}
           <div className="mt-8 p-6 border border-primary/30 bg-primary/5 rounded-lg">
-            <h3 className="font-semibold text-primary mb-2">Regenerate Thumbnails</h3>
+            <h3 className="font-semibold text-primary mb-2">
+              Regenerate Thumbnails
+            </h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Update the circuit thumbnails. First load the preview to verify it looks correct, then capture new screenshots in both light and dark modes.
+              Update the circuit thumbnails. First load the preview to verify it
+              looks correct, then capture new screenshots in both light and dark
+              modes.
             </p>
 
             {showThumbnailPreview && previewUrl ? (
               <div className="mb-4">
-                <p className="text-sm font-medium mb-3">Live Previews (thumbnails will be captured from these):</p>
+                <p className="text-sm font-medium mb-3">
+                  Live Previews (thumbnails will be captured from these):
+                </p>
                 <div className="grid md:grid-cols-2 gap-4">
                   {/* Light Mode Preview */}
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Light Mode (kicad theme)</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Light Mode (kicad theme)
+                    </p>
                     <div
                       ref={lightContainerRef}
                       className="rounded-md overflow-hidden border-2 border-gray-300"
-                      style={{ height: '300px' }}
+                      style={{ height: "300px" }}
                     >
                       <KiCanvas
                         key={`light-${previewUrl}`}
@@ -715,11 +790,13 @@ export default function EditCircuitPage() {
 
                   {/* Dark Mode Preview */}
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Dark Mode (witchhazel theme)</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Dark Mode (witchhazel theme)
+                    </p>
                     <div
                       ref={darkContainerRef}
                       className="rounded-md overflow-hidden border-2 border-gray-600 bg-gray-900"
-                      style={{ height: '300px' }}
+                      style={{ height: "300px" }}
                     >
                       <KiCanvas
                         key={`dark-${previewUrl}`}
@@ -795,7 +872,8 @@ export default function EditCircuitPage() {
               Thumbnail Version History
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
-              View all thumbnail versions and select which one to display. Current version: v{circuit?.thumbnail_version || 1}
+              View all thumbnail versions and select which one to display.
+              Current version: v{circuit?.thumbnail_version || 1}
             </p>
 
             {!showVersionSelector ? (
@@ -829,7 +907,9 @@ export default function EditCircuitPage() {
                 </div>
 
                 {thumbnailHistory.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No thumbnail history found.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No thumbnail history found.
+                  </p>
                 ) : (
                   <div className="grid md:grid-cols-2 gap-4">
                     {thumbnailHistory.map((version) => (
@@ -837,8 +917,8 @@ export default function EditCircuitPage() {
                         key={version.id}
                         className={`border rounded-lg p-4 ${
                           version.is_current
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-muted hover:border-blue-500/50'
+                            ? "border-blue-500 bg-blue-500/10"
+                            : "border-muted hover:border-blue-500/50"
                         }`}
                       >
                         <div className="flex justify-between items-start mb-3">
@@ -852,10 +932,14 @@ export default function EditCircuitPage() {
                               )}
                             </h5>
                             <p className="text-xs text-muted-foreground">
-                              {new Date(version.regenerated_at).toLocaleString()}
+                              {new Date(
+                                version.regenerated_at,
+                              ).toLocaleString()}
                             </p>
                             {version.notes && (
-                              <p className="text-xs text-muted-foreground italic mt-1">{version.notes}</p>
+                              <p className="text-xs text-muted-foreground italic mt-1">
+                                {version.notes}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -863,7 +947,9 @@ export default function EditCircuitPage() {
                         {/* Thumbnail Previews */}
                         <div className="space-y-2 mb-3">
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">Light Mode:</p>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Light Mode:
+                            </p>
                             <img
                               src={version.thumbnail_light_url}
                               alt={`Version ${version.version} light`}
@@ -871,7 +957,9 @@ export default function EditCircuitPage() {
                             />
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">Dark Mode:</p>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Dark Mode:
+                            </p>
                             <img
                               src={version.thumbnail_dark_url}
                               alt={`Version ${version.version} dark`}
@@ -887,7 +975,7 @@ export default function EditCircuitPage() {
                                 version.id,
                                 version.version,
                                 version.thumbnail_light_url,
-                                version.thumbnail_dark_url
+                                version.thumbnail_dark_url,
                               )
                             }
                             className="w-full px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -905,7 +993,9 @@ export default function EditCircuitPage() {
 
           {/* Delete Circuit Section */}
           <div className="mt-8 p-6 border border-destructive/30 bg-destructive/5 rounded-lg">
-            <h3 className="font-semibold text-destructive mb-2">Delete Circuit</h3>
+            <h3 className="font-semibold text-destructive mb-2">
+              Delete Circuit
+            </h3>
             <p className="text-sm text-muted-foreground mb-4">
               Permanently delete this circuit. This action cannot be undone.
             </p>
@@ -921,7 +1011,8 @@ export default function EditCircuitPage() {
             ) : (
               <div className="space-y-4">
                 <p className="text-sm font-medium">
-                  Are you sure you want to delete &quot;{circuit?.title}&quot;? This will permanently remove:
+                  Are you sure you want to delete &quot;{circuit?.title}&quot;?
+                  This will permanently remove:
                 </p>
                 <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
                   <li>The circuit and all its data</li>

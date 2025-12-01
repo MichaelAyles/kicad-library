@@ -1,6 +1,6 @@
-import Link from 'next/link';
-import { Header } from '@/components/Header';
-import { Footer } from '@/components/Footer';
+import Link from "next/link";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 
 export default function DocsPage() {
   return (
@@ -10,7 +10,9 @@ export default function DocsPage() {
       <main className="flex-1 py-12 px-4">
         <div className="container mx-auto max-w-3xl">
           <h1 className="text-4xl font-bold mb-2">Documentation</h1>
-          <p className="text-muted-foreground mb-12">Learn how to use CircuitSnips</p>
+          <p className="text-muted-foreground mb-12">
+            Learn how to use CircuitSnips
+          </p>
 
           <div className="grid gap-6">
             {/* Getting Started */}
@@ -19,7 +21,10 @@ export default function DocsPage() {
               <p className="text-muted-foreground text-sm mb-4">
                 New to CircuitSnips? Start here to learn the basics.
               </p>
-              <Link href="#" className="text-primary hover:underline text-sm font-medium">
+              <Link
+                href="#"
+                className="text-primary hover:underline text-sm font-medium"
+              >
                 Read guide →
               </Link>
             </div>
@@ -30,40 +35,60 @@ export default function DocsPage() {
               <p className="text-muted-foreground text-sm mb-4">
                 Learn how to upload your KiCad subcircuits to the library.
               </p>
-              <Link href="#" className="text-primary hover:underline text-sm font-medium">
+              <Link
+                href="#"
+                className="text-primary hover:underline text-sm font-medium"
+              >
                 Read guide →
               </Link>
             </div>
 
             {/* Searching & Browsing */}
             <div className="border rounded-lg p-6 hover:shadow-md transition-shadow">
-              <h2 className="text-xl font-semibold mb-2">Searching & Browsing</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                Searching & Browsing
+              </h2>
               <p className="text-muted-foreground text-sm mb-4">
                 Find circuits using search, filters, and advanced queries.
               </p>
-              <Link href="#" className="text-primary hover:underline text-sm font-medium">
+              <Link
+                href="#"
+                className="text-primary hover:underline text-sm font-medium"
+              >
                 Read guide →
               </Link>
             </div>
 
             {/* Using Circuits in KiCad */}
             <div className="border rounded-lg p-6 hover:shadow-md transition-shadow">
-              <h2 className="text-xl font-semibold mb-2">Using Circuits in KiCad</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                Using Circuits in KiCad
+              </h2>
               <p className="text-muted-foreground text-sm mb-4">
-                Copy circuits from CircuitSnips and paste them into your KiCad projects.
+                Copy circuits from CircuitSnips and paste them into your KiCad
+                projects.
               </p>
-              <Link href="#" className="text-primary hover:underline text-sm font-medium">
+              <Link
+                href="#"
+                className="text-primary hover:underline text-sm font-medium"
+              >
                 Read guide →
               </Link>
             </div>
 
             {/* Attribution & Licensing */}
             <div className="border rounded-lg p-6 hover:shadow-md transition-shadow">
-              <h2 className="text-xl font-semibold mb-2">Attribution & Licensing</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                Attribution & Licensing
+              </h2>
               <p className="text-muted-foreground text-sm mb-4">
-                Understand how to properly attribute circuits and respect licenses.
+                Understand how to properly attribute circuits and respect
+                licenses.
               </p>
-              <Link href="#" className="text-primary hover:underline text-sm font-medium">
+              <Link
+                href="#"
+                className="text-primary hover:underline text-sm font-medium"
+              >
                 Read guide →
               </Link>
             </div>
@@ -74,7 +99,10 @@ export default function DocsPage() {
               <p className="text-muted-foreground text-sm mb-4">
                 Build tools and integrations with our API (coming soon).
               </p>
-              <Link href="#" className="text-primary hover:underline text-sm font-medium opacity-50 pointer-events-none">
+              <Link
+                href="#"
+                className="text-primary hover:underline text-sm font-medium opacity-50 pointer-events-none"
+              >
                 Read guide (Coming soon)
               </Link>
             </div>

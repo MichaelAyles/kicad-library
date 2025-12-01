@@ -4,8 +4,8 @@
  * Functions for checking and managing admin users
  */
 
-import { createClient } from '@/lib/supabase/client';
-import type { User } from '@supabase/supabase-js';
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 /**
  * Check if a user has admin role
@@ -16,7 +16,7 @@ export async function isAdmin(user?: User | null): Promise<boolean> {
 
   // Check if user has admin role in metadata
   const role = user.user_metadata?.role;
-  return role === 'admin';
+  return role === "admin";
 }
 
 /**
@@ -24,7 +24,9 @@ export async function isAdmin(user?: User | null): Promise<boolean> {
  */
 export async function getCurrentUserIsAdmin(): Promise<boolean> {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return isAdmin(user);
 }
@@ -33,16 +35,19 @@ export async function getCurrentUserIsAdmin(): Promise<boolean> {
  * Set a user's role to admin (requires existing admin privileges)
  * Note: This requires server-side implementation with service role
  */
-export async function setUserAdmin(userId: string, isAdmin: boolean): Promise<void> {
+export async function setUserAdmin(
+  userId: string,
+  isAdmin: boolean,
+): Promise<void> {
   const supabase = createClient();
 
   // This endpoint would need to be implemented with service role
-  const { error } = await supabase.functions.invoke('set-user-role', {
-    body: { userId, role: isAdmin ? 'admin' : 'user' }
+  const { error } = await supabase.functions.invoke("set-user-role", {
+    body: { userId, role: isAdmin ? "admin" : "user" },
   });
 
   if (error) {
-    throw new Error('Failed to update user role');
+    throw new Error("Failed to update user role");
   }
 }
 
@@ -51,15 +56,17 @@ export async function setUserAdmin(userId: string, isAdmin: boolean): Promise<vo
  */
 export async function requireAdmin(): Promise<User> {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    throw new Error('Not authenticated');
+    throw new Error("Not authenticated");
   }
 
   const adminCheck = await isAdmin(user);
   if (!adminCheck) {
-    throw new Error('Unauthorized - Admin access required');
+    throw new Error("Unauthorized - Admin access required");
   }
 
   return user;

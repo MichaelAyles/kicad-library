@@ -1,6 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { isClipboardSnippet, wrapSnippetToFullFile, removeHierarchicalSheets } from '@/lib/kicad-parser';
-import { getCircuitBySlug } from '@/lib/circuits';
+import { NextRequest, NextResponse } from "next/server";
+import {
+  isClipboardSnippet,
+  wrapSnippetToFullFile,
+  removeHierarchicalSheets,
+  validateSExpression,
+  selectSheetSize,
+} from "@/lib/kicad-parser";
+import { getCircuitBySlug } from "@/lib/circuits";
 
 /**
  * API endpoint to serve schematic files for KiCanvas viewer
@@ -8,11 +14,11 @@ import { getCircuitBySlug } from '@/lib/circuits';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: { filename: string } },
 ) {
   try {
     // Extract slug from filename (e.g., "8k2-r.kicad_sch" -> "8k2-r")
-    const slug = params.filename.replace('.kicad_sch', '');
+    const slug = params.filename.replace(".kicad_sch", "");
 
     // Fetch circuit from database
     const circuit = await getCircuitBySlug(slug);
@@ -31,9 +37,9 @@ export async function GET(
 )`;
       return new NextResponse(emptySchematic, {
         headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Content-Disposition': `inline; filename="${params.filename}"`,
-          'Cache-Control': 'public, max-age=3600',
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `inline; filename="${params.filename}"`,
+          "Cache-Control": "public, max-age=3600",
         },
       });
     }
@@ -43,8 +49,8 @@ export async function GET(
 
     if (!rawData) {
       return NextResponse.json(
-        { error: 'Circuit data not found' },
-        { status: 404 }
+        { error: "Circuit data not found" },
+        { status: 404 },
       );
     }
 
@@ -52,8 +58,14 @@ export async function GET(
     const trimmedData = rawData.trim();
 
     // Check if it starts with HTML/XML (corrupted data)
-    if (trimmedData.startsWith('<!DOCTYPE') || trimmedData.startsWith('<html') || trimmedData.startsWith('<?xml')) {
-      console.error(`Circuit ${slug} contains corrupted data (HTML/XML instead of schematic)`);
+    if (
+      trimmedData.startsWith("<!DOCTYPE") ||
+      trimmedData.startsWith("<html") ||
+      trimmedData.startsWith("<?xml")
+    ) {
+      console.error(
+        `Circuit ${slug} contains corrupted data (HTML/XML instead of schematic)`,
+      );
       // Return empty schematic stub for corrupted data
       const emptySchematic = `(kicad_sch (version 20230121) (generator "CircuitSnips")
   (uuid 00000000-0000-0000-0000-000000000000)
@@ -65,15 +77,15 @@ export async function GET(
 )`;
       return new NextResponse(emptySchematic, {
         headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Content-Disposition': `inline; filename="${params.filename}"`,
-          'Cache-Control': 'no-cache', // Don't cache corrupted data
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `inline; filename="${params.filename}"`,
+          "Cache-Control": "no-cache", // Don't cache corrupted data
         },
       });
     }
 
     // Check if it starts with a valid S-expression
-    if (!trimmedData.startsWith('(kicad_sch') && !trimmedData.startsWith('(')) {
+    if (!trimmedData.startsWith("(kicad_sch") && !trimmedData.startsWith("(")) {
       console.error(`Circuit ${slug} data is not a valid KiCad S-expression`);
       // Return empty schematic stub for invalid data
       const emptySchematic = `(kicad_sch (version 20230121) (generator "CircuitSnips")
@@ -86,9 +98,9 @@ export async function GET(
 )`;
       return new NextResponse(emptySchematic, {
         headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Content-Disposition': `inline; filename="${params.filename}"`,
-          'Cache-Control': 'no-cache',
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `inline; filename="${params.filename}"`,
+          "Cache-Control": "no-cache",
         },
       });
     }
@@ -97,9 +109,17 @@ export async function GET(
     let schematicFile: string;
     if (isClipboardSnippet(rawData)) {
       // It's a snippet - wrap it for serving as .kicad_sch file
+      // First, calculate the appropriate sheet size based on bounding box
+      const validation = validateSExpression(rawData);
+      const paperSize =
+        validation.valid && validation.metadata
+          ? selectSheetSize(validation.metadata.boundingBox).size
+          : "A4";
+
       schematicFile = wrapSnippetToFullFile(rawData, {
         title: circuit.title,
         uuid: circuit.id, // Use circuit UUID
+        paperSize,
       });
     } else {
       // It's already a full file - use as-is
@@ -112,16 +132,16 @@ export async function GET(
     // Return with proper content type
     return new NextResponse(schematicFile, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Content-Disposition': `inline; filename="${params.filename}"`,
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": `inline; filename="${params.filename}"`,
+        "Cache-Control": "public, max-age=3600", // Cache for 1 hour
       },
     });
   } catch (error) {
-    console.error('Failed to serve schematic:', error);
+    console.error("Failed to serve schematic:", error);
     return NextResponse.json(
-      { error: 'Failed to serve schematic file' },
-      { status: 500 }
+      { error: "Failed to serve schematic file" },
+      { status: 500 },
     );
   }
 }

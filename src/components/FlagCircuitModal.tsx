@@ -20,7 +20,7 @@ export function FlagCircuitModal({
   onClose,
   onSuccess,
 }: FlagCircuitModalProps) {
-  const [reason, setReason] = useState<FlagReason>('other');
+  const [reason, setReason] = useState<FlagReason>("other");
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -53,7 +53,7 @@ export function FlagCircuitModal({
   };
 
   const handleClose = () => {
-    setReason('other');
+    setReason("other");
     setDetails("");
     onClose();
   };
@@ -86,8 +86,8 @@ export function FlagCircuitModal({
             <div className="text-sm text-yellow-800 dark:text-yellow-200">
               <p className="font-medium mb-1">Report: {circuitTitle}</p>
               <p className="text-xs">
-                Please only report content that violates our community guidelines.
-                False reports may result in account restrictions.
+                Please only report content that violates our community
+                guidelines. False reports may result in account restrictions.
               </p>
             </div>
           </div>

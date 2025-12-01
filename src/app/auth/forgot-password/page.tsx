@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Loader, Mail } from 'lucide-react';
-import { Header } from '@/components/Header';
-import { useAuth } from '@/hooks/useAuth';
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Loader, Mail } from "lucide-react";
+import { Header } from "@/components/Header";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ForgotPasswordPage() {
   const { resetPassword, error } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -20,15 +20,15 @@ export default function ForgotPasswordPage() {
 
     // Validation
     if (!email) {
-      setLocalError('Please enter your email address');
+      setLocalError("Please enter your email address");
       return;
     }
 
     setIsLoading(true);
     try {
       await resetPassword(email);
-      setSuccessMessage('Password reset instructions sent! Check your email.');
-      setEmail('');
+      setSuccessMessage("Password reset instructions sent! Check your email.");
+      setEmail("");
     } catch (err) {
       // Error is already set in the auth hook
     } finally {
@@ -53,7 +53,8 @@ export default function ForgotPasswordPage() {
 
             <h1 className="text-3xl font-bold mb-2">Reset Password</h1>
             <p className="text-muted-foreground mb-8">
-              Enter your email address and we&apos;ll send you instructions to reset your password.
+              Enter your email address and we&apos;ll send you instructions to
+              reset your password.
             </p>
 
             {(error || localError) && (
@@ -70,7 +71,10 @@ export default function ForgotPasswordPage() {
 
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium mb-2"
+                >
                   Email
                 </label>
                 <input
@@ -104,8 +108,11 @@ export default function ForgotPasswordPage() {
             </form>
 
             <p className="text-center text-sm text-muted-foreground mt-6">
-              Remember your password?{' '}
-              <Link href="/login" className="text-primary hover:underline font-medium">
+              Remember your password?{" "}
+              <Link
+                href="/login"
+                className="text-primary hover:underline font-medium"
+              >
                 Sign in
               </Link>
             </p>

@@ -4,7 +4,11 @@ import { useState } from "react";
 import { Heart, Reply, Trash2, Edit2, Check, X, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Comment as CommentType } from "@/types/comments";
-import { toggleCommentLike, updateComment, deleteComment } from "@/lib/comments";
+import {
+  toggleCommentLike,
+  updateComment,
+  deleteComment,
+} from "@/lib/comments";
 import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
 import { MarkdownRenderer } from "./MarkdownRenderer";
@@ -16,7 +20,12 @@ interface CommentProps {
   depth?: number;
 }
 
-export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps) {
+export function Comment({
+  comment,
+  onReply,
+  onUpdate,
+  depth = 0,
+}: CommentProps) {
   const { user } = useAuth();
   const [isLiked, setIsLiked] = useState(comment.is_liked_by_user || false);
   const [likesCount, setLikesCount] = useState(comment.likes_count);
@@ -38,7 +47,7 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
     try {
       const newLikedState = await toggleCommentLike(comment.id);
       setIsLiked(newLikedState);
-      setLikesCount(prev => newLikedState ? prev + 1 : prev - 1);
+      setLikesCount((prev) => (newLikedState ? prev + 1 : prev - 1));
     } catch (error) {
       console.error("Failed to toggle like:", error);
       alert("Failed to update like");
@@ -84,7 +93,9 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
   };
 
   return (
-    <div className={`${depth > 0 ? 'ml-8 mt-4' : 'mt-4'} border-l-2 border-muted pl-4`}>
+    <div
+      className={`${depth > 0 ? "ml-8 mt-4" : "mt-4"} border-l-2 border-muted pl-4`}
+    >
       {/* Comment Header */}
       <div className="flex items-start gap-3">
         {/* Avatar */}
@@ -114,12 +125,16 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
             </Link>
             <span className="text-muted-foreground">•</span>
             <span className="text-muted-foreground">
-              {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+              {formatDistanceToNow(new Date(comment.created_at), {
+                addSuffix: true,
+              })}
             </span>
             {comment.is_edited && (
               <>
                 <span className="text-muted-foreground">•</span>
-                <span className="text-xs text-muted-foreground italic">edited</span>
+                <span className="text-xs text-muted-foreground italic">
+                  edited
+                </span>
               </>
             )}
           </div>
@@ -160,7 +175,9 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
                   {editContent.trim() ? (
                     <MarkdownRenderer content={editContent} />
                   ) : (
-                    <p className="text-sm text-muted-foreground italic">Nothing to preview</p>
+                    <p className="text-sm text-muted-foreground italic">
+                      Nothing to preview
+                    </p>
                   )}
                 </div>
               ) : (
@@ -176,8 +193,11 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
               )}
 
               <div className="flex justify-between items-center">
-                <span className={`text-xs ${editContent.length >= 9000 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
-                  {editContent.length.toLocaleString()}/10,000 • Markdown supported
+                <span
+                  className={`text-xs ${editContent.length >= 9000 ? "text-yellow-500" : "text-muted-foreground"}`}
+                >
+                  {editContent.length.toLocaleString()}/10,000 • Markdown
+                  supported
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -212,7 +232,9 @@ export function Comment({ comment, onReply, onUpdate, depth = 0 }: CommentProps)
               <button
                 onClick={handleLike}
                 className={`flex items-center gap-1 text-sm transition-colors ${
-                  isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+                  isLiked
+                    ? "text-red-500"
+                    : "text-muted-foreground hover:text-red-500"
                 }`}
               >
                 <Heart className={`w-4 h-4 ${isLiked ? "fill-current" : ""}`} />

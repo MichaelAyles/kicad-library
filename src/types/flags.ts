@@ -5,14 +5,14 @@
  */
 
 export type FlagReason =
-  | 'inappropriate_content'
-  | 'copyright_violation'
-  | 'spam'
-  | 'broken_circuit'
-  | 'duplicate'
-  | 'other';
+  | "inappropriate_content"
+  | "copyright_violation"
+  | "spam"
+  | "broken_circuit"
+  | "duplicate"
+  | "other";
 
-export type FlagStatus = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+export type FlagStatus = "pending" | "reviewed" | "resolved" | "dismissed";
 
 export interface CircuitFlag {
   id: string;
@@ -39,29 +39,32 @@ export interface UpdateFlagInput {
   admin_notes?: string;
 }
 
-export const FLAG_REASONS: Record<FlagReason, { label: string; description: string }> = {
+export const FLAG_REASONS: Record<
+  FlagReason,
+  { label: string; description: string }
+> = {
   inappropriate_content: {
-    label: 'Inappropriate Content',
-    description: 'Contains offensive, harmful, or inappropriate content',
+    label: "Inappropriate Content",
+    description: "Contains offensive, harmful, or inappropriate content",
   },
   copyright_violation: {
-    label: 'Copyright Violation',
-    description: 'Violates copyright or intellectual property rights',
+    label: "Copyright Violation",
+    description: "Violates copyright or intellectual property rights",
   },
   spam: {
-    label: 'Spam',
-    description: 'Spam, advertisement, or off-topic content',
+    label: "Spam",
+    description: "Spam, advertisement, or off-topic content",
   },
   broken_circuit: {
-    label: 'Broken Circuit',
-    description: 'Circuit is invalid, corrupted, or does not work',
+    label: "Broken Circuit",
+    description: "Circuit is invalid, corrupted, or does not work",
   },
   duplicate: {
-    label: 'Duplicate',
-    description: 'This circuit is a duplicate of another existing circuit',
+    label: "Duplicate",
+    description: "This circuit is a duplicate of another existing circuit",
   },
   other: {
-    label: 'Other',
-    description: 'Other reason not listed above',
+    label: "Other",
+    description: "Other reason not listed above",
   },
 };

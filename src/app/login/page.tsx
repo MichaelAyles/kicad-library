@@ -1,24 +1,30 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Github, Loader, Mail } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { Header } from '@/components/Header';
-import { useAuth } from '@/hooks/useAuth';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Github, Loader, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Header } from "@/components/Header";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading, signInWithGitHub, signInWithEmail, error } = useAuth();
+  const {
+    user,
+    isLoading: authLoading,
+    signInWithGitHub,
+    signInWithEmail,
+    error,
+  } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   // Redirect if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      router.push('/');
+      router.push("/");
     }
   }, [user, authLoading, router]);
 
@@ -38,7 +44,7 @@ export default function LoginPage() {
 
     // Validation
     if (!email || !password) {
-      setLocalError('Please fill in all fields');
+      setLocalError("Please fill in all fields");
       return;
     }
 
@@ -59,7 +65,9 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           <div className="bg-card border rounded-lg p-8 shadow-sm">
             <h1 className="text-3xl font-bold mb-2">Sign In</h1>
-            <p className="text-muted-foreground mb-8">Welcome back to CircuitSnips</p>
+            <p className="text-muted-foreground mb-8">
+              Welcome back to CircuitSnips
+            </p>
 
             {(error || localError) && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
@@ -70,7 +78,10 @@ export default function LoginPage() {
             {/* Email Sign In Form */}
             <form onSubmit={handleEmailSignIn} className="space-y-4 mb-6">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium mb-2"
+                >
                   Email
                 </label>
                 <input
@@ -86,7 +97,10 @@ export default function LoginPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label htmlFor="password" className="block text-sm font-medium">
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-medium"
+                  >
                     Password
                   </label>
                   <Link
@@ -132,7 +146,9 @@ export default function LoginPage() {
                 <div className="w-full border-t"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-card text-muted-foreground">Or continue with</span>
+                <span className="px-2 bg-card text-muted-foreground">
+                  Or continue with
+                </span>
               </div>
             </div>
 
@@ -156,8 +172,11 @@ export default function LoginPage() {
             </button>
 
             <p className="text-center text-sm text-muted-foreground mt-6">
-              Don&apos;t have an account?{' '}
-              <Link href="/signup" className="text-primary hover:underline font-medium">
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/signup"
+                className="text-primary hover:underline font-medium"
+              >
                 Sign up
               </Link>
             </p>

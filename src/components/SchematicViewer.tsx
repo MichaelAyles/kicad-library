@@ -17,12 +17,18 @@ interface SchematicViewerProps {
  * Uses KiCanvas from https://kicanvas.org for interactive viewing
  * Falls back to expandable S-expression view if needed
  */
-export function SchematicViewer({ sexpr, title, slug, circuitId, onCopy }: SchematicViewerProps) {
+export function SchematicViewer({
+  sexpr,
+  title,
+  slug,
+  circuitId,
+  onCopy,
+}: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [componentCount, setComponentCount] = useState(0);
 
   // Strip any existing .kicad_sch extension to avoid double extensions
-  const cleanSlug = slug.replace(/\.kicad_sch$/i, '');
+  const cleanSlug = slug.replace(/\.kicad_sch$/i, "");
   const viewerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,8 +36,8 @@ export function SchematicViewer({ sexpr, title, slug, circuitId, onCopy }: Schem
     const symbolMatches = sexpr.match(/\(symbol \(lib_id/g);
     setComponentCount(symbolMatches ? symbolMatches.length : 0);
 
-    console.log('Loading KiCanvas with slug:', cleanSlug);
-    console.log('S-expression preview:', sexpr.substring(0, 100));
+    console.log("Loading KiCanvas with slug:", cleanSlug);
+    console.log("S-expression preview:", sexpr.substring(0, 100));
   }, [sexpr, cleanSlug]);
 
   return (
@@ -90,8 +96,10 @@ export function SchematicViewer({ sexpr, title, slug, circuitId, onCopy }: Schem
       {/* Info Footer */}
       <div className="bg-blue-50 dark:bg-blue-950/30 px-4 py-3 border-t text-sm text-blue-900 dark:text-blue-100">
         <p>
-          💡 <strong>Tip:</strong> Use the interactive viewer above to explore the circuit. Click &quot;Copy to Clipboard&quot; button
-          on the main page to get this circuit with attribution, then paste directly into your KiCad project (Ctrl+V).
+          💡 <strong>Tip:</strong> Use the interactive viewer above to explore
+          the circuit. Click &quot;Copy to Clipboard&quot; button on the main
+          page to get this circuit with attribution, then paste directly into
+          your KiCad project (Ctrl+V).
         </p>
       </div>
     </div>

@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, AlertCircle, CheckCircle2, Eye, Loader, Camera } from "lucide-react";
+import {
+  Upload,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  Loader,
+  Camera,
+} from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,15 +21,23 @@ import {
   suggestTags,
   suggestCategory,
   wrapSnippetToFullFile,
+  selectSheetSize,
   type ParsedMetadata,
   type ValidationResult,
+  type SheetSizeResult,
 } from "@/lib/kicad-parser";
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 
-const KICANVAS_HEIGHT = '350px';
+const KICANVAS_HEIGHT = "350px";
 
-type UploadStep = 'paste' | 'preview' | 'metadata' | 'thumbnails' | 'uploading' | 'success';
+type UploadStep =
+  | "paste"
+  | "preview"
+  | "metadata"
+  | "thumbnails"
+  | "uploading"
+  | "success";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -32,7 +47,7 @@ export default function UploadPage() {
   // Redirect if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login');
+      router.push("/login");
     }
   }, [user, authLoading, router]);
 
@@ -40,10 +55,12 @@ export default function UploadPage() {
   // This is the modded version with proper theme attribute support
 
   // Form state
-  const [currentStep, setCurrentStep] = useState<UploadStep>('paste');
+  const [currentStep, setCurrentStep] = useState<UploadStep>("paste");
   const [sexpr, setSexpr] = useState(""); // Original input (snippet or full file)
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [metadata, setMetadata] = useState<ParsedMetadata | null>(null);
+  const [sheetSizeResult, setSheetSizeResult] =
+    useState<SheetSizeResult | null>(null);
   const [fullFileSexpr, setFullFileSexpr] = useState<string>(""); // Always full file format for preview/storage
 
   // Metadata form
@@ -93,14 +110,14 @@ export default function UploadPage() {
       setIsLoadingPreview(true);
       try {
         // Send schematic to preview API
-        const response = await fetch('/api/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await fetch("/api/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sexpr: fullFileSexpr }),
         });
 
         if (!response.ok) {
-          throw new Error('Failed to create preview');
+          throw new Error("Failed to create preview");
         }
 
         const { previewId } = await response.json();
@@ -108,7 +125,7 @@ export default function UploadPage() {
         // We use the filename in the path, and pass the ID as a query parameter
         setPreviewUrl(`/api/preview/preview.kicad_sch?id=${previewId}`);
       } catch (error) {
-        console.error('Preview creation failed:', error);
+        console.error("Preview creation failed:", error);
         setPreviewUrl("");
       } finally {
         setIsLoadingPreview(false);
@@ -121,7 +138,13 @@ export default function UploadPage() {
   // Step 1: Parse and validate
   const handleParse = () => {
     if (!sexpr.trim()) {
-      setValidation({ valid: false, errors: ["Please paste a schematic"], warnings: [], isSnippet: false, originalFormat: 'full' });
+      setValidation({
+        valid: false,
+        errors: ["Please paste a schematic"],
+        warnings: [],
+        isSnippet: false,
+        originalFormat: "full",
+      });
       return;
     }
 
@@ -134,9 +157,16 @@ export default function UploadPage() {
       if (result.valid && result.metadata) {
         setMetadata(result.metadata);
 
-        // If it's a snippet, wrap it. Otherwise use as-is
+        // Determine the appropriate sheet size based on bounding box
+        const sizeResult = selectSheetSize(result.metadata.boundingBox);
+        setSheetSizeResult(sizeResult);
+
+        // If it's a snippet, wrap it with the appropriate paper size. Otherwise use as-is
         if (result.isSnippet) {
-          const wrapped = wrapSnippetToFullFile(sexpr, { title: title || 'Circuit' });
+          const wrapped = wrapSnippetToFullFile(sexpr, {
+            title: title || "Circuit",
+            paperSize: sizeResult.size,
+          });
           setFullFileSexpr(wrapped);
         } else {
           setFullFileSexpr(sexpr);
@@ -146,7 +176,9 @@ export default function UploadPage() {
         if (!title) {
           const firstComp = result.metadata.components[0];
           if (firstComp) {
-            setTitle(`${firstComp.value} ${firstComp.lib_id.split(':')[1] || 'Circuit'}`);
+            setTitle(
+              `${firstComp.value} ${firstComp.lib_id.split(":")[1] || "Circuit"}`,
+            );
           }
         }
 
@@ -158,7 +190,7 @@ export default function UploadPage() {
           setCategory(suggestCategory(result.metadata));
         }
 
-        setCurrentStep('preview');
+        setCurrentStep("preview");
       }
 
       setIsParsing(false);
@@ -167,7 +199,7 @@ export default function UploadPage() {
 
   // Step 2: Continue to metadata form
   const handleContinueToMetadata = () => {
-    setCurrentStep('metadata');
+    setCurrentStep("metadata");
   };
 
   // Step 3: Continue to thumbnail capture
@@ -176,7 +208,7 @@ export default function UploadPage() {
       alert("Please enter a title");
       return;
     }
-    setCurrentStep('thumbnails');
+    setCurrentStep("thumbnails");
   };
 
   // Step 4: Capture thumbnails from two KiCanvas components (light and dark themes)
@@ -190,11 +222,11 @@ export default function UploadPage() {
 
     try {
       // Wait a moment for KiCanvas to fully render
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const thumbnails = await captureThumbnails(
         lightContainerRef.current,
-        darkContainerRef.current
+        darkContainerRef.current,
       );
 
       setLightThumbnail(thumbnails.light);
@@ -217,13 +249,13 @@ export default function UploadPage() {
     while (true) {
       // Check if slug exists
       const { data, error } = await supabase
-        .from('circuits')
-        .select('id')
-        .eq('slug', uniqueSlug)
+        .from("circuits")
+        .select("id")
+        .eq("slug", uniqueSlug)
         .maybeSingle();
 
       if (error) {
-        console.error('Error checking slug:', error);
+        console.error("Error checking slug:", error);
         throw error;
       }
 
@@ -245,7 +277,7 @@ export default function UploadPage() {
       return;
     }
 
-    setCurrentStep('uploading');
+    setCurrentStep("uploading");
     setIsUploading(true);
 
     try {
@@ -274,7 +306,7 @@ export default function UploadPage() {
       };
 
       const { data: circuit, error: circuitError } = await supabase
-        .from('circuits')
+        .from("circuits")
         .insert([circuitData])
         .select()
         .single();
@@ -284,27 +316,41 @@ export default function UploadPage() {
       // 2. Upload thumbnails to storage (v1)
       const version = 1;
       setUploadProgress("Uploading light theme thumbnail...");
-      const lightUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'light', lightThumb, version);
+      const lightUrl = await uploadThumbnail(
+        supabase,
+        user.id,
+        circuit.id,
+        "light",
+        lightThumb,
+        version,
+      );
 
       setUploadProgress("Uploading dark theme thumbnail...");
-      const darkUrl = await uploadThumbnail(supabase, user.id, circuit.id, 'dark', darkThumb, version);
+      const darkUrl = await uploadThumbnail(
+        supabase,
+        user.id,
+        circuit.id,
+        "dark",
+        darkThumb,
+        version,
+      );
 
       // 3. Update circuit with thumbnail URLs and version
       setUploadProgress("Finalizing...");
       const { error: updateError } = await supabase
-        .from('circuits')
+        .from("circuits")
         .update({
           thumbnail_light_url: lightUrl,
           thumbnail_dark_url: darkUrl,
           thumbnail_version: version,
         })
-        .eq('id', circuit.id);
+        .eq("id", circuit.id);
 
       if (updateError) throw updateError;
 
       // 4. Create initial thumbnail history record
       const { error: historyError } = await supabase
-        .from('thumbnail_history')
+        .from("thumbnail_history")
         .insert({
           circuit_id: circuit.id,
           version: version,
@@ -312,34 +358,39 @@ export default function UploadPage() {
           thumbnail_dark_url: darkUrl,
           regenerated_by: user.id,
           is_current: true,
-          notes: 'Initial upload',
+          notes: "Initial upload",
         });
 
       if (historyError) {
-        console.error('Error creating thumbnail history:', historyError);
+        console.error("Error creating thumbnail history:", historyError);
         // Don't fail the upload if history creation fails
       }
 
       // Success!
-      setCurrentStep('success');
+      setCurrentStep("success");
       setIsUploading(false);
 
       // Redirect to circuit page after 2 seconds
       setTimeout(() => {
         router.push(`/circuit/${uniqueSlug}`);
       }, 2000);
-
     } catch (err) {
       console.error("Upload failed:", err);
-      alert(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      alert(
+        `Upload failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
       setIsUploading(false);
-      setCurrentStep('thumbnails');
+      setCurrentStep("thumbnails");
     }
   };
 
   // Tag management
   const handleAddTag = () => {
-    if (tagInput.trim() && tags.length < 10 && !tags.includes(tagInput.trim().toLowerCase())) {
+    if (
+      tagInput.trim() &&
+      tags.length < 10 &&
+      !tags.includes(tagInput.trim().toLowerCase())
+    ) {
       setTags([...tags, tagInput.trim().toLowerCase()]);
       setTagInput("");
     }
@@ -374,19 +425,19 @@ export default function UploadPage() {
           {/* Progress indicator */}
           <div className="flex items-center gap-2 mb-8">
             {[
-              { key: 'paste', label: 'Paste' },
-              { key: 'preview', label: 'Preview' },
-              { key: 'metadata', label: 'Details' },
-              { key: 'thumbnails', label: 'Thumbnails' },
+              { key: "paste", label: "Paste" },
+              { key: "preview", label: "Preview" },
+              { key: "metadata", label: "Details" },
+              { key: "thumbnails", label: "Thumbnails" },
             ].map((step, index) => (
               <div key={step.key} className="flex items-center gap-2">
                 <div
                   className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
                     currentStep === step.key ||
-                    (currentStep === 'uploading' && index < 4) ||
-                    (currentStep === 'success' && index < 4)
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
+                    (currentStep === "uploading" && index < 4) ||
+                    (currentStep === "success" && index < 4)
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {index + 1}
@@ -398,11 +449,14 @@ export default function UploadPage() {
           </div>
 
           {/* Step 1: Paste */}
-          {currentStep === 'paste' && (
+          {currentStep === "paste" && (
             <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Paste Your Schematic</h2>
+              <h2 className="text-2xl font-semibold mb-4">
+                Paste Your Schematic
+              </h2>
               <p className="text-muted-foreground mb-4">
-                Copy your circuit from KiCad (Ctrl+C) and paste it here, or upload a .kicad_sch file.
+                Copy your circuit from KiCad (Ctrl+C) and paste it here, or
+                upload a .kicad_sch file.
               </p>
 
               <textarea
@@ -437,8 +491,8 @@ export default function UploadPage() {
                 <div
                   className={`mt-4 p-4 rounded-md border ${
                     validation.valid
-                      ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800'
-                      : 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
+                      ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800"
+                      : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"
                   }`}
                 >
                   {validation.valid ? (
@@ -450,14 +504,42 @@ export default function UploadPage() {
                       {metadata && (
                         <div className="text-sm text-green-600 dark:text-green-400 space-y-1">
                           <p>✓ {metadata.stats.componentCount} components</p>
-                          <p>✓ {metadata.footprints.assigned}/{metadata.footprints.assigned + metadata.footprints.unassigned} footprints assigned</p>
-                          <p>✓ {metadata.stats.wireCount} wires, {metadata.stats.netCount} nets</p>
+                          <p>
+                            ✓ {metadata.footprints.assigned}/
+                            {metadata.footprints.assigned +
+                              metadata.footprints.unassigned}{" "}
+                            footprints assigned
+                          </p>
+                          <p>
+                            ✓ {metadata.stats.wireCount} wires,{" "}
+                            {metadata.stats.netCount} nets
+                          </p>
+                          {sheetSizeResult && (
+                            <p
+                              className={
+                                sheetSizeResult.isOversized
+                                  ? "text-yellow-600 dark:text-yellow-400"
+                                  : ""
+                              }
+                            >
+                              {sheetSizeResult.isOversized ? "⚠️" : "✓"} Sheet
+                              size: {sheetSizeResult.size}
+                              {sheetSizeResult.size === "A3" &&
+                                !sheetSizeResult.isOversized &&
+                                " (circuit exceeds A4 bounds)"}
+                              {sheetSizeResult.isOversized &&
+                                " (circuit is very large, may not display fully)"}
+                            </p>
+                          )}
                         </div>
                       )}
                       {validation.warnings.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-800">
                           {validation.warnings.map((w, i) => (
-                            <p key={i} className="text-sm text-yellow-600 dark:text-yellow-400">
+                            <p
+                              key={i}
+                              className="text-sm text-yellow-600 dark:text-yellow-400"
+                            >
                               ⚠️ {w}
                             </p>
                           ))}
@@ -471,7 +553,10 @@ export default function UploadPage() {
                         Validation Failed
                       </div>
                       {validation.errors.map((err, i) => (
-                        <p key={i} className="text-sm text-red-600 dark:text-red-400">
+                        <p
+                          key={i}
+                          className="text-sm text-red-600 dark:text-red-400"
+                        >
                           • {err}
                         </p>
                       ))}
@@ -483,22 +568,31 @@ export default function UploadPage() {
           )}
 
           {/* Step 2: Preview & Circuit Summary */}
-          {currentStep === 'preview' && metadata && (
+          {currentStep === "preview" && metadata && (
             <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Preview & Circuit Summary</h2>
+              <h2 className="text-2xl font-semibold mb-4">
+                Preview & Circuit Summary
+              </h2>
               <p className="text-muted-foreground mb-6">
-                Review your circuit schematic and details before adding metadata.
+                Review your circuit schematic and details before adding
+                metadata.
               </p>
 
               {/* KiCanvas Preview */}
               <div className="mb-6">
                 <h3 className="font-semibold mb-3">Interactive Preview:</h3>
-                <div className="bg-background rounded-md overflow-hidden border" style={{ height: '450px' }} ref={viewerRef}>
+                <div
+                  className="bg-background rounded-md overflow-hidden border"
+                  style={{ height: "450px" }}
+                  ref={viewerRef}
+                >
                   {isLoadingPreview ? (
                     <div className="w-full h-full flex items-center justify-center bg-muted/20">
                       <div className="text-center">
                         <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">Loading preview...</p>
+                        <p className="text-sm text-muted-foreground">
+                          Loading preview...
+                        </p>
                       </div>
                     </div>
                   ) : previewUrl ? (
@@ -513,28 +607,39 @@ export default function UploadPage() {
                     <div className="w-full h-full flex items-center justify-center bg-muted/20">
                       <div className="text-center text-muted-foreground">
                         <Eye className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                        <p className="text-sm">Preview will load after validation</p>
+                        <p className="text-sm">
+                          Preview will load after validation
+                        </p>
                       </div>
                     </div>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Use mouse wheel to zoom, drag to pan. This preview is used to generate thumbnails.
+                  Use mouse wheel to zoom, drag to pan. This preview is used to
+                  generate thumbnails.
                 </p>
               </div>
 
               {/* Circuit Stats Cards */}
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-muted/30 rounded-lg p-4 border">
-                  <div className="text-3xl font-bold text-primary mb-1">{metadata.stats.componentCount}</div>
-                  <div className="text-sm text-muted-foreground">Components</div>
+                  <div className="text-3xl font-bold text-primary mb-1">
+                    {metadata.stats.componentCount}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Components
+                  </div>
                 </div>
                 <div className="bg-muted/30 rounded-lg p-4 border">
-                  <div className="text-3xl font-bold text-primary mb-1">{metadata.stats.wireCount}</div>
+                  <div className="text-3xl font-bold text-primary mb-1">
+                    {metadata.stats.wireCount}
+                  </div>
                   <div className="text-sm text-muted-foreground">Wires</div>
                 </div>
                 <div className="bg-muted/30 rounded-lg p-4 border">
-                  <div className="text-3xl font-bold text-primary mb-1">{metadata.stats.netCount}</div>
+                  <div className="text-3xl font-bold text-primary mb-1">
+                    {metadata.stats.netCount}
+                  </div>
                   <div className="text-sm text-muted-foreground">Nets</div>
                 </div>
               </div>
@@ -545,12 +650,19 @@ export default function UploadPage() {
                   <h3 className="font-semibold mb-3">Components Detected:</h3>
                   <div className="grid md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
                     {metadata.components.map((comp, index) => (
-                      <div key={index} className="text-sm flex items-start gap-2 p-2 bg-background rounded">
-                        <span className="font-mono font-medium text-primary">{comp.reference}</span>
-                        <span className="text-muted-foreground">{comp.value}</span>
+                      <div
+                        key={index}
+                        className="text-sm flex items-start gap-2 p-2 bg-background rounded"
+                      >
+                        <span className="font-mono font-medium text-primary">
+                          {comp.reference}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {comp.value}
+                        </span>
                         {comp.footprint && (
                           <span className="text-xs text-muted-foreground ml-auto">
-                            {comp.footprint.split(':')[1] || comp.footprint}
+                            {comp.footprint.split(":")[1] || comp.footprint}
                           </span>
                         )}
                       </div>
@@ -568,20 +680,23 @@ export default function UploadPage() {
                     <AlertCircle className="w-5 h-5 text-yellow-600" />
                   )}
                   <span className="font-medium text-blue-900 dark:text-blue-100">
-                    Footprint Assignment: {metadata.footprints.assigned}/{metadata.footprints.assigned + metadata.footprints.unassigned}
+                    Footprint Assignment: {metadata.footprints.assigned}/
+                    {metadata.footprints.assigned +
+                      metadata.footprints.unassigned}
                   </span>
                 </div>
                 {metadata.footprints.unassigned > 0 && (
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {metadata.footprints.unassigned} component(s) are missing footprint assignments.
-                    This is normal for reusable subcircuits.
+                    {metadata.footprints.unassigned} component(s) are missing
+                    footprint assignments. This is normal for reusable
+                    subcircuits.
                   </p>
                 )}
               </div>
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => setCurrentStep('paste')}
+                  onClick={() => setCurrentStep("paste")}
                   className="px-6 py-2 border rounded-md hover:bg-muted/50 transition-colors"
                 >
                   Back
@@ -597,9 +712,11 @@ export default function UploadPage() {
           )}
 
           {/* Step 3: Metadata Form */}
-          {currentStep === 'metadata' && (
+          {currentStep === "metadata" && (
             <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Add Circuit Details</h2>
+              <h2 className="text-2xl font-semibold mb-4">
+                Add Circuit Details
+              </h2>
 
               <div className="space-y-4">
                 {/* Title */}
@@ -616,7 +733,9 @@ export default function UploadPage() {
                     maxLength={150}
                     className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
                   />
-                  <p className={`text-xs mt-1 text-right ${title.length >= 135 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+                  <p
+                    className={`text-xs mt-1 text-right ${title.length >= 135 ? "text-yellow-500" : "text-muted-foreground"}`}
+                  >
                     {title.length} / 150
                   </p>
                 </div>
@@ -634,7 +753,7 @@ export default function UploadPage() {
                     className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    circuitsnips.com/circuit/{slug || 'your-slug'}
+                    circuitsnips.com/circuit/{slug || "your-slug"}
                   </p>
                 </div>
 
@@ -673,9 +792,7 @@ export default function UploadPage() {
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Tags
-                  </label>
+                  <label className="block text-sm font-medium mb-1">Tags</label>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {tags.map((tag, index) => (
                       <span
@@ -730,7 +847,9 @@ export default function UploadPage() {
                     onChange={(e) => setLicense(e.target.value)}
                     className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
                   >
-                    <option value="CERN-OHL-S-2.0">CERN-OHL-S-2.0 (Recommended)</option>
+                    <option value="CERN-OHL-S-2.0">
+                      CERN-OHL-S-2.0 (Recommended)
+                    </option>
                     <option value="MIT">MIT</option>
                     <option value="CC-BY-4.0">CC-BY-4.0</option>
                     <option value="CC-BY-SA-4.0">CC-BY-SA-4.0</option>
@@ -751,7 +870,9 @@ export default function UploadPage() {
                       className="mt-1"
                     />
                     <div>
-                      <span className="text-sm font-medium">Make this circuit public</span>
+                      <span className="text-sm font-medium">
+                        Make this circuit public
+                      </span>
                       <p className="text-xs text-muted-foreground mt-1">
                         {isPublic
                           ? "Anyone can discover and view this circuit. You can change this later."
@@ -766,13 +887,15 @@ export default function UploadPage() {
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="checkbox" required className="mt-1" />
                     <span className="text-sm">
-                      I am the original creator OR have permission to share this design
+                      I am the original creator OR have permission to share this
+                      design
                     </span>
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="checkbox" required className="mt-1" />
                     <span className="text-sm">
-                      This design does not infringe any intellectual property rights
+                      This design does not infringe any intellectual property
+                      rights
                     </span>
                   </label>
                 </div>
@@ -780,7 +903,7 @@ export default function UploadPage() {
 
               <div className="flex gap-4 mt-6">
                 <button
-                  onClick={() => setCurrentStep('preview')}
+                  onClick={() => setCurrentStep("preview")}
                   className="px-6 py-2 border rounded-md hover:bg-muted/50 transition-colors"
                 >
                   Back
@@ -796,31 +919,50 @@ export default function UploadPage() {
           )}
 
           {/* Step 4: Thumbnail Capture */}
-          {currentStep === 'thumbnails' && (
+          {currentStep === "thumbnails" && (
             <div className="bg-card border rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Generate Thumbnails</h2>
+              <h2 className="text-2xl font-semibold mb-4">
+                Generate Thumbnails
+              </h2>
               <p className="text-muted-foreground mb-4">
-                Both light and dark theme previews are shown below. Click to capture and publish.
+                Both light and dark theme previews are shown below. Click to
+                capture and publish.
               </p>
 
               {lightThumbnail && darkThumbnail ? (
                 <div className="grid md:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <p className="text-sm font-medium mb-2">Light Mode (Captured)</p>
-                    <img src={lightThumbnail} alt="Light thumbnail" className="w-full border rounded" />
+                    <p className="text-sm font-medium mb-2">
+                      Light Mode (Captured)
+                    </p>
+                    <img
+                      src={lightThumbnail}
+                      alt="Light thumbnail"
+                      className="w-full border rounded"
+                    />
                   </div>
                   <div>
-                    <p className="text-sm font-medium mb-2">Dark Mode (Captured)</p>
-                    <img src={darkThumbnail} alt="Dark thumbnail" className="w-full border rounded" />
+                    <p className="text-sm font-medium mb-2">
+                      Dark Mode (Captured)
+                    </p>
+                    <img
+                      src={darkThumbnail}
+                      alt="Dark thumbnail"
+                      className="w-full border rounded"
+                    />
                   </div>
                 </div>
               ) : (
                 <div className="mb-4">
-                  <p className="text-sm font-medium mb-3">Live Previews (thumbnails will be captured from these):</p>
+                  <p className="text-sm font-medium mb-3">
+                    Live Previews (thumbnails will be captured from these):
+                  </p>
                   <div className="grid md:grid-cols-2 gap-4">
                     {/* Light Mode Preview */}
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2">Light Mode (kicad theme)</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">
+                        Light Mode (kicad theme)
+                      </p>
                       <div
                         ref={lightContainerRef}
                         className="rounded-md overflow-hidden border-2 border-gray-300"
@@ -830,7 +972,9 @@ export default function UploadPage() {
                           <div className="w-full h-full flex items-center justify-center bg-white">
                             <div className="text-center">
                               <Loader className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-400" />
-                              <p className="text-xs text-gray-500">Loading...</p>
+                              <p className="text-xs text-gray-500">
+                                Loading...
+                              </p>
                             </div>
                           </div>
                         ) : previewUrl ? (
@@ -844,7 +988,9 @@ export default function UploadPage() {
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                            <p className="text-xs text-gray-500">Preview not available</p>
+                            <p className="text-xs text-gray-500">
+                              Preview not available
+                            </p>
                           </div>
                         )}
                       </div>
@@ -852,7 +998,9 @@ export default function UploadPage() {
 
                     {/* Dark Mode Preview */}
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2">Dark Mode (witchhazel theme)</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">
+                        Dark Mode (witchhazel theme)
+                      </p>
                       <div
                         ref={darkContainerRef}
                         className="rounded-md overflow-hidden border-2 border-gray-600 bg-gray-900"
@@ -862,7 +1010,9 @@ export default function UploadPage() {
                           <div className="w-full h-full flex items-center justify-center bg-gray-900">
                             <div className="text-center">
                               <Loader className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-500" />
-                              <p className="text-xs text-gray-500">Loading...</p>
+                              <p className="text-xs text-gray-500">
+                                Loading...
+                              </p>
                             </div>
                           </div>
                         ) : previewUrl ? (
@@ -876,7 +1026,9 @@ export default function UploadPage() {
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                            <p className="text-xs text-gray-500">Preview not available</p>
+                            <p className="text-xs text-gray-500">
+                              Preview not available
+                            </p>
                           </div>
                         )}
                       </div>
@@ -887,7 +1039,7 @@ export default function UploadPage() {
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => setCurrentStep('metadata')}
+                  onClick={() => setCurrentStep("metadata")}
                   disabled={isCapturing || isUploading}
                   className="px-6 py-2 border rounded-md hover:bg-muted/50 transition-colors disabled:opacity-50"
                 >
@@ -901,7 +1053,7 @@ export default function UploadPage() {
                   {isCapturing || isUploading ? (
                     <>
                       <Loader className="w-4 h-4 animate-spin" />
-                      {isCapturing ? 'Capturing...' : uploadProgress}
+                      {isCapturing ? "Capturing..." : uploadProgress}
                     </>
                   ) : (
                     <>
@@ -915,10 +1067,12 @@ export default function UploadPage() {
           )}
 
           {/* Step 5: Success */}
-          {currentStep === 'success' && (
+          {currentStep === "success" && (
             <div className="bg-card border rounded-lg p-6 text-center">
               <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-green-500" />
-              <h2 className="text-2xl font-semibold mb-2">Circuit Published!</h2>
+              <h2 className="text-2xl font-semibold mb-2">
+                Circuit Published!
+              </h2>
               <p className="text-muted-foreground mb-4">
                 Your circuit has been successfully uploaded and is now live.
               </p>

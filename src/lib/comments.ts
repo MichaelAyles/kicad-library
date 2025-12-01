@@ -1,24 +1,33 @@
 // API functions for comments system using Supabase
 
-import { createClient } from '@/lib/supabase/client';
-import type { Comment, CreateCommentInput, UpdateCommentInput } from '@/types/comments';
+import { createClient } from "@/lib/supabase/client";
+import type {
+  Comment,
+  CreateCommentInput,
+  UpdateCommentInput,
+} from "@/types/comments";
 
 const supabase = createClient();
 
 /**
  * Fetch all comments for a circuit with user data and nested replies
  */
-export async function getCircuitComments(circuitId: string, userId?: string): Promise<Comment[]> {
+export async function getCircuitComments(
+  circuitId: string,
+  userId?: string,
+): Promise<Comment[]> {
   try {
     // Fetch all comments for this circuit
     const { data: comments, error } = await supabase
-      .from('circuit_comments')
-      .select(`
+      .from("circuit_comments")
+      .select(
+        `
         *,
         user:profiles(id, username, avatar_url)
-      `)
-      .eq('circuit_id', circuitId)
-      .order('created_at', { ascending: true });
+      `,
+      )
+      .eq("circuit_id", circuitId)
+      .order("created_at", { ascending: true });
 
     if (error) throw error;
     if (!comments) return [];
@@ -27,12 +36,12 @@ export async function getCircuitComments(circuitId: string, userId?: string): Pr
     let userLikes: Set<string> = new Set();
     if (userId) {
       const { data: likes } = await supabase
-        .from('comment_likes')
-        .select('comment_id')
-        .eq('user_id', userId);
+        .from("comment_likes")
+        .select("comment_id")
+        .eq("user_id", userId);
 
       if (likes) {
-        userLikes = new Set(likes.map(like => like.comment_id));
+        userLikes = new Set(likes.map((like) => like.comment_id));
       }
     }
 
@@ -70,7 +79,7 @@ export async function getCircuitComments(circuitId: string, userId?: string): Pr
 
     return topLevelComments.map(attachReplies);
   } catch (error) {
-    console.error('Error fetching comments:', error);
+    console.error("Error fetching comments:", error);
     throw error;
   }
 }
@@ -81,36 +90,44 @@ const MAX_COMMENT_LENGTH = 10000;
 /**
  * Create a new comment or reply
  */
-export async function createComment(input: CreateCommentInput): Promise<Comment> {
+export async function createComment(
+  input: CreateCommentInput,
+): Promise<Comment> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User must be authenticated to comment');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User must be authenticated to comment");
 
     // Validate content length
     const trimmedContent = input.content.trim();
     if (!trimmedContent) {
-      throw new Error('Comment cannot be empty');
+      throw new Error("Comment cannot be empty");
     }
     if (trimmedContent.length > MAX_COMMENT_LENGTH) {
-      throw new Error(`Comment must be ${MAX_COMMENT_LENGTH.toLocaleString()} characters or less`);
+      throw new Error(
+        `Comment must be ${MAX_COMMENT_LENGTH.toLocaleString()} characters or less`,
+      );
     }
 
     const { data, error } = await supabase
-      .from('circuit_comments')
+      .from("circuit_comments")
       .insert({
         circuit_id: input.circuit_id,
         user_id: user.id,
         parent_comment_id: input.parent_comment_id || null,
         content: trimmedContent,
       })
-      .select(`
+      .select(
+        `
         *,
         user:profiles(id, username, avatar_url)
-      `)
+      `,
+      )
       .single();
 
     if (error) throw error;
-    if (!data) throw new Error('Failed to create comment');
+    if (!data) throw new Error("Failed to create comment");
 
     return {
       ...data,
@@ -118,7 +135,7 @@ export async function createComment(input: CreateCommentInput): Promise<Comment>
       replies: [],
     };
   } catch (error) {
-    console.error('Error creating comment:', error);
+    console.error("Error creating comment:", error);
     throw error;
   }
 }
@@ -126,33 +143,40 @@ export async function createComment(input: CreateCommentInput): Promise<Comment>
 /**
  * Update a comment (edit content)
  */
-export async function updateComment(commentId: string, input: UpdateCommentInput): Promise<Comment> {
+export async function updateComment(
+  commentId: string,
+  input: UpdateCommentInput,
+): Promise<Comment> {
   try {
     // Validate content length
     const trimmedContent = input.content.trim();
     if (!trimmedContent) {
-      throw new Error('Comment cannot be empty');
+      throw new Error("Comment cannot be empty");
     }
     if (trimmedContent.length > MAX_COMMENT_LENGTH) {
-      throw new Error(`Comment must be ${MAX_COMMENT_LENGTH.toLocaleString()} characters or less`);
+      throw new Error(
+        `Comment must be ${MAX_COMMENT_LENGTH.toLocaleString()} characters or less`,
+      );
     }
 
     const { data, error } = await supabase
-      .from('circuit_comments')
+      .from("circuit_comments")
       .update({ content: trimmedContent })
-      .eq('id', commentId)
-      .select(`
+      .eq("id", commentId)
+      .select(
+        `
         *,
         user:profiles(id, username, avatar_url)
-      `)
+      `,
+      )
       .single();
 
     if (error) throw error;
-    if (!data) throw new Error('Failed to update comment');
+    if (!data) throw new Error("Failed to update comment");
 
     return data;
   } catch (error) {
-    console.error('Error updating comment:', error);
+    console.error("Error updating comment:", error);
     throw error;
   }
 }
@@ -163,13 +187,13 @@ export async function updateComment(commentId: string, input: UpdateCommentInput
 export async function deleteComment(commentId: string): Promise<void> {
   try {
     const { error } = await supabase
-      .from('circuit_comments')
+      .from("circuit_comments")
       .delete()
-      .eq('id', commentId);
+      .eq("id", commentId);
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    console.error("Error deleting comment:", error);
     throw error;
   }
 }
@@ -179,41 +203,41 @@ export async function deleteComment(commentId: string): Promise<void> {
  */
 export async function toggleCommentLike(commentId: string): Promise<boolean> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User must be authenticated to like comments');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User must be authenticated to like comments");
 
     // Check if already liked
     const { data: existingLike } = await supabase
-      .from('comment_likes')
-      .select('id')
-      .eq('comment_id', commentId)
-      .eq('user_id', user.id)
+      .from("comment_likes")
+      .select("id")
+      .eq("comment_id", commentId)
+      .eq("user_id", user.id)
       .single();
 
     if (existingLike) {
       // Unlike: remove the like
       const { error } = await supabase
-        .from('comment_likes')
+        .from("comment_likes")
         .delete()
-        .eq('comment_id', commentId)
-        .eq('user_id', user.id);
+        .eq("comment_id", commentId)
+        .eq("user_id", user.id);
 
       if (error) throw error;
       return false; // Now unliked
     } else {
       // Like: add the like
-      const { error } = await supabase
-        .from('comment_likes')
-        .insert({
-          comment_id: commentId,
-          user_id: user.id,
-        });
+      const { error } = await supabase.from("comment_likes").insert({
+        comment_id: commentId,
+        user_id: user.id,
+      });
 
       if (error) throw error;
       return true; // Now liked
     }
   } catch (error) {
-    console.error('Error toggling comment like:', error);
+    console.error("Error toggling comment like:", error);
     throw error;
   }
 }
@@ -224,14 +248,14 @@ export async function toggleCommentLike(commentId: string): Promise<boolean> {
 export async function getCommentCount(circuitId: string): Promise<number> {
   try {
     const { count, error } = await supabase
-      .from('circuit_comments')
-      .select('*', { count: 'exact', head: true })
-      .eq('circuit_id', circuitId);
+      .from("circuit_comments")
+      .select("*", { count: "exact", head: true })
+      .eq("circuit_id", circuitId);
 
     if (error) throw error;
     return count || 0;
   } catch (error) {
-    console.error('Error getting comment count:', error);
+    console.error("Error getting comment count:", error);
     return 0;
   }
 }

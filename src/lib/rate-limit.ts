@@ -41,13 +41,14 @@ export interface RateLimitResult {
  */
 export function checkRateLimit(
   identifier: string,
-  config: RateLimitConfig
+  config: RateLimitConfig,
 ): RateLimitResult {
   const now = Date.now();
   const windowMs = config.windowSeconds * 1000;
 
   // Clean up expired entries periodically
-  if (Math.random() < 0.01) { // 1% chance to cleanup
+  if (Math.random() < 0.01) {
+    // 1% chance to cleanup
     cleanupExpiredEntries(now);
   }
 

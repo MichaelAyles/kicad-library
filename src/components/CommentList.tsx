@@ -50,7 +50,10 @@ export function CommentList({ circuitId }: CommentListProps) {
 
   const totalComments = comments.reduce((acc, comment) => {
     const countReplies = (c: CommentType): number => {
-      return 1 + (c.replies?.reduce((sum, reply) => sum + countReplies(reply), 0) || 0);
+      return (
+        1 +
+        (c.replies?.reduce((sum, reply) => sum + countReplies(reply), 0) || 0)
+      );
     };
     return acc + countReplies(comment);
   }, 0);

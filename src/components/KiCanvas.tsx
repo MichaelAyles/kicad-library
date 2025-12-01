@@ -7,18 +7,21 @@ import { useTheme } from "next-themes";
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      'kicanvas-embed': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string;
-        controls?: 'none' | 'basic' | 'full';
-        theme?: string;
-      }, HTMLElement>;
+      "kicanvas-embed": React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          src?: string;
+          controls?: "none" | "basic" | "full";
+          theme?: string;
+        },
+        HTMLElement
+      >;
     }
   }
 }
 
 // Extended interface for the KiCanvas element (accessed via ref)
 interface KiCanvasElement extends HTMLElement {
-  theme: 'kicad' | 'witchhazel';
+  theme: "kicad" | "witchhazel";
   loaded: boolean;
 }
 
@@ -28,9 +31,9 @@ interface KiCanvasProps {
   /** Direct URL to schematic file (e.g., "/api/preview/abc123.kicad_sch") */
   src?: string;
   /** Controls level */
-  controls?: 'none' | 'basic' | 'full';
+  controls?: "none" | "basic" | "full";
   /** Explicit theme - 'kicad' for light, 'witchhazel' for dark. If not set, syncs with page theme */
-  theme?: 'kicad' | 'witchhazel';
+  theme?: "kicad" | "witchhazel";
   /** Additional styling */
   className?: string;
   /** Height of the viewer */
@@ -65,11 +68,11 @@ interface KiCanvasProps {
 export function KiCanvas({
   slug,
   src,
-  controls = 'basic',
+  controls = "basic",
   theme: explicitTheme,
-  className = '',
-  height = '100%',
-  width = '100%',
+  className = "",
+  height = "100%",
+  width = "100%",
   circuitId,
   onCopy,
 }: KiCanvasProps) {
@@ -85,7 +88,9 @@ export function KiCanvas({
   // Determine the KiCanvas theme to use
   // If explicit theme is provided, use it directly
   // Otherwise, sync with page theme
-  const kicanvasTheme = explicitTheme || ((resolvedTheme || pageTheme) === 'dark' ? 'witchhazel' : 'kicad');
+  const kicanvasTheme =
+    explicitTheme ||
+    ((resolvedTheme || pageTheme) === "dark" ? "witchhazel" : "kicad");
 
   // Sync theme with KiCanvas (only needed when not using explicit theme via attribute)
   useEffect(() => {
@@ -99,7 +104,9 @@ export function KiCanvas({
     const setViewerTheme = () => {
       // Set theme as a property (not attribute!)
       viewer.theme = kicanvasTheme;
-      console.log(`KiCanvas theme updated to: ${kicanvasTheme} (page theme: ${resolvedTheme || pageTheme})`);
+      console.log(
+        `KiCanvas theme updated to: ${kicanvasTheme} (page theme: ${resolvedTheme || pageTheme})`,
+      );
     };
 
     // Check if viewer is already loaded
@@ -108,15 +115,17 @@ export function KiCanvas({
     } else {
       // Wait for kicanvas:load event
       const handleLoad = () => {
-        console.log('KiCanvas loaded, setting theme');
+        console.log("KiCanvas loaded, setting theme");
         // Add small delay to ensure internal state is ready
         setTimeout(setViewerTheme, 100);
       };
 
-      viewer.addEventListener('kicanvas:load', handleLoad as any, { once: true });
+      viewer.addEventListener("kicanvas:load", handleLoad as any, {
+        once: true,
+      });
 
       return () => {
-        viewer.removeEventListener('kicanvas:load', handleLoad as any);
+        viewer.removeEventListener("kicanvas:load", handleLoad as any);
       };
     }
   }, [mounted, pageTheme, resolvedTheme, explicitTheme, kicanvasTheme]);
@@ -129,8 +138,8 @@ export function KiCanvas({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Detect Ctrl+C or Cmd+C
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        console.log('Copy detected from KiCanvas viewer');
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        console.log("Copy detected from KiCanvas viewer");
 
         // Call the onCopy callback if provided
         if (onCopy) {
@@ -140,30 +149,36 @@ export function KiCanvas({
     };
 
     // Add keyboard event listener to the viewer
-    viewer.addEventListener('keydown', handleKeyDown as any);
+    viewer.addEventListener("keydown", handleKeyDown as any);
 
     return () => {
-      viewer.removeEventListener('keydown', handleKeyDown as any);
+      viewer.removeEventListener("keydown", handleKeyDown as any);
     };
   }, [mounted, onCopy]);
 
   // Determine the source URL
-  const schematicUrl = slug
-    ? `/api/schematic/${slug}.kicad_sch`
-    : src;
+  const schematicUrl = slug ? `/api/schematic/${slug}.kicad_sch` : src;
 
   if (!schematicUrl) {
-    console.error('KiCanvas: Either slug or src must be provided');
+    console.error("KiCanvas: Either slug or src must be provided");
     return (
-      <div className={`bg-muted/20 flex items-center justify-center ${className}`} style={{ height, width }}>
-        <p className="text-muted-foreground text-sm">Error: No schematic source provided</p>
+      <div
+        className={`bg-muted/20 flex items-center justify-center ${className}`}
+        style={{ height, width }}
+      >
+        <p className="text-muted-foreground text-sm">
+          Error: No schematic source provided
+        </p>
       </div>
     );
   }
 
   if (!mounted) {
     return (
-      <div className={`bg-muted/20 animate-pulse ${className}`} style={{ height, width }} />
+      <div
+        className={`bg-muted/20 animate-pulse ${className}`}
+        style={{ height, width }}
+      />
     );
   }
 
@@ -177,7 +192,7 @@ export function KiCanvas({
       style={{
         width,
         height,
-        display: 'block',
+        display: "block",
       }}
     />
   );
@@ -189,14 +204,17 @@ export function KiCanvas({
 export function KiCanvasCard({
   slug,
   src,
-  controls = 'full',
+  controls = "full",
   theme,
-  height = '500px',
+  height = "500px",
   circuitId,
   onCopy,
-}: Omit<KiCanvasProps, 'className' | 'width'>) {
+}: Omit<KiCanvasProps, "className" | "width">) {
   return (
-    <div className="rounded-md overflow-hidden border-2 border-muted" style={{ height }}>
+    <div
+      className="rounded-md overflow-hidden border-2 border-muted"
+      style={{ height }}
+    >
       <KiCanvas
         slug={slug}
         src={src}
