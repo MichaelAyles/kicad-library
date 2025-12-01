@@ -3,6 +3,7 @@ import {
   isClipboardSnippet,
   wrapSnippetToFullFile,
   removeHierarchicalSheets,
+  replacePaperSize,
   validateSExpression,
   selectSheetSize,
   type SheetSize,
@@ -106,31 +107,32 @@ export async function GET(
       });
     }
 
+    // Determine the appropriate paper size
+    // Priority: 1) User override from database, 2) Auto-detect from bounding box
+    let paperSize: SheetSize = "A4";
+    if (circuit.sheet_size) {
+      // User specified a sheet size override
+      paperSize = circuit.sheet_size as SheetSize;
+    } else {
+      // Auto-detect from bounding box
+      const validation = validateSExpression(rawData);
+      if (validation.valid && validation.metadata) {
+        paperSize = selectSheetSize(validation.metadata.boundingBox).size;
+      }
+    }
+
     // Check if raw data is a snippet or full file, and prepare accordingly
     let schematicFile: string;
     if (isClipboardSnippet(rawData)) {
       // It's a snippet - wrap it for serving as .kicad_sch file
-      // Use stored sheet_size if available, otherwise auto-detect from bounding box
-      let paperSize: SheetSize = "A4";
-      if (circuit.sheet_size) {
-        // User specified a sheet size override
-        paperSize = circuit.sheet_size as SheetSize;
-      } else {
-        // Auto-detect from bounding box
-        const validation = validateSExpression(rawData);
-        if (validation.valid && validation.metadata) {
-          paperSize = selectSheetSize(validation.metadata.boundingBox).size;
-        }
-      }
-
       schematicFile = wrapSnippetToFullFile(rawData, {
         title: circuit.title,
         uuid: circuit.id, // Use circuit UUID
         paperSize,
       });
     } else {
-      // It's already a full file - use as-is
-      schematicFile = rawData;
+      // It's already a full file - replace paper size with calculated/override value
+      schematicFile = replacePaperSize(rawData, paperSize);
     }
 
     // Remove hierarchical sheet references to prevent KiCanvas from trying to load non-existent files
