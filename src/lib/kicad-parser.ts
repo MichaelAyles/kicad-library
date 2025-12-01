@@ -805,10 +805,18 @@ export function extractMetadata(sexpr: string): ParsedMetadata {
     minX = minY = maxX = maxY = 0;
   }
 
-  // Footprint analysis
+  // Footprint analysis - exclude power symbols (they don't have physical footprints)
   const footprintTypes = new Set<string>();
   let assigned = 0;
+  let totalRequiringFootprints = 0;
+
   for (const comp of components) {
+    // Skip power symbols - they're electrical symbols, not physical components
+    if (comp.lib_id.startsWith("power:")) {
+      continue;
+    }
+
+    totalRequiringFootprints++;
     if (comp.footprint) {
       assigned++;
       footprintTypes.add(comp.footprint);
@@ -832,7 +840,7 @@ export function extractMetadata(sexpr: string): ParsedMetadata {
     },
     footprints: {
       assigned,
-      unassigned: components.length - assigned,
+      unassigned: totalRequiringFootprints - assigned,
       types: Array.from(footprintTypes),
     },
     version,
