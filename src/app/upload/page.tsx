@@ -527,6 +527,9 @@ export default function UploadPage() {
                               {sheetSizeResult.size === "A3" &&
                                 !sheetSizeResult.isOversized &&
                                 " (circuit exceeds A4 bounds)"}
+                              {sheetSizeResult.size === "A2" &&
+                                !sheetSizeResult.isOversized &&
+                                " (circuit exceeds A3 bounds)"}
                               {sheetSizeResult.isOversized &&
                                 " (circuit is very large, may not display fully)"}
                             </p>

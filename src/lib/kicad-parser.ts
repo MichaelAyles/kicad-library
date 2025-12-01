@@ -87,13 +87,15 @@ export interface ValidationResult {
  * Measured from actual KiCad schematics:
  * - A4: usable area from (12.7, 12.7) to (283.21, 196.85)
  * - A3: usable area from (12.7, 12.7) to (406.4, 284.48)
+ * - A2: 594x420mm paper, estimated usable ~570x396mm
  */
 export const SHEET_SIZES = {
   A4: { width: 270, height: 184, name: "A4" as const },
   A3: { width: 394, height: 272, name: "A3" as const },
+  A2: { width: 570, height: 396, name: "A2" as const },
 } as const;
 
-export type SheetSize = "A4" | "A3";
+export type SheetSize = "A4" | "A3" | "A2";
 
 export interface SheetSizeResult {
   size: SheetSize;
@@ -137,10 +139,20 @@ export function selectSheetSize(boundingBox: {
     };
   }
 
-  // Too large - use A3 but flag as oversized
+  // Check if fits in A2
+  if (width <= SHEET_SIZES.A2.width && height <= SHEET_SIZES.A2.height) {
+    return {
+      size: "A2",
+      recommended: "A2",
+      isOversized: false,
+      boundingBox: { width, height },
+    };
+  }
+
+  // Too large - use A2 but flag as oversized
   return {
-    size: "A3",
-    recommended: "A3",
+    size: "A2",
+    recommended: "A2",
     isOversized: true,
     boundingBox: { width, height },
   };
