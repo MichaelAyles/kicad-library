@@ -166,6 +166,7 @@ export default function UploadPage() {
           const wrapped = wrapSnippetToFullFile(sexpr, {
             title: title || "Circuit",
             paperSize: sizeResult.size,
+            offset: sizeResult.offset,
           });
           setFullFileSexpr(wrapped);
         } else {
