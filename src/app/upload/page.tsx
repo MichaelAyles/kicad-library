@@ -9,6 +9,7 @@ import {
   Eye,
   Loader,
   Camera,
+  ChevronDown,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -25,6 +26,7 @@ import {
   type ParsedMetadata,
   type ValidationResult,
   type SheetSizeResult,
+  type SheetSize,
 } from "@/lib/kicad-parser";
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
@@ -61,6 +63,9 @@ export default function UploadPage() {
   const [metadata, setMetadata] = useState<ParsedMetadata | null>(null);
   const [sheetSizeResult, setSheetSizeResult] =
     useState<SheetSizeResult | null>(null);
+  const [sheetSizeOverride, setSheetSizeOverride] = useState<SheetSize | null>(
+    null,
+  );
   const [fullFileSexpr, setFullFileSexpr] = useState<string>(""); // Always full file format for preview/storage
 
   // Metadata form
@@ -134,6 +139,20 @@ export default function UploadPage() {
 
     createPreview();
   }, [fullFileSexpr]);
+
+  // Handle sheet size override - regenerate fullFileSexpr with new paper size
+  const handleSheetSizeChange = (newSize: SheetSize) => {
+    setSheetSizeOverride(newSize);
+
+    // If we have a snippet, re-wrap with new paper size
+    if (validation?.isSnippet && sexpr) {
+      const wrapped = wrapSnippetToFullFile(sexpr, {
+        title: title || "Circuit",
+        paperSize: newSize,
+      });
+      setFullFileSexpr(wrapped);
+    }
+  };
 
   // Step 1: Parse and validate
   const handleParse = () => {
@@ -583,7 +602,42 @@ export default function UploadPage() {
 
               {/* KiCanvas Preview */}
               <div className="mb-6">
-                <h3 className="font-semibold mb-3">Interactive Preview:</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold">Interactive Preview:</h3>
+                  {/* Sheet size indicator/dropdown */}
+                  {sheetSizeResult && validation?.isSnippet && (
+                    <div className="relative group">
+                      <button
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-mono bg-muted/50 hover:bg-muted rounded border border-transparent hover:border-border transition-colors"
+                        title="Click to change sheet size"
+                      >
+                        {sheetSizeOverride || sheetSizeResult.size}
+                        <ChevronDown className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                      <div className="absolute right-0 top-full mt-1 bg-popover border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                        {(["A4", "A3", "A2"] as const).map((size) => (
+                          <button
+                            key={size}
+                            onClick={() => handleSheetSizeChange(size)}
+                            className={`block w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors ${
+                              (sheetSizeOverride || sheetSizeResult.size) ===
+                              size
+                                ? "bg-muted font-medium"
+                                : ""
+                            }`}
+                          >
+                            {size}
+                            {size === sheetSizeResult.recommended && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                (recommended)
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div
                   className="bg-background rounded-md overflow-hidden border"
                   style={{ height: "450px" }}
