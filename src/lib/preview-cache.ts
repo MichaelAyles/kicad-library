@@ -10,7 +10,7 @@
  * This prevents unbounded memory growth in serverless functions
  */
 
-import QuickLRU from 'quick-lru';
+import QuickLRU from "quick-lru";
 
 export interface PreviewCacheEntry {
   sexpr: string;

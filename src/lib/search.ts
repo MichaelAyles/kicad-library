@@ -29,7 +29,7 @@ export interface SearchOptions {
   category?: string;
   tag?: string;
   license?: string;
-  sort?: 'relevance' | 'recent' | 'popular' | 'views' | 'favorites';
+  sort?: "relevance" | "recent" | "popular" | "views" | "favorites";
   limit?: number;
   offset?: number;
   excludeImported?: boolean;
@@ -62,38 +62,40 @@ export interface SearchResponse {
  * // Tag search
  * const tagged = await searchCircuits({ tag: 'microcontroller' });
  */
-export async function searchCircuits(options: SearchOptions = {}): Promise<SearchResponse> {
+export async function searchCircuits(
+  options: SearchOptions = {},
+): Promise<SearchResponse> {
   try {
     const params = new URLSearchParams();
 
     // Add search query
     if (options.query?.trim()) {
-      params.set('q', options.query.trim());
+      params.set("q", options.query.trim());
     }
 
     // Add filters
-    if (options.category) params.set('category', options.category);
-    if (options.tag) params.set('tag', options.tag);
-    if (options.license) params.set('license', options.license);
+    if (options.category) params.set("category", options.category);
+    if (options.tag) params.set("tag", options.tag);
+    if (options.license) params.set("license", options.license);
 
     // Add sorting
-    if (options.sort) params.set('sort', options.sort);
+    if (options.sort) params.set("sort", options.sort);
 
     // Add limit (default 50, max 100)
     const limit = Math.min(options.limit || 50, 100);
-    params.set('limit', limit.toString());
+    params.set("limit", limit.toString());
 
     // Add offset for pagination
-    if (options.offset) params.set('offset', options.offset.toString());
+    if (options.offset) params.set("offset", options.offset.toString());
 
     // Exclude imported circuits if requested
-    if (options.excludeImported) params.set('excludeImported', 'true');
+    if (options.excludeImported) params.set("excludeImported", "true");
 
     const response = await fetch(`/api/search?${params.toString()}`);
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Search failed');
+      throw new Error(error.error || "Search failed");
     }
 
     const data = await response.json();
@@ -103,7 +105,7 @@ export async function searchCircuits(options: SearchOptions = {}): Promise<Searc
       count: data.count || 0,
     };
   } catch (error) {
-    console.error('Search error:', error);
+    console.error("Search error:", error);
     throw error;
   }
 }
@@ -120,7 +122,7 @@ export async function searchCircuits(options: SearchOptions = {}): Promise<Searc
 export async function debouncedSearch(
   query: string,
   limit: number = 5,
-  debounceMs: number = 300
+  debounceMs: number = 300,
 ): Promise<SearchCircuit[]> {
   return new Promise((resolve) => {
     setTimeout(async () => {
@@ -133,7 +135,7 @@ export async function debouncedSearch(
         const { circuits } = await searchCircuits({ query, limit });
         resolve(circuits);
       } catch (error) {
-        console.error('Debounced search error:', error);
+        console.error("Debounced search error:", error);
         resolve([]);
       }
     }, debounceMs);
@@ -148,7 +150,10 @@ export async function debouncedSearch(
  * @param limit - Number of results (default 5)
  * @returns Search results
  */
-export async function quickSearch(query: string, limit: number = 5): Promise<SearchCircuit[]> {
+export async function quickSearch(
+  query: string,
+  limit: number = 5,
+): Promise<SearchCircuit[]> {
   if (query.trim().length < 2) {
     return [];
   }
@@ -157,7 +162,7 @@ export async function quickSearch(query: string, limit: number = 5): Promise<Sea
     const { circuits } = await searchCircuits({ query, limit });
     return circuits;
   } catch (error) {
-    console.error('Quick search error:', error);
+    console.error("Quick search error:", error);
     return [];
   }
 }

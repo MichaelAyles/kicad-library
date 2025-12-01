@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -19,16 +19,20 @@ export default function HomePage() {
   const { theme } = useTheme();
   const [topCircuits, setTopCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState<Stats>({ circuits: 0, copies: 0, makers: 0 });
+  const [stats, setStats] = useState<Stats>({
+    circuits: 0,
+    copies: 0,
+    makers: 0,
+  });
 
   // Load top circuits
   useEffect(() => {
     const loadTopCircuits = async () => {
       try {
-        const { circuits } = await getCircuits(6, 0, 'copies'); // Get top 6 most copied
+        const { circuits } = await getCircuits(6, 0, "copies"); // Get top 6 most copied
         setTopCircuits(circuits);
       } catch (error) {
-        console.error('Error loading top circuits:', error);
+        console.error("Error loading top circuits:", error);
       } finally {
         setIsLoading(false);
       }
@@ -41,13 +45,13 @@ export default function HomePage() {
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const response = await fetch('/api/stats');
+        const response = await fetch("/api/stats");
         if (response.ok) {
           const data = await response.json();
           setStats(data);
         }
       } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error("Error loading stats:", error);
       }
     };
 
@@ -61,9 +65,13 @@ export default function HomePage() {
       <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden py-20 px-4">
         {/* Subtle Background Gradient */}
         <div className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-radial from-primary/10 via-transparent to-transparent" style={{
-            background: 'radial-gradient(ellipse at center, rgba(0, 255, 135, 0.1) 0%, transparent 70%)'
-          }} />
+          <div
+            className="absolute inset-0 bg-gradient-radial from-primary/10 via-transparent to-transparent"
+            style={{
+              background:
+                "radial-gradient(ellipse at center, rgba(0, 255, 135, 0.1) 0%, transparent 70%)",
+            }}
+          />
         </div>
 
         <div className="container mx-auto max-w-7xl">
@@ -77,7 +85,8 @@ export default function HomePage() {
                 <span className="text-foreground">for KiCad</span>
               </h1>
               <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                Share and discover reusable schematic subcircuits. Built by makers, for makers.
+                Share and discover reusable schematic subcircuits. Built by
+                makers, for makers.
               </p>
 
               {/* CTA Buttons */}
@@ -102,25 +111,30 @@ export default function HomePage() {
               <div className="flex gap-8 justify-center">
                 <div className="flex flex-col">
                   <span className="text-3xl font-bold green-gradient-text">
-                    {stats.circuits > 0 ? `${stats.circuits}` : '...'}
+                    {stats.circuits > 0 ? `${stats.circuits}` : "..."}
                   </span>
-                  <span className="text-sm text-muted-foreground">Circuits</span>
+                  <span className="text-sm text-muted-foreground">
+                    Circuits
+                  </span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-3xl font-bold green-gradient-text">
-                    {stats.copies > 0 ? `${stats.copies.toLocaleString()}` : '...'}
+                    {stats.copies > 0
+                      ? `${stats.copies.toLocaleString()}`
+                      : "..."}
                   </span>
-                  <span className="text-sm text-muted-foreground">Downloads</span>
+                  <span className="text-sm text-muted-foreground">
+                    Downloads
+                  </span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-3xl font-bold green-gradient-text">
-                    {stats.makers > 0 ? `${stats.makers}` : '...'}
+                    {stats.makers > 0 ? `${stats.makers}` : "..."}
                   </span>
                   <span className="text-sm text-muted-foreground">Makers</span>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </section>
@@ -141,7 +155,8 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">1. Copy from KiCad</h3>
               <p className="text-muted-foreground">
-                Select your circuit in KiCad and press Ctrl+C. The S-expression goes to your clipboard.
+                Select your circuit in KiCad and press Ctrl+C. The S-expression
+                goes to your clipboard.
               </p>
             </div>
             <div className="flex flex-col items-center text-center p-6 rounded-lg border border-border hover:border-primary/50 transition-all hover:green-glow">
@@ -150,7 +165,8 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">2. Upload & Share</h3>
               <p className="text-muted-foreground">
-                Paste into CircuitSnips, add a description and license. Your circuit is instantly searchable.
+                Paste into CircuitSnips, add a description and license. Your
+                circuit is instantly searchable.
               </p>
             </div>
             <div className="flex flex-col items-center text-center p-6 rounded-lg border border-border hover:border-primary/50 transition-all hover:green-glow">
@@ -159,7 +175,8 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">3. One-Click Paste</h3>
               <p className="text-muted-foreground">
-                Others find your circuit, click copy, and paste directly into their KiCad projects.
+                Others find your circuit, click copy, and paste directly into
+                their KiCad projects.
               </p>
             </div>
           </div>
@@ -173,7 +190,10 @@ export default function HomePage() {
             <h2 className="text-4xl font-bold">
               <span className="green-gradient-text">Top Circuits</span>
             </h2>
-            <Link href="/browse" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1">
+            <Link
+              href="/browse"
+              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
+            >
               View all <span className="text-lg">→</span>
             </Link>
           </div>
@@ -188,8 +208,13 @@ export default function HomePage() {
           {/* Empty State */}
           {!isLoading && topCircuits.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">No circuits uploaded yet.</p>
-              <Link href="/upload" className="text-primary hover:underline font-medium">
+              <p className="text-muted-foreground mb-4">
+                No circuits uploaded yet.
+              </p>
+              <Link
+                href="/upload"
+                className="text-primary hover:underline font-medium"
+              >
                 Be the first to share a circuit!
               </Link>
             </div>
@@ -200,7 +225,11 @@ export default function HomePage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {topCircuits.map((circuit) => {
                 // Use theme-appropriate thumbnail, transformed to R2 URL
-                const thumbnailUrl = toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url);
+                const thumbnailUrl = toR2ThumbnailUrl(
+                  theme === "dark"
+                    ? circuit.thumbnail_dark_url
+                    : circuit.thumbnail_light_url,
+                );
 
                 return (
                   <Link
@@ -251,10 +280,19 @@ export default function HomePage() {
 
                       {/* Footer */}
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>by @{circuit.github_owner || circuit.user?.username || 'unknown'}</span>
+                        <span>
+                          by @
+                          {circuit.github_owner ||
+                            circuit.user?.username ||
+                            "unknown"}
+                        </span>
                         <div className="flex items-center gap-3">
-                          <span className="group-hover:text-primary transition-colors">📋 {circuit.copy_count}</span>
-                          <span className="group-hover:text-primary transition-colors">⭐ {circuit.favorite_count}</span>
+                          <span className="group-hover:text-primary transition-colors">
+                            📋 {circuit.copy_count}
+                          </span>
+                          <span className="group-hover:text-primary transition-colors">
+                            ⭐ {circuit.favorite_count}
+                          </span>
                         </div>
                       </div>
                     </div>

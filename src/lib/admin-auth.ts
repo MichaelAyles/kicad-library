@@ -26,7 +26,7 @@ export function verifyAdminKey(authHeader: string | null): boolean {
 
   // Check if admin key is configured
   if (!adminKey) {
-    console.error('ADMIN_API_KEY not configured in environment variables');
+    console.error("ADMIN_API_KEY not configured in environment variables");
     return false;
   }
 
@@ -62,6 +62,6 @@ function timingSafeEqual(a: string, b: string): boolean {
  * ```
  */
 export function generateAdminKey(): string {
-  const crypto = require('crypto');
-  return crypto.randomBytes(32).toString('base64url');
+  const crypto = require("crypto");
+  return crypto.randomBytes(32).toString("base64url");
 }

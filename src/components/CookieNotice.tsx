@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { X } from 'lucide-react';
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { X } from "lucide-react";
 
 export function CookieNotice() {
   const [showNotice, setShowNotice] = useState(false);
 
   useEffect(() => {
     // Check if user has already dismissed the notice
-    const dismissed = localStorage.getItem('cookieNoticeDismissed');
+    const dismissed = localStorage.getItem("cookieNoticeDismissed");
     if (!dismissed) {
       setShowNotice(true);
     }
   }, []);
 
   const handleDismiss = () => {
-    localStorage.setItem('cookieNoticeDismissed', 'true');
+    localStorage.setItem("cookieNoticeDismissed", "true");
     setShowNotice(false);
   };
 
@@ -28,18 +28,20 @@ export function CookieNotice() {
         <div className="flex items-start gap-4">
           <div className="flex-1">
             <p className="text-sm text-foreground mb-2">
-              <strong>Cookie Notice:</strong> We use only essential cookies for authentication and platform functionality.
-              We do not use tracking or advertising cookies.
+              <strong>Cookie Notice:</strong> We use only essential cookies for
+              authentication and platform functionality. We do not use tracking
+              or advertising cookies.
             </p>
             <p className="text-xs text-muted-foreground mb-3">
-              By using CircuitSnips, you agree to our{' '}
+              By using CircuitSnips, you agree to our{" "}
               <Link href="/privacy" className="text-primary hover:underline">
                 Privacy Policy
-              </Link>
-              {' '}and{' '}
+              </Link>{" "}
+              and{" "}
               <Link href="/terms" className="text-primary hover:underline">
                 Terms of Service
-              </Link>.
+              </Link>
+              .
             </p>
             <button
               onClick={handleDismiss}

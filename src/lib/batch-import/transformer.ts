@@ -4,7 +4,7 @@
  * Transforms scraper data format into CircuitSnips database schema
  */
 
-import { ImportRecord, normalizeLicense } from './validator';
+import { ImportRecord, normalizeLicense } from "./validator";
 
 export interface CircuitData {
   slug: string;
@@ -36,9 +36,16 @@ export interface CircuitData {
 export function transformToCircuit(
   record: ImportRecord,
   slug: string,
-  botUserId: string
+  botUserId: string,
 ): CircuitData {
-  const { subcircuit, raw_sexpr, component_count, repo_license, repo_owner, repo_name } = record;
+  const {
+    subcircuit,
+    raw_sexpr,
+    component_count,
+    repo_license,
+    repo_owner,
+    repo_name,
+  } = record;
 
   // Build enhanced description with attribution
   const description = buildDescription(record);
@@ -67,7 +74,7 @@ export function transformToCircuit(
     license,
     is_public: true,
     github_owner: repo_owner, // Store GitHub username for display
-    github_repo: repo_name,   // Store repo name for reference
+    github_repo: repo_name, // Store repo name for reference
     thumbnail_light_url: null, // Generated later
     thumbnail_dark_url: null, // Generated later
   };
@@ -86,51 +93,61 @@ export function transformToCircuit(
  * **Components**: {components}
  */
 function buildDescription(record: ImportRecord): string {
-  const { subcircuit, repo_owner, repo_name, repo_url, repo_license, file_path, classification_score } = record;
+  const {
+    subcircuit,
+    repo_owner,
+    repo_name,
+    repo_url,
+    repo_license,
+    file_path,
+    classification_score,
+  } = record;
 
   const parts: string[] = [];
 
   // GitHub attribution FIRST (most visible)
   const normalizedLicense = normalizeLicense(repo_license);
   const licenseText = normalizedLicense || repo_license;
-  parts.push(`> **From GitHub**: [${repo_owner}/${repo_name}](${repo_url}) ([${licenseText} license](${repo_url}/blob/main/LICENSE))`);
-  parts.push('');
+  parts.push(
+    `> **From GitHub**: [${repo_owner}/${repo_name}](${repo_url}) ([${licenseText} license](${repo_url}/blob/main/LICENSE))`,
+  );
+  parts.push("");
 
   // Main description
   parts.push(subcircuit.description.trim());
 
   // Add use case if present
   if (subcircuit.useCase && subcircuit.useCase.trim()) {
-    parts.push('');
+    parts.push("");
     parts.push(`**Use Case**: ${subcircuit.useCase.trim()}`);
   }
 
   // Add components list if present
   if (subcircuit.components && subcircuit.components.trim()) {
-    parts.push('');
+    parts.push("");
     parts.push(`**Components**: ${subcircuit.components.trim()}`);
   }
 
   // Add notes if present
   if (subcircuit.notes && subcircuit.notes.trim()) {
-    parts.push('');
+    parts.push("");
     parts.push(`**Notes**: ${subcircuit.notes.trim()}`);
   }
 
-  const fullDescription = parts.join('\n');
+  const fullDescription = parts.join("\n");
 
   // Limit to 1000 characters for database
   if (fullDescription.length > 1000) {
     // Try to truncate at a sentence or paragraph boundary
     const truncated = fullDescription.substring(0, 997);
-    const lastPeriod = truncated.lastIndexOf('.');
-    const lastNewline = truncated.lastIndexOf('\n');
+    const lastPeriod = truncated.lastIndexOf(".");
+    const lastNewline = truncated.lastIndexOf("\n");
     const breakPoint = Math.max(lastPeriod, lastNewline);
 
     if (breakPoint > 500) {
       return fullDescription.substring(0, breakPoint + 1);
     } else {
-      return truncated + '...';
+      return truncated + "...";
     }
   }
 
@@ -156,15 +173,40 @@ function inferCategory(tags: string[]): string | null {
 
   // Category mapping (first match wins)
   const categoryMap: Record<string, string[]> = {
-    'Power Supply': ['power', 'voltage-regulator', 'ldo', 'buck', 'boost', 'converter', 'psu'],
-    'Communication': ['uart', 'spi', 'i2c', 'usb', 'ethernet', 'wifi', 'bluetooth', 'serial', 'can'],
-    'Interface': ['interface', 'connector', 'gpio', 'bridge', 'adapter'],
-    'Sensing': ['sensor', 'adc', 'temperature', 'pressure', 'accelerometer', 'gyroscope'],
-    'Signal Processing': ['filter', 'amplifier', 'op-amp', 'dac', 'signal'],
-    'Control': ['microcontroller', 'mcu', 'cpu', 'controller', 'processor'],
-    'Timing': ['timing', 'clock', 'oscillator', 'crystal', 'rtc'],
-    'Display': ['display', 'lcd', 'oled', 'led'],
-    'Audio': ['audio', 'speaker', 'microphone', 'codec'],
+    "Power Supply": [
+      "power",
+      "voltage-regulator",
+      "ldo",
+      "buck",
+      "boost",
+      "converter",
+      "psu",
+    ],
+    Communication: [
+      "uart",
+      "spi",
+      "i2c",
+      "usb",
+      "ethernet",
+      "wifi",
+      "bluetooth",
+      "serial",
+      "can",
+    ],
+    Interface: ["interface", "connector", "gpio", "bridge", "adapter"],
+    Sensing: [
+      "sensor",
+      "adc",
+      "temperature",
+      "pressure",
+      "accelerometer",
+      "gyroscope",
+    ],
+    "Signal Processing": ["filter", "amplifier", "op-amp", "dac", "signal"],
+    Control: ["microcontroller", "mcu", "cpu", "controller", "processor"],
+    Timing: ["timing", "clock", "oscillator", "crystal", "rtc"],
+    Display: ["display", "lcd", "oled", "led"],
+    Audio: ["audio", "speaker", "microphone", "codec"],
   };
 
   for (const [category, keywords] of Object.entries(categoryMap)) {
@@ -199,7 +241,14 @@ function sanitizeTags(tags: string[]): string[] {
  * This will be embedded in the schematic file's comments
  */
 export function buildSExprAttribution(record: ImportRecord): string {
-  const { repo_owner, repo_name, repo_url, file_path, repo_license, classification_score } = record;
+  const {
+    repo_owner,
+    repo_name,
+    repo_url,
+    file_path,
+    repo_license,
+    classification_score,
+  } = record;
 
   return [
     `Source: ${repo_owner}/${repo_name}`,
@@ -208,5 +257,5 @@ export function buildSExprAttribution(record: ImportRecord): string {
     `License: ${repo_license}`,
     `Quality: ${classification_score}/10`,
     `Imported by: CircuitSnips.com`,
-  ].join(' | ');
+  ].join(" | ");
 }

@@ -3,16 +3,41 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Copy, Heart, Download, ArrowLeft, Check, FileDown, Loader, Edit, Lock, Flag } from "lucide-react";
+import {
+  Copy,
+  Heart,
+  Download,
+  ArrowLeft,
+  Check,
+  FileDown,
+  Loader,
+  Edit,
+  Lock,
+  Flag,
+} from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { addAttribution, isClipboardSnippet, wrapSnippetToFullFile, extractSnippetFromFullFile, validateSExpression } from "@/lib/kicad-parser";
+import {
+  addAttribution,
+  isClipboardSnippet,
+  wrapSnippetToFullFile,
+  extractSnippetFromFullFile,
+  validateSExpression,
+  selectSheetSize,
+} from "@/lib/kicad-parser";
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { CommentList } from "@/components/CommentList";
 import { FlagCircuitModal } from "@/components/FlagCircuitModal";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { formatDate } from "@/lib/utils";
-import { getCircuitBySlug, incrementViewCount, incrementCopyCount, checkIfFavorited, toggleFavorite, type Circuit } from "@/lib/circuits";
+import {
+  getCircuitBySlug,
+  incrementViewCount,
+  incrementCopyCount,
+  checkIfFavorited,
+  toggleFavorite,
+  type Circuit,
+} from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
 
@@ -57,8 +82,8 @@ export default function CircuitDetailPage() {
         setCopyCount(circuitData.copy_count);
 
         // Increment view count (fire and forget)
-        incrementViewCount(circuitData.id).catch(err =>
-          console.error("Failed to increment view count:", err)
+        incrementViewCount(circuitData.id).catch((err) =>
+          console.error("Failed to increment view count:", err),
         );
 
         // Check if user has favorited this circuit
@@ -106,8 +131,14 @@ export default function CircuitDetailPage() {
 
     if (isClipboardSnippet(rawSexpr)) {
       // It's a snippet - use as-is for copy, wrap for preview/download
+      // Calculate the appropriate sheet size based on bounding box
+      const paperSize =
+        validation.valid && validation.metadata
+          ? selectSheetSize(validation.metadata.boundingBox).size
+          : "A4";
+
       setSnippetData(rawSexpr);
-      setFullFileData(wrapSnippetToFullFile(rawSexpr, { title }));
+      setFullFileData(wrapSnippetToFullFile(rawSexpr, { title, paperSize }));
     } else {
       // It's a full file - extract snippet for copy, use as-is for preview/download
       setSnippetData(extractSnippetFromFullFile(rawSexpr));
@@ -140,7 +171,7 @@ export default function CircuitDetailPage() {
       }
 
       // Update local copy count optimistically
-      setCopyCount(prev => prev + 1);
+      setCopyCount((prev) => prev + 1);
 
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -157,15 +188,15 @@ export default function CircuitDetailPage() {
 
     // Add attribution to the complete schematic file
     const attributed = addAttribution(fullFileData, {
-      author: circuit.user?.username ? `@${circuit.user.username}` : 'Unknown',
+      author: circuit.user?.username ? `@${circuit.user.username}` : "Unknown",
       url: `https://circuitsnips.com/circuit/${circuit.slug}`,
       license: circuit.license,
     });
 
     // Create a blob and download link
-    const blob = new Blob([attributed], { type: 'text/plain' });
+    const blob = new Blob([attributed], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = `${circuit.slug}.kicad_sch`;
     document.body.appendChild(link);
@@ -195,7 +226,7 @@ export default function CircuitDetailPage() {
       setIsFavorited(newFavoritedState);
 
       // Update count optimistically
-      setFavoriteCount(prev => newFavoritedState ? prev + 1 : prev - 1);
+      setFavoriteCount((prev) => (newFavoritedState ? prev + 1 : prev - 1));
     } catch (error) {
       console.error("Failed to toggle favorite:", error);
       alert("Failed to update favorite. Please try again.");
@@ -214,7 +245,7 @@ export default function CircuitDetailPage() {
       console.log("Successfully incremented copy count from viewer");
 
       // Update local copy count optimistically
-      setCopyCount(prev => prev + 1);
+      setCopyCount((prev) => prev + 1);
     } catch (err) {
       console.error("Failed to increment copy count from viewer:", err);
     }
@@ -253,7 +284,8 @@ export default function CircuitDetailPage() {
             <div className="bg-card border rounded-lg p-12 text-center">
               <h1 className="text-2xl font-bold mb-2">Circuit Not Found</h1>
               <p className="text-muted-foreground mb-6">
-                {error || "The circuit you're looking for doesn't exist or has been removed."}
+                {error ||
+                  "The circuit you're looking for doesn't exist or has been removed."}
               </p>
               <Link
                 href="/browse"
@@ -303,7 +335,7 @@ export default function CircuitDetailPage() {
                   <span>
                     by{" "}
                     <a
-                      href={`https://github.com/${circuit.github_owner}${circuit.github_repo ? `/${circuit.github_repo}` : ''}`}
+                      href={`https://github.com/${circuit.github_owner}${circuit.github_repo ? `/${circuit.github_repo}` : ""}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline inline-flex items-center gap-1"
@@ -318,7 +350,10 @@ export default function CircuitDetailPage() {
                 <>
                   <span>
                     by{" "}
-                    <Link href="/profile" className="text-primary hover:underline">
+                    <Link
+                      href="/profile"
+                      className="text-primary hover:underline"
+                    >
                       @{circuit.user.username}
                     </Link>
                   </span>
@@ -357,10 +392,14 @@ export default function CircuitDetailPage() {
             <button
               onClick={handleFavorite}
               className={`px-6 py-3 border rounded-md font-medium transition-colors flex items-center gap-2 ${
-                isFavorited ? "bg-red-50 border-red-200 text-red-600" : "hover:bg-muted/50"
+                isFavorited
+                  ? "bg-red-50 border-red-200 text-red-600"
+                  : "hover:bg-muted/50"
               }`}
             >
-              <Heart className={`w-5 h-5 ${isFavorited ? "fill-current" : ""}`} />
+              <Heart
+                className={`w-5 h-5 ${isFavorited ? "fill-current" : ""}`}
+              />
               {isFavorited ? "Favorited" : "Favorite"} ({favoriteCount})
             </button>
 
@@ -416,7 +455,9 @@ export default function CircuitDetailPage() {
           ) : (
             <div className="bg-card border rounded-lg p-8 mb-8">
               <div className="aspect-video bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground">
-                <p className="text-lg font-medium mb-2">Failed to load circuit</p>
+                <p className="text-lg font-medium mb-2">
+                  Failed to load circuit
+                </p>
               </div>
             </div>
           )}
@@ -426,16 +467,27 @@ export default function CircuitDetailPage() {
             <div className="grid md:grid-cols-2 gap-8 mb-8">
               {/* Components */}
               <div className="bg-card border rounded-lg p-6">
-                <h2 className="text-xl font-semibold mb-4">Components ({metadata.stats.componentCount})</h2>
+                <h2 className="text-xl font-semibold mb-4">
+                  Components ({metadata.stats.componentCount})
+                </h2>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {metadata.components.map((comp: any, index: number) => (
-                    <div key={index} className="flex items-start justify-between text-sm">
+                    <div
+                      key={index}
+                      className="flex items-start justify-between text-sm"
+                    >
                       <div>
-                        <span className="font-mono font-medium">{comp.reference}</span>
-                        <span className="text-muted-foreground ml-2">{comp.value}</span>
+                        <span className="font-mono font-medium">
+                          {comp.reference}
+                        </span>
+                        <span className="text-muted-foreground ml-2">
+                          {comp.value}
+                        </span>
                       </div>
                       {comp.footprint && (
-                        <span className="text-xs text-muted-foreground">{comp.footprint.split(":")[1] || comp.footprint}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {comp.footprint.split(":")[1] || comp.footprint}
+                        </span>
                       )}
                     </div>
                   ))}
@@ -448,20 +500,29 @@ export default function CircuitDetailPage() {
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Components:</span>
-                    <span className="font-medium">{metadata.stats.componentCount}</span>
+                    <span className="font-medium">
+                      {metadata.stats.componentCount}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Wires:</span>
-                    <span className="font-medium">{metadata.stats.wireCount}</span>
+                    <span className="font-medium">
+                      {metadata.stats.wireCount}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Nets:</span>
-                    <span className="font-medium">{metadata.stats.netCount}</span>
+                    <span className="font-medium">
+                      {metadata.stats.netCount}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Footprints Assigned:</span>
+                    <span className="text-muted-foreground">
+                      Footprints Assigned:
+                    </span>
                     <span className="font-medium">
-                      {metadata.footprints.assigned}/{metadata.stats.componentCount}
+                      {metadata.footprints.assigned}/
+                      {metadata.stats.componentCount}
                     </span>
                   </div>
                   <div className="flex justify-between pt-3 border-t">
@@ -501,7 +562,8 @@ export default function CircuitDetailPage() {
                 {circuit.license}
               </span>
               <p className="text-sm text-muted-foreground">
-                This design is open source hardware. You can use, modify, and distribute it under the terms of this license.
+                This design is open source hardware. You can use, modify, and
+                distribute it under the terms of this license.
               </p>
             </div>
           </div>
@@ -510,7 +572,8 @@ export default function CircuitDetailPage() {
           <div className="mt-8 bg-muted/30 border border-muted rounded-lg p-6">
             <h2 className="text-lg font-semibold mb-3">Attribution</h2>
             <p className="text-sm text-muted-foreground mb-3">
-              When using this circuit, please include this attribution in your documentation:
+              When using this circuit, please include this attribution in your
+              documentation:
             </p>
             <div className="bg-card border rounded-md p-4 font-mono text-sm">
               <div>&quot;{circuit.title}&quot;</div>
@@ -519,8 +582,9 @@ export default function CircuitDetailPage() {
               <div>Licensed under {circuit.license}</div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              Note: The &quot;Copy to Clipboard&quot; button copies raw data for easy pasting.
-              The downloaded .kicad_sch file includes attribution in the schematic metadata.
+              Note: The &quot;Copy to Clipboard&quot; button copies raw data for
+              easy pasting. The downloaded .kicad_sch file includes attribution
+              in the schematic metadata.
             </p>
           </div>
 

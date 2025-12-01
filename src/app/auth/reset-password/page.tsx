@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Loader, Lock } from 'lucide-react';
-import { Header } from '@/components/Header';
-import { useAuth } from '@/hooks/useAuth';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader, Lock } from "lucide-react";
+import { Header } from "@/components/Header";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
   const { updatePassword, error } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -22,26 +22,26 @@ export default function ResetPasswordPage() {
 
     // Validation
     if (!password || !confirmPassword) {
-      setLocalError('Please fill in all fields');
+      setLocalError("Please fill in all fields");
       return;
     }
 
     if (password !== confirmPassword) {
-      setLocalError('Passwords do not match');
+      setLocalError("Passwords do not match");
       return;
     }
 
     if (password.length < 6) {
-      setLocalError('Password must be at least 6 characters');
+      setLocalError("Password must be at least 6 characters");
       return;
     }
 
     setIsLoading(true);
     try {
       await updatePassword(password);
-      setSuccessMessage('Password updated successfully! Redirecting...');
+      setSuccessMessage("Password updated successfully! Redirecting...");
       setTimeout(() => {
-        router.push('/');
+        router.push("/");
       }, 2000);
     } catch (err) {
       // Error is already set in the auth hook
@@ -76,7 +76,10 @@ export default function ResetPasswordPage() {
 
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div>
-                <label htmlFor="password" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium mb-2"
+                >
                   New Password
                 </label>
                 <input
@@ -91,7 +94,10 @@ export default function ResetPasswordPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="confirmPassword"
+                  className="block text-sm font-medium mb-2"
+                >
                   Confirm New Password
                 </label>
                 <input

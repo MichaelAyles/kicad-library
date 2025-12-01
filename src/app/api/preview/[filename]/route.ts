@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * GET: Retrieve a preview schematic by ID from a filename-based URL
@@ -8,30 +8,30 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: { filename: string } },
 ) {
   try {
     const { searchParams } = new URL(request.url);
-    const previewId = searchParams.get('id');
+    const previewId = searchParams.get("id");
 
     if (!previewId) {
       return NextResponse.json(
-        { error: 'Missing preview ID' },
-        { status: 400 }
+        { error: "Missing preview ID" },
+        { status: 400 },
       );
     }
 
     // Retrieve from Supabase storage
     const supabase = await createClient();
     const { data, error } = await supabase.storage
-      .from('previews')
+      .from("previews")
       .download(`${previewId}.kicad_sch`);
 
     if (error || !data) {
-      console.error('Failed to retrieve preview:', error);
+      console.error("Failed to retrieve preview:", error);
       return NextResponse.json(
-        { error: 'Preview not found or expired' },
-        { status: 404 }
+        { error: "Preview not found or expired" },
+        { status: 404 },
       );
     }
 
@@ -42,16 +42,16 @@ export async function GET(
     // IMPORTANT: Use text/plain (not application/x-kicad-schematic) - this is what KiCanvas expects
     return new NextResponse(text, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Content-Disposition': `inline; filename="${params.filename}"`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": `inline; filename="${params.filename}"`,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
   } catch (error) {
-    console.error('Preview GET error:', error);
+    console.error("Preview GET error:", error);
     return NextResponse.json(
-      { error: 'Failed to retrieve preview' },
-      { status: 500 }
+      { error: "Failed to retrieve preview" },
+      { status: 500 },
     );
   }
 }

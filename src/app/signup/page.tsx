@@ -1,27 +1,33 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Github, Loader, Mail } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { Header } from '@/components/Header';
-import { useAuth } from '@/hooks/useAuth';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Github, Loader, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Header } from "@/components/Header";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading, signInWithGitHub, signUpWithEmail, error } = useAuth();
+  const {
+    user,
+    isLoading: authLoading,
+    signInWithGitHub,
+    signUpWithEmail,
+    error,
+  } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Redirect if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      router.push('/');
+      router.push("/");
     }
   }, [user, authLoading, router]);
 
@@ -42,28 +48,28 @@ export default function SignupPage() {
 
     // Validation
     if (!email || !password || !confirmPassword) {
-      setLocalError('Please fill in all fields');
+      setLocalError("Please fill in all fields");
       return;
     }
 
     if (password !== confirmPassword) {
-      setLocalError('Passwords do not match');
+      setLocalError("Passwords do not match");
       return;
     }
 
     if (password.length < 6) {
-      setLocalError('Password must be at least 6 characters');
+      setLocalError("Password must be at least 6 characters");
       return;
     }
 
     setIsLoading(true);
     try {
       await signUpWithEmail(email, password, username || undefined);
-      setSuccessMessage('Check your email to confirm your account!');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-      setUsername('');
+      setSuccessMessage("Check your email to confirm your account!");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setUsername("");
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +83,9 @@ export default function SignupPage() {
         <div className="w-full max-w-md">
           <div className="bg-card border rounded-lg p-8 shadow-sm">
             <h1 className="text-3xl font-bold mb-2">Create Account</h1>
-            <p className="text-muted-foreground mb-8">Join CircuitSnips to upload and share circuits</p>
+            <p className="text-muted-foreground mb-8">
+              Join CircuitSnips to upload and share circuits
+            </p>
 
             {(error || localError) && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
@@ -89,7 +97,10 @@ export default function SignupPage() {
               <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-md text-sm text-green-600 dark:text-green-400">
                 <p className="font-medium">{successMessage}</p>
                 <p className="mt-2 text-xs opacity-90">
-                  The email will come from <strong>Supabase Auth &lt;noreply@mail.app.supabase.io&gt;</strong>
+                  The email will come from{" "}
+                  <strong>
+                    Supabase Auth &lt;noreply@mail.app.supabase.io&gt;
+                  </strong>
                 </p>
               </div>
             )}
@@ -97,7 +108,10 @@ export default function SignupPage() {
             {/* Email Sign Up Form */}
             <form onSubmit={handleEmailSignUp} className="space-y-4 mb-6">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium mb-2"
+                >
                   Email
                 </label>
                 <input
@@ -112,7 +126,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="username" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="username"
+                  className="block text-sm font-medium mb-2"
+                >
                   Username (optional)
                 </label>
                 <input
@@ -127,7 +144,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium mb-2"
+                >
                   Password
                 </label>
                 <input
@@ -142,7 +162,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="confirmPassword"
+                  className="block text-sm font-medium mb-2"
+                >
                   Confirm Password
                 </label>
                 <input
@@ -181,7 +204,9 @@ export default function SignupPage() {
                 <div className="w-full border-t"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-card text-muted-foreground">Or continue with</span>
+                <span className="px-2 bg-card text-muted-foreground">
+                  Or continue with
+                </span>
               </div>
             </div>
 
@@ -205,8 +230,11 @@ export default function SignupPage() {
             </button>
 
             <p className="text-center text-sm text-muted-foreground mt-6">
-              Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:underline font-medium">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="text-primary hover:underline font-medium"
+              >
                 Sign in
               </Link>
             </p>

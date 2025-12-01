@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import type { User } from '@supabase/supabase-js';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -19,7 +19,7 @@ export function useAuth() {
         } = await supabase.auth.getUser();
         setUser(user || null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Auth error');
+        setError(err instanceof Error ? err.message : "Auth error");
       } finally {
         setIsLoading(false);
       }
@@ -43,17 +43,18 @@ export function useAuth() {
     setError(null);
     try {
       // Use window.location.origin to handle both local and production environments
-      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.com'}/auth/callback`;
+      const redirectUrl = `${typeof window !== "undefined" ? window.location.origin : "https://circuitsnips.com"}/auth/callback`;
 
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
+        provider: "github",
         options: {
           redirectTo: redirectUrl,
         },
       });
       if (error) throw error;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'GitHub sign in failed';
+      const message =
+        err instanceof Error ? err.message : "GitHub sign in failed";
       setError(message);
       throw err;
     }
@@ -68,16 +69,21 @@ export function useAuth() {
       });
       if (error) throw error;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Email sign in failed';
+      const message =
+        err instanceof Error ? err.message : "Email sign in failed";
       setError(message);
       throw err;
     }
   };
 
-  const signUpWithEmail = async (email: string, password: string, username?: string) => {
+  const signUpWithEmail = async (
+    email: string,
+    password: string,
+    username?: string,
+  ) => {
     setError(null);
     try {
-      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.com'}/auth/callback`;
+      const redirectUrl = `${typeof window !== "undefined" ? window.location.origin : "https://circuitsnips.com"}/auth/callback`;
 
       const { error } = await supabase.auth.signUp({
         email,
@@ -85,13 +91,14 @@ export function useAuth() {
         options: {
           emailRedirectTo: redirectUrl,
           data: {
-            username: username || email.split('@')[0],
+            username: username || email.split("@")[0],
           },
         },
       });
       if (error) throw error;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Email sign up failed';
+      const message =
+        err instanceof Error ? err.message : "Email sign up failed";
       setError(message);
       throw err;
     }
@@ -100,14 +107,15 @@ export function useAuth() {
   const resetPassword = async (email: string) => {
     setError(null);
     try {
-      const redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://circuitsnips.com'}/auth/reset-password`;
+      const redirectUrl = `${typeof window !== "undefined" ? window.location.origin : "https://circuitsnips.com"}/auth/reset-password`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,
       });
       if (error) throw error;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Password reset failed';
+      const message =
+        err instanceof Error ? err.message : "Password reset failed";
       setError(message);
       throw err;
     }
@@ -121,7 +129,8 @@ export function useAuth() {
       });
       if (error) throw error;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Password update failed';
+      const message =
+        err instanceof Error ? err.message : "Password update failed";
       setError(message);
       throw err;
     }
@@ -133,9 +142,9 @@ export function useAuth() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setUser(null);
-      router.push('/');
+      router.push("/");
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign out failed';
+      const message = err instanceof Error ? err.message : "Sign out failed";
       setError(message);
       throw err;
     }

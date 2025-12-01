@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { Github, Mail } from 'lucide-react';
+import Link from "next/link";
+import { Github, Mail } from "lucide-react";
 
 export function Footer() {
   return (
@@ -7,16 +7,25 @@ export function Footer() {
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center flex-wrap justify-center md:justify-start gap-x-6 gap-y-2">
-            <Link href="/about" className="hover:text-primary transition-colors">
+            <Link
+              href="/about"
+              className="hover:text-primary transition-colors"
+            >
               About
             </Link>
             <Link href="/docs" className="hover:text-primary transition-colors">
               Documentation
             </Link>
-            <Link href="/privacy" className="hover:text-primary transition-colors">
+            <Link
+              href="/privacy"
+              className="hover:text-primary transition-colors"
+            >
               Privacy
             </Link>
-            <Link href="/terms" className="hover:text-primary transition-colors">
+            <Link
+              href="/terms"
+              className="hover:text-primary transition-colors"
+            >
               Terms
             </Link>
             <a
@@ -36,9 +45,7 @@ export function Footer() {
               <span>Contact</span>
             </a>
           </div>
-          <div className="text-center md:text-right">
-            © 2025 CircuitSnips
-          </div>
+          <div className="text-center md:text-right">© 2025 CircuitSnips</div>
         </div>
       </div>
     </footer>

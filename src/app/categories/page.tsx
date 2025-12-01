@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Grid, TrendingUp, Tag } from 'lucide-react';
-import { Header } from '@/components/Header';
-import { Footer } from '@/components/Footer';
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Grid, TrendingUp, Tag } from "lucide-react";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 
 interface PopularTag {
   tag: string;
@@ -20,16 +20,16 @@ export default function CategoriesPage() {
     const fetchTags = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/tags');
+        const response = await fetch("/api/tags");
         const data = await response.json();
 
         if (response.ok) {
           setTags(data.tags || []);
         } else {
-          console.error('Error fetching tags:', data.error);
+          console.error("Error fetching tags:", data.error);
         }
       } catch (error) {
-        console.error('Error fetching tags:', error);
+        console.error("Error fetching tags:", error);
       } finally {
         setLoading(false);
       }
@@ -53,7 +53,8 @@ export default function CategoriesPage() {
               </h1>
             </div>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Browse circuits by the most popular tags. Explore components, projects, and circuit types used by the community.
+              Browse circuits by the most popular tags. Explore components,
+              projects, and circuit types used by the community.
             </p>
           </div>
 
@@ -83,7 +84,8 @@ export default function CategoriesPage() {
                   </div>
                   <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
                     <TrendingUp className="w-3 h-3" />
-                    {tagData.count} {tagData.count === 1 ? 'circuit' : 'circuits'}
+                    {tagData.count}{" "}
+                    {tagData.count === 1 ? "circuit" : "circuits"}
                   </div>
                 </Link>
               ))}

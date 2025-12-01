@@ -67,9 +67,7 @@ export function SearchAutocomplete() {
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
-          setSelectedIndex((prev) =>
-            prev < results.length ? prev + 1 : prev
-          );
+          setSelectedIndex((prev) => (prev < results.length ? prev + 1 : prev));
           break;
         case "ArrowUp":
           e.preventDefault();
@@ -95,7 +93,7 @@ export function SearchAutocomplete() {
           break;
       }
     },
-    [isOpen, selectedIndex, results, query, router]
+    [isOpen, selectedIndex, results, query, router],
   );
 
   const handleCircuitClick = (slug: string) => {
@@ -120,7 +118,9 @@ export function SearchAutocomplete() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => query.trim().length >= 2 && results.length > 0 && setIsOpen(true)}
+          onFocus={() =>
+            query.trim().length >= 2 && results.length > 0 && setIsOpen(true)
+          }
           placeholder="Search circuits..."
           className="w-full pl-10 pr-10 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
         />
@@ -146,9 +146,16 @@ export function SearchAutocomplete() {
                 }`}
               >
                 {/* Thumbnail */}
-                {(circuit.thumbnail_dark_url || circuit.thumbnail_light_url) && (
+                {(circuit.thumbnail_dark_url ||
+                  circuit.thumbnail_light_url) && (
                   <img
-                    src={toR2ThumbnailUrl(theme === 'dark' ? circuit.thumbnail_dark_url : circuit.thumbnail_light_url) || ''}
+                    src={
+                      toR2ThumbnailUrl(
+                        theme === "dark"
+                          ? circuit.thumbnail_dark_url
+                          : circuit.thumbnail_light_url,
+                      ) || ""
+                    }
                     alt={circuit.title}
                     className="w-16 h-16 rounded object-cover flex-shrink-0 bg-muted"
                   />
@@ -200,16 +207,19 @@ export function SearchAutocomplete() {
       )}
 
       {/* No Results */}
-      {isOpen && !isLoading && query.trim().length >= 2 && results.length === 0 && (
-        <div
-          ref={dropdownRef}
-          className="absolute z-50 w-full mt-2 bg-card border rounded-lg shadow-xl p-4"
-        >
-          <p className="text-sm text-muted-foreground text-center">
-            No circuits found for &ldquo;{query}&rdquo;
-          </p>
-        </div>
-      )}
+      {isOpen &&
+        !isLoading &&
+        query.trim().length >= 2 &&
+        results.length === 0 && (
+          <div
+            ref={dropdownRef}
+            className="absolute z-50 w-full mt-2 bg-card border rounded-lg shadow-xl p-4"
+          >
+            <p className="text-sm text-muted-foreground text-center">
+              No circuits found for &ldquo;{query}&rdquo;
+            </p>
+          </div>
+        )}
     </div>
   );
 }

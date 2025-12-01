@@ -1,18 +1,25 @@
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * Shuffle circuits that have equal scores to randomize their order
  * This gives all circuits with the same metric a fair chance at visibility
  */
-function shuffleEqualScores(circuits: Circuit[], sortBy: 'copies' | 'recent' | 'favorites'): Circuit[] {
+function shuffleEqualScores(
+  circuits: Circuit[],
+  sortBy: "copies" | "recent" | "favorites",
+): Circuit[] {
   if (circuits.length === 0) return circuits;
 
   const getScoreKey = (sortBy: string): keyof Circuit => {
     switch (sortBy) {
-      case 'copies': return 'copy_count';
-      case 'favorites': return 'favorite_count';
-      case 'recent': return 'created_at';
-      default: return 'copy_count';
+      case "copies":
+        return "copy_count";
+      case "favorites":
+        return "favorite_count";
+      case "recent":
+        return "created_at";
+      default:
+        return "copy_count";
     }
   };
 
@@ -35,7 +42,10 @@ function shuffleEqualScores(circuits: Circuit[], sortBy: 'copies' | 'recent' | '
         // Fisher-Yates shuffle for groups with ties
         for (let i = currentGroup.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [currentGroup[i], currentGroup[j]] = [currentGroup[j], currentGroup[i]];
+          [currentGroup[i], currentGroup[j]] = [
+            currentGroup[j],
+            currentGroup[i],
+          ];
         }
       }
       result.push(...currentGroup);
@@ -50,7 +60,10 @@ function shuffleEqualScores(circuits: Circuit[], sortBy: 'copies' | 'recent' | '
       if (currentGroup.length > 1) {
         for (let i = currentGroup.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [currentGroup[i], currentGroup[j]] = [currentGroup[j], currentGroup[i]];
+          [currentGroup[i], currentGroup[j]] = [
+            currentGroup[j],
+            currentGroup[i],
+          ];
         }
       }
       result.push(...currentGroup);
@@ -80,6 +93,7 @@ export interface Circuit {
   thumbnail_version: number;
   is_public: boolean;
   is_featured: boolean;
+  sheet_size: string | null; // A4, A3, A2, or null for auto-detect
   github_owner: string | null;
   github_repo: string | null;
   created_at: string;
@@ -101,34 +115,36 @@ const supabase = createClient();
 export async function getCircuits(
   limit = 12,
   offset = 0,
-  sortBy: 'copies' | 'recent' | 'favorites' = 'copies',
-  excludeImported = false
+  sortBy: "copies" | "recent" | "favorites" = "copies",
+  excludeImported = false,
 ): Promise<CircuitsResponse> {
   try {
     let query = supabase
-      .from('circuits')
+      .from("circuits")
       .select(
         `*,
         user:profiles(id, username, avatar_url)`,
-        { count: 'exact' }
+        { count: "exact" },
       )
-      .eq('is_public', true)
+      .eq("is_public", true)
       .limit(limit)
       .range(offset, offset + limit - 1);
 
     // Exclude bulk-imported circuits if requested (circuits with batch_import_id set)
     if (excludeImported) {
-      console.log('[getCircuits] Filtering out bulk-imported circuits (batch_import_id IS NULL)');
-      query = query.is('batch_import_id', null);
+      console.log(
+        "[getCircuits] Filtering out bulk-imported circuits (batch_import_id IS NULL)",
+      );
+      query = query.is("batch_import_id", null);
     }
 
     // Apply sorting
-    if (sortBy === 'copies') {
-      query = query.order('copy_count', { ascending: false });
-    } else if (sortBy === 'recent') {
-      query = query.order('created_at', { ascending: false });
-    } else if (sortBy === 'favorites') {
-      query = query.order('favorite_count', { ascending: false });
+    if (sortBy === "copies") {
+      query = query.order("copy_count", { ascending: false });
+    } else if (sortBy === "recent") {
+      query = query.order("created_at", { ascending: false });
+    } else if (sortBy === "favorites") {
+      query = query.order("favorite_count", { ascending: false });
     }
 
     const { data, error, count } = await query;
@@ -144,7 +160,7 @@ export async function getCircuits(
       total: count || 0,
     };
   } catch (error) {
-    console.error('Error fetching circuits:', error);
+    console.error("Error fetching circuits:", error);
     throw error;
   }
 }
@@ -154,16 +170,16 @@ export async function getCircuitBySlug(slug: string): Promise<Circuit | null> {
     // Don't filter by is_public - let RLS policy handle access control
     // RLS allows: public circuits for everyone, private circuits for owner
     const { data, error } = await supabase
-      .from('circuits')
+      .from("circuits")
       .select(
         `*,
-        user:profiles(id, username, avatar_url)`
+        user:profiles(id, username, avatar_url)`,
       )
-      .eq('slug', slug)
+      .eq("slug", slug)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
+      if (error.code === "PGRST116") {
         // Not found
         return null;
       }
@@ -172,7 +188,7 @@ export async function getCircuitBySlug(slug: string): Promise<Circuit | null> {
 
     return data as Circuit;
   } catch (error) {
-    console.error('Error fetching circuit:', error);
+    console.error("Error fetching circuit:", error);
     throw error;
   }
 }
@@ -184,16 +200,16 @@ export async function getCircuitBySlug(slug: string): Promise<Circuit | null> {
 export async function searchCircuits(
   query: string,
   limit = 12,
-  offset = 0
+  offset = 0,
 ): Promise<CircuitsResponse> {
   try {
     // Import dynamically to avoid circular dependency
-    const { searchCircuits: centralizedSearch } = await import('@/lib/search');
+    const { searchCircuits: centralizedSearch } = await import("@/lib/search");
 
     const { circuits: results } = await centralizedSearch({
       query,
       limit,
-      sort: 'relevance',
+      sort: "relevance",
     });
 
     return {
@@ -201,7 +217,7 @@ export async function searchCircuits(
       total: results.length,
     };
   } catch (error) {
-    console.error('Error searching circuits:', error);
+    console.error("Error searching circuits:", error);
     throw error;
   }
 }
@@ -212,13 +228,13 @@ export async function searchCircuits(
  */
 export async function incrementViewCount(circuitId: string): Promise<void> {
   try {
-    const { error } = await supabase.rpc('increment_circuit_views', {
-      circuit_id: circuitId
+    const { error } = await supabase.rpc("increment_circuit_views", {
+      circuit_id: circuitId,
     });
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error incrementing view count:', error);
+    console.error("Error incrementing view count:", error);
     // Silently fail - don't block user experience for analytics
   }
 }
@@ -229,16 +245,16 @@ export async function incrementViewCount(circuitId: string): Promise<void> {
  */
 export async function incrementCopyCount(circuitId: string): Promise<void> {
   try {
-    const { error } = await supabase.rpc('increment_circuit_copies', {
-      circuit_id: circuitId
+    const { error } = await supabase.rpc("increment_circuit_copies", {
+      circuit_id: circuitId,
     });
 
     if (error) {
-      console.error('Error incrementing copy count:', error);
+      console.error("Error incrementing copy count:", error);
       throw error;
     }
   } catch (error) {
-    console.error('Error incrementing copy count:', error);
+    console.error("Error incrementing copy count:", error);
     throw error;
   }
 }
@@ -246,19 +262,22 @@ export async function incrementCopyCount(circuitId: string): Promise<void> {
 /**
  * Check if the current user has favorited a circuit
  */
-export async function checkIfFavorited(circuitId: string, userId: string): Promise<boolean> {
+export async function checkIfFavorited(
+  circuitId: string,
+  userId: string,
+): Promise<boolean> {
   try {
     const { data, error } = await supabase
-      .from('favorites')
-      .select('id')
-      .eq('circuit_id', circuitId)
-      .eq('user_id', userId)
+      .from("favorites")
+      .select("id")
+      .eq("circuit_id", circuitId)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw error;
     return !!data;
   } catch (error) {
-    console.error('Error checking favorite status:', error);
+    console.error("Error checking favorite status:", error);
     return false;
   }
 }
@@ -267,15 +286,18 @@ export async function checkIfFavorited(circuitId: string, userId: string): Promi
  * Add a circuit to user's favorites
  * Triggers automatic favorite_count increment via database trigger
  */
-export async function addFavorite(circuitId: string, userId: string): Promise<void> {
+export async function addFavorite(
+  circuitId: string,
+  userId: string,
+): Promise<void> {
   try {
     const { error } = await supabase
-      .from('favorites')
+      .from("favorites")
       .insert({ circuit_id: circuitId, user_id: userId });
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error adding favorite:', error);
+    console.error("Error adding favorite:", error);
     throw error;
   }
 }
@@ -284,17 +306,20 @@ export async function addFavorite(circuitId: string, userId: string): Promise<vo
  * Remove a circuit from user's favorites
  * Triggers automatic favorite_count decrement via database trigger
  */
-export async function removeFavorite(circuitId: string, userId: string): Promise<void> {
+export async function removeFavorite(
+  circuitId: string,
+  userId: string,
+): Promise<void> {
   try {
     const { error } = await supabase
-      .from('favorites')
+      .from("favorites")
       .delete()
-      .eq('circuit_id', circuitId)
-      .eq('user_id', userId);
+      .eq("circuit_id", circuitId)
+      .eq("user_id", userId);
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error removing favorite:', error);
+    console.error("Error removing favorite:", error);
     throw error;
   }
 }
@@ -303,7 +328,10 @@ export async function removeFavorite(circuitId: string, userId: string): Promise
  * Toggle favorite status for a circuit
  * Returns the new favorited state
  */
-export async function toggleFavorite(circuitId: string, userId: string): Promise<boolean> {
+export async function toggleFavorite(
+  circuitId: string,
+  userId: string,
+): Promise<boolean> {
   try {
     const isFavorited = await checkIfFavorited(circuitId, userId);
 
@@ -315,7 +343,7 @@ export async function toggleFavorite(circuitId: string, userId: string): Promise
       return true;
     }
   } catch (error) {
-    console.error('Error toggling favorite:', error);
+    console.error("Error toggling favorite:", error);
     throw error;
   }
 }

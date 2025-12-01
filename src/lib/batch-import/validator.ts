@@ -45,78 +45,84 @@ export function validateImportRecord(record: any): ValidationResult {
   const warnings: string[] = [];
 
   // Check required top-level fields
-  if (!record.source_file_id) errors.push('Missing source_file_id');
-  if (!record.repo_owner) errors.push('Missing repo_owner');
-  if (!record.repo_name) errors.push('Missing repo_name');
-  if (!record.repo_url) errors.push('Missing repo_url');
-  if (!record.repo_license) errors.push('Missing repo_license');
-  if (!record.file_path) errors.push('Missing file_path');
-  if (!record.raw_sexpr) errors.push('Missing raw_sexpr');
-  if (record.component_count === undefined) errors.push('Missing component_count');
-  if (record.classification_score === undefined) errors.push('Missing classification_score');
+  if (!record.source_file_id) errors.push("Missing source_file_id");
+  if (!record.repo_owner) errors.push("Missing repo_owner");
+  if (!record.repo_name) errors.push("Missing repo_name");
+  if (!record.repo_url) errors.push("Missing repo_url");
+  if (!record.repo_license) errors.push("Missing repo_license");
+  if (!record.file_path) errors.push("Missing file_path");
+  if (!record.raw_sexpr) errors.push("Missing raw_sexpr");
+  if (record.component_count === undefined)
+    errors.push("Missing component_count");
+  if (record.classification_score === undefined)
+    errors.push("Missing classification_score");
 
   // Validate types
-  if (typeof record.source_file_id !== 'string') {
-    errors.push('source_file_id must be a string');
+  if (typeof record.source_file_id !== "string") {
+    errors.push("source_file_id must be a string");
   }
-  if (typeof record.repo_owner !== 'string') {
-    errors.push('repo_owner must be a string');
+  if (typeof record.repo_owner !== "string") {
+    errors.push("repo_owner must be a string");
   }
-  if (typeof record.repo_name !== 'string') {
-    errors.push('repo_name must be a string');
+  if (typeof record.repo_name !== "string") {
+    errors.push("repo_name must be a string");
   }
-  if (typeof record.repo_url !== 'string') {
-    errors.push('repo_url must be a string');
+  if (typeof record.repo_url !== "string") {
+    errors.push("repo_url must be a string");
   } else if (!isValidUrl(record.repo_url)) {
-    errors.push('repo_url must be a valid URL');
+    errors.push("repo_url must be a valid URL");
   }
-  if (typeof record.raw_sexpr !== 'string') {
-    errors.push('raw_sexpr must be a string');
+  if (typeof record.raw_sexpr !== "string") {
+    errors.push("raw_sexpr must be a string");
   }
-  if (typeof record.component_count !== 'number') {
-    errors.push('component_count must be a number');
+  if (typeof record.component_count !== "number") {
+    errors.push("component_count must be a number");
   }
-  if (typeof record.classification_score !== 'number') {
-    errors.push('classification_score must be a number');
+  if (typeof record.classification_score !== "number") {
+    errors.push("classification_score must be a number");
   }
 
   // Validate subcircuit object
   if (!record.subcircuit) {
-    errors.push('Missing subcircuit object');
+    errors.push("Missing subcircuit object");
   } else {
     const sc = record.subcircuit;
 
-    if (!sc.name) errors.push('Missing subcircuit.name');
-    if (!sc.description) errors.push('Missing subcircuit.description');
-    if (!sc.tags) errors.push('Missing subcircuit.tags');
+    if (!sc.name) errors.push("Missing subcircuit.name");
+    if (!sc.description) errors.push("Missing subcircuit.description");
+    if (!sc.tags) errors.push("Missing subcircuit.tags");
 
     // Validate subcircuit types
-    if (typeof sc.name !== 'string') {
-      errors.push('subcircuit.name must be a string');
+    if (typeof sc.name !== "string") {
+      errors.push("subcircuit.name must be a string");
     } else if (sc.name.length > 100) {
-      errors.push('subcircuit.name must be 100 characters or less');
+      errors.push("subcircuit.name must be 100 characters or less");
     }
 
-    if (typeof sc.description !== 'string') {
-      errors.push('subcircuit.description must be a string');
+    if (typeof sc.description !== "string") {
+      errors.push("subcircuit.description must be a string");
     } else if (sc.description.length > 2000) {
-      warnings.push('subcircuit.description is very long (>2000 chars), will be truncated');
+      warnings.push(
+        "subcircuit.description is very long (>2000 chars), will be truncated",
+      );
     }
 
     // Validate tags array
     if (!Array.isArray(sc.tags)) {
-      errors.push('subcircuit.tags must be an array');
+      errors.push("subcircuit.tags must be an array");
     } else {
       if (sc.tags.length === 0) {
-        errors.push('subcircuit.tags must have at least one tag');
+        errors.push("subcircuit.tags must have at least one tag");
       }
       if (sc.tags.length > 10) {
-        warnings.push('subcircuit.tags has more than 10 tags, extras will be ignored');
+        warnings.push(
+          "subcircuit.tags has more than 10 tags, extras will be ignored",
+        );
       }
 
       // Validate each tag
       sc.tags.forEach((tag: any, index: number) => {
-        if (typeof tag !== 'string') {
+        if (typeof tag !== "string") {
           errors.push(`subcircuit.tags[${index}] must be a string`);
         } else if (tag.length > 30) {
           errors.push(`subcircuit.tags[${index}] exceeds 30 characters`);
@@ -128,26 +134,28 @@ export function validateImportRecord(record: any): ValidationResult {
   }
 
   // Validate S-expression has basic structure
-  if (record.raw_sexpr && typeof record.raw_sexpr === 'string') {
+  if (record.raw_sexpr && typeof record.raw_sexpr === "string") {
     const trimmed = record.raw_sexpr.trim();
-    if (!trimmed.startsWith('(')) {
-      errors.push('raw_sexpr must start with opening parenthesis');
+    if (!trimmed.startsWith("(")) {
+      errors.push("raw_sexpr must start with opening parenthesis");
     }
-    if (!trimmed.endsWith(')')) {
-      errors.push('raw_sexpr must end with closing parenthesis');
+    if (!trimmed.endsWith(")")) {
+      errors.push("raw_sexpr must end with closing parenthesis");
     }
     if (trimmed.length < 100) {
-      warnings.push('raw_sexpr seems very short, may not be a complete schematic');
+      warnings.push(
+        "raw_sexpr seems very short, may not be a complete schematic",
+      );
     }
   }
 
   // Validate classification score range
-  if (typeof record.classification_score === 'number') {
+  if (typeof record.classification_score === "number") {
     if (record.classification_score < 0 || record.classification_score > 10) {
-      errors.push('classification_score must be between 0 and 10');
+      errors.push("classification_score must be between 0 and 10");
     }
     if (record.classification_score < 7) {
-      warnings.push('classification_score is below recommended threshold of 7');
+      warnings.push("classification_score is below recommended threshold of 7");
     }
   }
 
@@ -166,15 +174,15 @@ export function validateImportRecord(record: any): ValidationResult {
  */
 export function validateImportBatch(records: any[]): ValidationResult[] {
   if (!Array.isArray(records)) {
-    throw new Error('Records must be an array');
+    throw new Error("Records must be an array");
   }
 
   if (records.length === 0) {
-    throw new Error('Records array is empty');
+    throw new Error("Records array is empty");
   }
 
   if (records.length > 100) {
-    throw new Error('Batch size exceeds maximum of 100 records');
+    throw new Error("Batch size exceeds maximum of 100 records");
   }
 
   return records.map(validateImportRecord);
@@ -202,32 +210,32 @@ export function normalizeLicense(license: string): string | null {
   // GitHub imports can use additional common open source licenses
   const supportedLicenses = [
     // OSHW-compliant (for user uploads)
-    'MIT',
-    'Apache-2.0',
-    'GPL-3.0',
-    'BSD-2-Clause',
-    'CC-BY-4.0',
-    'CC-BY-SA-4.0',
-    'CERN-OHL-S-2.0',
-    'CERN-OHL-W-2.0',
-    'CERN-OHL-P-2.0',
-    'CERN-OHL-1.2',
-    'TAPR-OHL-1.0',
+    "MIT",
+    "Apache-2.0",
+    "GPL-3.0",
+    "BSD-2-Clause",
+    "CC-BY-4.0",
+    "CC-BY-SA-4.0",
+    "CERN-OHL-S-2.0",
+    "CERN-OHL-W-2.0",
+    "CERN-OHL-P-2.0",
+    "CERN-OHL-1.2",
+    "TAPR-OHL-1.0",
     // Common GitHub licenses (imports only)
-    'CC-BY-NC-SA-4.0',
-    'CC-BY-NC-SA-3.0',
-    'CC-BY-NC-4.0',
-    'CC-BY-NC-3.0',
-    'CC-BY-ND-4.0',
-    'CC0-1.0',
-    'Unlicense',
-    'GPL-2.0',
-    'LGPL-2.1',
-    'LGPL-3.0',
-    'AGPL-3.0',
-    'MPL-2.0',
-    'BSD-3-Clause',
-    'ISC',
+    "CC-BY-NC-SA-4.0",
+    "CC-BY-NC-SA-3.0",
+    "CC-BY-NC-4.0",
+    "CC-BY-NC-3.0",
+    "CC-BY-ND-4.0",
+    "CC0-1.0",
+    "Unlicense",
+    "GPL-2.0",
+    "LGPL-2.1",
+    "LGPL-3.0",
+    "AGPL-3.0",
+    "MPL-2.0",
+    "BSD-3-Clause",
+    "ISC",
   ];
 
   // Normalize input (trim, uppercase for comparison)
@@ -235,7 +243,7 @@ export function normalizeLicense(license: string): string | null {
 
   // Check for exact match (case-insensitive)
   const match = supportedLicenses.find(
-    (supported) => supported.toLowerCase() === normalized.toLowerCase()
+    (supported) => supported.toLowerCase() === normalized.toLowerCase(),
   );
 
   if (match) {
@@ -244,39 +252,39 @@ export function normalizeLicense(license: string): string | null {
 
   // Handle common variations
   const variations: Record<string, string> = {
-    'apache-2': 'Apache-2.0',
-    'apache': 'Apache-2.0',
-    'gpl-3': 'GPL-3.0',
-    'gpl3': 'GPL-3.0',
-    'gpl-2': 'GPL-2.0',
-    'gpl2': 'GPL-2.0',
-    'lgpl-2.1': 'LGPL-2.1',
-    'lgpl-3': 'LGPL-3.0',
-    'lgpl-3.0': 'LGPL-3.0',
-    'agpl-3': 'AGPL-3.0',
-    'agpl-3.0': 'AGPL-3.0',
-    'bsd-2': 'BSD-2-Clause',
-    'bsd2': 'BSD-2-Clause',
-    'bsd-3': 'BSD-3-Clause',
-    'bsd3': 'BSD-3-Clause',
-    'cc-by': 'CC-BY-4.0',
-    'cc-by-sa': 'CC-BY-SA-4.0',
-    'cc-by-nc-sa': 'CC-BY-NC-SA-4.0',
-    'cc by nc sa 4.0': 'CC-BY-NC-SA-4.0',
-    'cc-by-nc-sa-3.0': 'CC-BY-NC-SA-3.0',
-    'cc by nc sa 3.0': 'CC-BY-NC-SA-3.0',
-    'cc-by-nc': 'CC-BY-NC-4.0',
-    'cc-by-nc-3.0': 'CC-BY-NC-3.0',
-    'cc by nc 3.0': 'CC-BY-NC-3.0',
-    'cc-by-nd': 'CC-BY-ND-4.0',
-    'cc0': 'CC0-1.0',
-    'cern-ohl-s': 'CERN-OHL-S-2.0',
-    'cern-ohl-w': 'CERN-OHL-W-2.0',
-    'cern-ohl-p': 'CERN-OHL-P-2.0',
-    'cern-ohl': 'CERN-OHL-S-2.0',
-    'tapr': 'TAPR-OHL-1.0',
-    'mpl-2': 'MPL-2.0',
-    'mpl': 'MPL-2.0',
+    "apache-2": "Apache-2.0",
+    apache: "Apache-2.0",
+    "gpl-3": "GPL-3.0",
+    gpl3: "GPL-3.0",
+    "gpl-2": "GPL-2.0",
+    gpl2: "GPL-2.0",
+    "lgpl-2.1": "LGPL-2.1",
+    "lgpl-3": "LGPL-3.0",
+    "lgpl-3.0": "LGPL-3.0",
+    "agpl-3": "AGPL-3.0",
+    "agpl-3.0": "AGPL-3.0",
+    "bsd-2": "BSD-2-Clause",
+    bsd2: "BSD-2-Clause",
+    "bsd-3": "BSD-3-Clause",
+    bsd3: "BSD-3-Clause",
+    "cc-by": "CC-BY-4.0",
+    "cc-by-sa": "CC-BY-SA-4.0",
+    "cc-by-nc-sa": "CC-BY-NC-SA-4.0",
+    "cc by nc sa 4.0": "CC-BY-NC-SA-4.0",
+    "cc-by-nc-sa-3.0": "CC-BY-NC-SA-3.0",
+    "cc by nc sa 3.0": "CC-BY-NC-SA-3.0",
+    "cc-by-nc": "CC-BY-NC-4.0",
+    "cc-by-nc-3.0": "CC-BY-NC-3.0",
+    "cc by nc 3.0": "CC-BY-NC-3.0",
+    "cc-by-nd": "CC-BY-ND-4.0",
+    cc0: "CC0-1.0",
+    "cern-ohl-s": "CERN-OHL-S-2.0",
+    "cern-ohl-w": "CERN-OHL-W-2.0",
+    "cern-ohl-p": "CERN-OHL-P-2.0",
+    "cern-ohl": "CERN-OHL-S-2.0",
+    tapr: "TAPR-OHL-1.0",
+    "mpl-2": "MPL-2.0",
+    mpl: "MPL-2.0",
   };
 
   const variation = variations[normalized.toLowerCase()];

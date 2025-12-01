@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { isAdmin } from '@/lib/admin';
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/admin";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 /**
  * DELETE /api/admin/delete-user
@@ -14,21 +14,21 @@ export async function DELETE(request: NextRequest) {
     const supabase = await createClient();
 
     // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Check if user is admin
     const adminStatus = await isAdmin(user);
     if (!adminStatus) {
       return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
+        { error: "Forbidden - Admin access required" },
+        { status: 403 },
       );
     }
 
@@ -37,38 +37,35 @@ export async function DELETE(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
+        { error: "User ID is required" },
+        { status: 400 },
       );
     }
 
     // Prevent admin from deleting themselves
     if (userId === user.id) {
       return NextResponse.json(
-        { error: 'Cannot delete your own admin account' },
-        { status: 400 }
+        { error: "Cannot delete your own admin account" },
+        { status: 400 },
       );
     }
 
     // Get user details before deletion for logging
     const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('username, id')
-      .eq('id', userId)
+      .from("profiles")
+      .select("username, id")
+      .eq("id", userId)
       .single();
 
     if (!userProfile) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Count user's circuits for response
     const { count: circuitCount } = await supabase
-      .from('circuits')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      .from("circuits")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
 
     // Delete from auth.users (this cascades to profiles and all related data via ON DELETE CASCADE)
     // We need to use the service role for this operation
@@ -79,12 +76,12 @@ export async function DELETE(request: NextRequest) {
     // which should cascade due to foreign key constraints
 
     const { error: deleteError } = await supabase
-      .from('profiles')
+      .from("profiles")
       .delete()
-      .eq('id', userId);
+      .eq("id", userId);
 
     if (deleteError) {
-      console.error('Error deleting user:', deleteError);
+      console.error("Error deleting user:", deleteError);
       throw deleteError;
     }
 
@@ -98,10 +95,10 @@ export async function DELETE(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('Error in delete-user:', error);
+    console.error("Error in delete-user:", error);
     return NextResponse.json(
-      { error: error.message || 'Failed to delete user' },
-      { status: 500 }
+      { error: error.message || "Failed to delete user" },
+      { status: 500 },
     );
   }
 }
@@ -115,21 +112,21 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Check if user is admin
     const adminStatus = await isAdmin(user);
     if (!adminStatus) {
       return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
+        { error: "Forbidden - Admin access required" },
+        { status: 403 },
       );
     }
 
@@ -137,14 +134,14 @@ export async function POST(request: NextRequest) {
 
     // Simple query without expensive aggregations
     let query = supabase
-      .from('profiles')
-      .select('id, username, avatar_url, created_at')
-      .order('created_at', { ascending: false })
+      .from("profiles")
+      .select("id, username, avatar_url, created_at")
+      .order("created_at", { ascending: false })
       .limit(limit);
 
     // If search query provided, filter by username
     if (searchQuery && searchQuery.trim()) {
-      query = query.ilike('username', `%${searchQuery.trim()}%`);
+      query = query.ilike("username", `%${searchQuery.trim()}%`);
     }
 
     const { data, error } = await query;
@@ -156,29 +153,30 @@ export async function POST(request: NextRequest) {
       (data || []).map(async (user: any) => {
         // Get circuit count
         const { count: circuitCount } = await supabase
-          .from('circuits')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
+          .from("circuits")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id);
 
         // Get total copy count across all their circuits
         const { data: circuitCopies } = await supabase
-          .from('circuits')
-          .select('copy_count')
-          .eq('user_id', user.id);
+          .from("circuits")
+          .select("copy_count")
+          .eq("user_id", user.id);
 
-        const totalCopies = circuitCopies?.reduce((sum, c) => sum + (c.copy_count || 0), 0) || 0;
+        const totalCopies =
+          circuitCopies?.reduce((sum, c) => sum + (c.copy_count || 0), 0) || 0;
 
         // Get comment count
         const { count: commentCount } = await supabase
-          .from('circuit_comments')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
+          .from("circuit_comments")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id);
 
         // Get favorite count (how many favorites they've given)
         const { count: favoriteCount } = await supabase
-          .from('favorites')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
+          .from("favorites")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id);
 
         return {
           id: user.id,
@@ -190,15 +188,15 @@ export async function POST(request: NextRequest) {
           commentCount: commentCount || 0,
           favoriteCount: favoriteCount || 0,
         };
-      })
+      }),
     );
 
     return NextResponse.json({ users: usersWithStats });
   } catch (error: any) {
-    console.error('Error searching users:', error);
+    console.error("Error searching users:", error);
     return NextResponse.json(
-      { error: error.message || 'Failed to search users' },
-      { status: 500 }
+      { error: error.message || "Failed to search users" },
+      { status: 500 },
     );
   }
 }

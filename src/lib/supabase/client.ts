@@ -1,4 +1,4 @@
-import { createBrowserClient } from '@supabase/ssr';
+import { createBrowserClient } from "@supabase/ssr";
 
 /**
  * Create a Supabase client for Client Components
@@ -12,9 +12,9 @@ export function createClient() {
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error(
-      'Missing Supabase environment variables. ' +
-      'Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your .env.local file. ' +
-      'See README.md for setup instructions.'
+      "Missing Supabase environment variables. " +
+        "Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in your .env.local file. " +
+        "See README.md for setup instructions.",
     );
   }
 
@@ -23,7 +23,7 @@ export function createClient() {
     new URL(supabaseUrl);
   } catch {
     throw new Error(
-      `Invalid NEXT_PUBLIC_SUPABASE_URL: "${supabaseUrl}". Must be a valid URL.`
+      `Invalid NEXT_PUBLIC_SUPABASE_URL: "${supabaseUrl}". Must be a valid URL.`,
     );
   }
 
