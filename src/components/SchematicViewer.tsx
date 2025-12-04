@@ -8,7 +8,7 @@ interface SchematicViewerProps {
   title?: string;
   slug: string;
   circuitId?: string;
-  schematicR2Url?: string | null; // Direct R2 URL for KiCanvas (bypasses API)
+  schematicR2Url: string; // Direct R2 URL for KiCanvas (required)
   onCopy?: () => void;
 }
 
@@ -65,8 +65,7 @@ export function SchematicViewer({
       {/* Main Viewer Area */}
       <div className="p-8" ref={viewerRef}>
         <KiCanvasCard
-          slug={schematicR2Url ? undefined : cleanSlug}
-          src={schematicR2Url || undefined}
+          src={schematicR2Url}
           controls="full"
           height="500px"
           circuitId={circuitId}
