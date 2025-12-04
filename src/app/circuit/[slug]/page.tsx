@@ -442,13 +442,14 @@ export default function CircuitDetailPage() {
                 <p className="text-lg font-medium mb-2">Loading circuit...</p>
               </div>
             </div>
-          ) : fullFileData ? (
+          ) : fullFileData && circuit.schematic_r2_url ? (
             <div className="mb-8">
               <SchematicViewer
                 sexpr={fullFileData}
                 title={circuit.title}
                 slug={circuit.slug}
                 circuitId={circuit.id}
+                schematicR2Url={circuit.schematic_r2_url}
                 onCopy={handleViewerCopy}
               />
             </div>
@@ -456,7 +457,7 @@ export default function CircuitDetailPage() {
             <div className="bg-card border rounded-lg p-8 mb-8">
               <div className="aspect-video bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground">
                 <p className="text-lg font-medium mb-2">
-                  Failed to load circuit
+                  {!circuit.schematic_r2_url ? "Schematic not available" : "Failed to load circuit"}
                 </p>
               </div>
             </div>

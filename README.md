@@ -69,7 +69,7 @@ As an electronics engineer, I found myself repeatedly designing the same common 
 - Frontend: Next.js 14, TypeScript, Tailwind CSS
 - Backend: Next.js API routes (RESTful)
 - Database & Auth: Supabase (PostgreSQL)
-- Thumbnail Storage: Cloudflare R2
+- Storage: Cloudflare R2 (thumbnails and schematics)
 - Schematic Viewer: KiCanvas (WebGL)
 - Hosting: Vercel
 
