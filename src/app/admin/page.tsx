@@ -13,7 +13,7 @@ import {
   CheckCircle,
   XCircle,
   Loader,
-  Image,
+  Image as ImageIcon,
   BarChart3,
   RefreshCw,
   Copy,
@@ -22,6 +22,7 @@ import {
   Heart,
   MessageSquare,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { ThumbnailRegenerator } from "@/components/ThumbnailRegenerator";
 
@@ -621,7 +622,7 @@ export default function AdminDashboard() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Image className="w-4 h-4" />
+              <ImageIcon className="w-4 h-4" />
               Thumbnail Regeneration
             </button>
             <button
@@ -1075,9 +1076,11 @@ export default function AdminDashboard() {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-4">
                             {userItem.avatar_url ? (
-                              <img
+                              <Image
                                 src={userItem.avatar_url}
                                 alt={userItem.username}
+                                width={48}
+                                height={48}
                                 className="w-12 h-12 rounded-full"
                               />
                             ) : (

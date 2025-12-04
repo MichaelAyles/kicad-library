@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Search as SearchIcon, Filter, SortDesc } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -183,7 +184,7 @@ function SearchContent() {
                   className="group border rounded-lg overflow-hidden hover:shadow-xl transition-all hover:border-primary/50"
                 >
                   <div className="aspect-video bg-muted relative overflow-hidden">
-                    <img
+                    <Image
                       src={
                         toR2ThumbnailUrl(
                           theme === "dark"
@@ -192,7 +193,8 @@ function SearchContent() {
                         ) || "/placeholder-circuit.png"
                       }
                       alt={circuit.title}
-                      className="w-full h-full object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
+                      fill
+                      className="object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
                     />
                   </div>
                   <div className="p-4">
@@ -203,11 +205,13 @@ function SearchContent() {
                       {circuit.description}
                     </p>
                     <div className="flex items-center gap-2 mb-3">
-                      <img
+                      <Image
                         src={
                           circuit.profiles.avatar_url || "/default-avatar.png"
                         }
                         alt={circuit.profiles.username}
+                        width={24}
+                        height={24}
                         className="w-6 h-6 rounded-full"
                       />
                       <span className="text-sm text-muted-foreground">

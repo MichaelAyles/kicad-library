@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Search, Upload, Copy, Zap } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
@@ -240,10 +241,11 @@ export default function HomePage() {
                     {/* Circuit Thumbnail */}
                     <div className="aspect-video bg-muted relative overflow-hidden group-hover:bg-muted/80 transition-colors">
                       {thumbnailUrl ? (
-                        <img
+                        <Image
                           src={thumbnailUrl}
                           alt={circuit.title}
-                          className="w-full h-full object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
+                          fill
+                          className="object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground">
