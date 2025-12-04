@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
@@ -194,9 +195,11 @@ export default function SettingsPage() {
             <h2 className="text-xl font-semibold mb-4">Profile Picture</h2>
             <div className="flex items-center gap-4">
               {githubAvatar ? (
-                <img
+                <Image
                   src={githubAvatar}
                   alt={fullName || "Profile"}
+                  width={80}
+                  height={80}
                   className="w-20 h-20 rounded-full border-2 border-primary/20"
                 />
               ) : (

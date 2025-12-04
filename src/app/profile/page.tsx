@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -256,9 +257,11 @@ function ProfileContent() {
               {/* Avatar */}
               <div className="flex-shrink-0">
                 {githubAvatar ? (
-                  <img
+                  <Image
                     src={githubAvatar}
                     alt={fullName || "Profile"}
+                    width={96}
+                    height={96}
                     className="w-24 h-24 rounded-full border-2 border-primary/20"
                   />
                 ) : (
@@ -437,12 +440,13 @@ function ProfileContent() {
                     >
                       <div className="flex gap-4">
                         {/* Thumbnail */}
-                        <div className="w-32 h-24 rounded border flex-shrink-0 overflow-hidden">
+                        <div className="w-32 h-24 rounded border flex-shrink-0 overflow-hidden relative">
                           {thumbnailUrl ? (
-                            <img
+                            <Image
                               src={thumbnailUrl}
                               alt={circuit.title}
-                              className="w-full h-full object-cover scale-110"
+                              fill
+                              className="object-cover scale-110"
                             />
                           ) : (
                             <div className="w-full h-full bg-muted flex items-center justify-center">

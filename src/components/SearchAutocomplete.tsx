@@ -6,6 +6,7 @@ import { Search, Loader, ArrowRight } from "lucide-react";
 import { useTheme } from "next-themes";
 import { quickSearch, type SearchCircuit } from "@/lib/search";
 import { toR2ThumbnailUrl } from "@/lib/thumbnail-url";
+import Image from "next/image";
 
 export function SearchAutocomplete() {
   const [query, setQuery] = useState("");
@@ -148,7 +149,7 @@ export function SearchAutocomplete() {
                 {/* Thumbnail */}
                 {(circuit.thumbnail_dark_url ||
                   circuit.thumbnail_light_url) && (
-                  <img
+                  <Image
                     src={
                       toR2ThumbnailUrl(
                         theme === "dark"
@@ -157,6 +158,8 @@ export function SearchAutocomplete() {
                       ) || ""
                     }
                     alt={circuit.title}
+                    width={64}
+                    height={64}
                     className="w-16 h-16 rounded object-cover flex-shrink-0 bg-muted"
                   />
                 )}

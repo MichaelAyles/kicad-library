@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeft,
   Save,
@@ -983,9 +984,11 @@ export default function EditCircuitPage() {
                             <p className="text-xs text-muted-foreground mb-1">
                               Light Mode:
                             </p>
-                            <img
+                            <Image
                               src={version.thumbnail_light_url}
                               alt={`Version ${version.version} light`}
+                              width={200}
+                              height={150}
                               className="w-full border rounded"
                             />
                           </div>
@@ -993,9 +996,11 @@ export default function EditCircuitPage() {
                             <p className="text-xs text-muted-foreground mb-1">
                               Dark Mode:
                             </p>
-                            <img
+                            <Image
                               src={version.thumbnail_dark_url}
                               alt={`Version ${version.version} dark`}
+                              width={200}
+                              height={150}
                               className="w-full border rounded"
                             />
                           </div>

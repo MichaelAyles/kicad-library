@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Upload,
   AlertCircle,
@@ -973,20 +974,26 @@ export default function UploadPage() {
                     <p className="text-sm font-medium mb-2">
                       Light Mode (Captured)
                     </p>
-                    <img
+                    <Image
                       src={lightThumbnail}
                       alt="Light thumbnail"
+                      width={400}
+                      height={300}
                       className="w-full border rounded"
+                      unoptimized
                     />
                   </div>
                   <div>
                     <p className="text-sm font-medium mb-2">
                       Dark Mode (Captured)
                     </p>
-                    <img
+                    <Image
                       src={darkThumbnail}
                       alt="Dark thumbnail"
+                      width={400}
+                      height={300}
                       className="w-full border rounded"
+                      unoptimized
                     />
                   </div>
                 </div>

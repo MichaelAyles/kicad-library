@@ -6,6 +6,7 @@ import { createComment } from "@/lib/comments";
 import { useAuth } from "@/hooks/useAuth";
 import type { CreateCommentInput } from "@/types/comments";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import Image from "next/image";
 
 interface CommentFormProps {
   circuitId: string;
@@ -82,9 +83,11 @@ export function CommentForm({
         {/* User avatar */}
         <div className="flex-shrink-0">
           {user.user_metadata?.avatar_url ? (
-            <img
+            <Image
               src={user.user_metadata.avatar_url}
               alt={user.user_metadata?.username || "You"}
+              width={32}
+              height={32}
               className="w-8 h-8 rounded-full"
             />
           ) : (

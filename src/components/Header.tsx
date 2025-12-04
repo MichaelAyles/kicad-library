@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
@@ -88,9 +89,11 @@ export function Header() {
                   title="View profile"
                 >
                   {user.user_metadata?.avatar_url ? (
-                    <img
+                    <Image
                       src={user.user_metadata.avatar_url}
                       alt={user.user_metadata?.full_name || "Profile"}
+                      width={32}
+                      height={32}
                       className="w-8 h-8 rounded-full border-2 border-primary/50 hover:border-primary transition-colors"
                     />
                   ) : (

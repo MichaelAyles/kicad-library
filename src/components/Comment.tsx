@@ -11,6 +11,7 @@ import {
 } from "@/lib/comments";
 import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
+import Image from "next/image";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface CommentProps {
@@ -101,9 +102,11 @@ export function Comment({
         {/* Avatar */}
         <div className="flex-shrink-0">
           {comment.user?.avatar_url ? (
-            <img
+            <Image
               src={comment.user.avatar_url}
               alt={comment.user.username}
+              width={32}
+              height={32}
               className="w-8 h-8 rounded-full"
             />
           ) : (
