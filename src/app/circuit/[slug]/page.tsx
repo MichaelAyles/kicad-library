@@ -449,6 +449,7 @@ export default function CircuitDetailPage() {
                 title={circuit.title}
                 slug={circuit.slug}
                 circuitId={circuit.id}
+                schematicR2Url={circuit.schematic_r2_url}
                 onCopy={handleViewerCopy}
               />
             </div>

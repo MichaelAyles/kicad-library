@@ -55,6 +55,7 @@ export interface Database {
           user_id: string;
           file_path: string;
           raw_sexpr: string;
+          schematic_r2_url: string | null;
           component_count: number;
           wire_count: number;
           net_count: number;
@@ -75,6 +76,7 @@ export interface Database {
           user_id: string;
           file_path: string;
           raw_sexpr: string;
+          schematic_r2_url?: string | null;
           component_count?: number;
           wire_count?: number;
           net_count?: number;
@@ -95,6 +97,7 @@ export interface Database {
           user_id?: string;
           file_path?: string;
           raw_sexpr?: string;
+          schematic_r2_url?: string | null;
           component_count?: number;
           wire_count?: number;
           net_count?: number;

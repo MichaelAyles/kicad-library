@@ -314,7 +314,31 @@ export default function UploadPage() {
 
       if (circuitError) throw circuitError;
 
-      // 2. Upload thumbnails to storage (v1)
+      // 2. Upload schematic to R2
+      setUploadProgress("Uploading schematic to R2...");
+      try {
+        const schematicResponse = await fetch("/api/upload-schematic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            circuitId: circuit.id,
+            rawSexpr: sexpr,
+            title,
+            sheetSize: sheetSizeOverride,
+          }),
+        });
+
+        if (!schematicResponse.ok) {
+          const errorData = await schematicResponse.json();
+          console.error("Failed to upload schematic to R2:", errorData);
+          // Don't fail the upload - we still have raw_sexpr in DB as fallback
+        }
+      } catch (schematicError) {
+        console.error("Error uploading schematic to R2:", schematicError);
+        // Don't fail the upload - we still have raw_sexpr in DB as fallback
+      }
+
+      // 3. Upload thumbnails to storage (v1)
       const version = 1;
       setUploadProgress("Uploading light theme thumbnail...");
       const lightUrl = await uploadThumbnail(
@@ -336,7 +360,7 @@ export default function UploadPage() {
         version,
       );
 
-      // 3. Update circuit with thumbnail URLs and version
+      // 4. Update circuit with thumbnail URLs and version
       setUploadProgress("Finalizing...");
       const { error: updateError } = await supabase
         .from("circuits")
@@ -349,7 +373,7 @@ export default function UploadPage() {
 
       if (updateError) throw updateError;
 
-      // 4. Create initial thumbnail history record
+      // 5. Create initial thumbnail history record
       const { error: historyError } = await supabase
         .from("thumbnail_history")
         .insert({

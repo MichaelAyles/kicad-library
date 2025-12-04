@@ -17,6 +17,7 @@ import {
 import { transformToCircuit } from "@/lib/batch-import/transformer";
 import { generateUniqueSlug } from "@/lib/batch-import/slug-generator";
 import { addGitHubAttribution } from "@/lib/kicad-parser";
+import { processAndUploadSchematic } from "@/lib/r2-schematic";
 
 interface ImportResult {
   source_file_id: string;
@@ -136,6 +137,28 @@ export async function POST(request: NextRequest) {
             throw insertError;
           }
         } else {
+          // Upload schematic to R2
+          try {
+            const r2Url = await processAndUploadSchematic({
+              circuitId: insertedCircuit.id,
+              rawSexpr: attributedSexpr,
+              title: record.subcircuit.name,
+              sheetSizeOverride: null, // Auto-detect for batch imports
+            });
+
+            // Update circuit with R2 URL
+            await supabase
+              .from("circuits")
+              .update({ schematic_r2_url: r2Url })
+              .eq("id", insertedCircuit.id);
+          } catch (r2Error) {
+            // Log but don't fail - database has raw_sexpr as fallback
+            console.error(
+              `Failed to upload schematic to R2 for ${insertedCircuit.id}:`,
+              r2Error,
+            );
+          }
+
           results.push({
             source_file_id: record.source_file_id,
             status: "success",

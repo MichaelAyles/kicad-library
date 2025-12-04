@@ -81,6 +81,7 @@ export interface Circuit {
   user_id: string;
   file_path: string;
   raw_sexpr: string;
+  schematic_r2_url: string | null; // R2 URL for processed schematic (KiCanvas-ready)
   tags: string[];
   category: string | null;
   license: string;

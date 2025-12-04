@@ -130,6 +130,9 @@ CREATE TABLE IF NOT EXISTS public.circuits (
   thumbnail_light_url TEXT,
   thumbnail_dark_url TEXT,
 
+  -- R2 Storage for processed schematic (KiCanvas-ready .kicad_sch)
+  schematic_r2_url TEXT, -- Full R2 public URL for the processed schematic
+
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -175,6 +178,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_name='circuits' AND column_name='sheet_size') THEN
     ALTER TABLE public.circuits ADD COLUMN sheet_size TEXT CHECK (sheet_size IS NULL OR sheet_size IN ('A4', 'A3', 'A2'));
+  END IF;
+
+  -- Add schematic_r2_url for R2 storage of processed schematics
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='schematic_r2_url') THEN
+    ALTER TABLE public.circuits ADD COLUMN schematic_r2_url TEXT;
   END IF;
 
   -- Make file_path nullable if not already
