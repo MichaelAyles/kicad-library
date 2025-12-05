@@ -34,11 +34,14 @@ function BrowsePageContent() {
   const [page, setPage] = useState(0);
   const observerRef = useRef<HTMLDivElement>(null);
 
-  // Initialize from URL params
+  // Initialize from URL params - use toString() for reliable change detection on back navigation
+  const searchParamsString = searchParams.toString();
   useEffect(() => {
     const query = searchParams.get("q") || "";
     const category = searchParams.get("category") || null;
 
+    // Reset circuits immediately to avoid showing stale results on back navigation
+    setCircuits([]);
     setActiveQuery(query);
     setActiveCategory(category);
     setIsSearchMode(!!query || !!category);
@@ -46,7 +49,7 @@ function BrowsePageContent() {
     if (query || category) {
       setSortBy("relevance");
     }
-  }, [searchParams]);
+  }, [searchParamsString, searchParams]);
 
   // Load circuits when filters/sort/search changes (reset to page 0)
   useEffect(() => {
