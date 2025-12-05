@@ -34,15 +34,14 @@ function BrowsePageContent() {
   const [page, setPage] = useState(0);
   const observerRef = useRef<HTMLDivElement>(null);
 
-  // Initialize from URL params - use toString() for reliable change detection on back navigation
+  // Initialize from URL params and load circuits
+  // Combined into single effect to avoid race conditions between param parsing and data fetching
   const searchParamsString = searchParams.toString();
   useEffect(() => {
     const query = searchParams.get("q") || "";
     const category = searchParams.get("category") || null;
 
-    // Reset state and show loading spinner immediately to avoid flash of empty state
-    setIsLoading(true);
-    setCircuits([]);
+    // Update UI state
     setActiveQuery(query);
     setActiveCategory(category);
     setIsSearchMode(!!query || !!category);
@@ -50,17 +49,18 @@ function BrowsePageContent() {
     if (query || category) {
       setSortBy("relevance");
     }
-  }, [searchParamsString, searchParams]);
 
-  // Load circuits when filters/sort/search changes (reset to page 0)
-  useEffect(() => {
+    // Load circuits with the URL params directly (not from state, to avoid race condition)
     const loadCircuits = async () => {
       setIsLoading(true);
       setError(null);
+      setCircuits([]);
       setPage(0);
+
       try {
-        if (activeQuery || activeCategory) {
+        if (query || category) {
           // Use weighted search
+          const effectiveSortBy = query || category ? "relevance" : sortBy;
           const sortMap: Record<
             string,
             "relevance" | "recent" | "popular" | "views" | "favorites"
@@ -72,9 +72,9 @@ function BrowsePageContent() {
           };
 
           const { circuits: data } = await searchCircuits({
-            query: activeQuery || undefined,
-            category: activeCategory || undefined,
-            sort: sortMap[sortBy],
+            query: query || undefined,
+            category: category || undefined,
+            sort: sortMap[effectiveSortBy],
             limit: CIRCUITS_PER_PAGE,
             offset: 0,
             excludeImported: hideImported,
@@ -110,7 +110,7 @@ function BrowsePageContent() {
     };
 
     loadCircuits();
-  }, [sortBy, hideImported, activeQuery, activeCategory]);
+  }, [searchParamsString, searchParams, sortBy, hideImported]);
 
   // Load more circuits for infinite scrolling
   const loadMoreCircuits = useCallback(async () => {
