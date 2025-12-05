@@ -446,6 +446,7 @@ function ProfileContent() {
                               src={thumbnailUrl}
                               alt={circuit.title}
                               fill
+                              unoptimized
                               className="object-cover scale-110"
                             />
                           ) : (

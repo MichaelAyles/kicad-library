@@ -435,6 +435,7 @@ function BrowsePageContent() {
                           src={thumbnailUrl}
                           alt={circuit.title}
                           fill
+                          unoptimized
                           className="object-cover scale-110 group-hover:scale-115 transition-transform duration-300"
                         />
                       ) : (
