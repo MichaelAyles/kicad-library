@@ -40,7 +40,8 @@ function BrowsePageContent() {
     const query = searchParams.get("q") || "";
     const category = searchParams.get("category") || null;
 
-    // Reset circuits immediately to avoid showing stale results on back navigation
+    // Reset state and show loading spinner immediately to avoid flash of empty state
+    setIsLoading(true);
     setCircuits([]);
     setActiveQuery(query);
     setActiveCategory(category);
