@@ -162,6 +162,7 @@ export function SearchAutocomplete() {
                     alt={circuit.title}
                     width={64}
                     height={64}
+                    unoptimized
                     className="w-16 h-16 rounded object-cover flex-shrink-0 bg-muted"
                   />
                 )}
