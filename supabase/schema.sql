@@ -696,6 +696,7 @@ CREATE OR REPLACE FUNCTION search_circuits_weighted(
   filter_tag TEXT DEFAULT NULL,
   filter_license TEXT DEFAULT NULL,
   exclude_user_id UUID DEFAULT NULL,
+  exclude_imported BOOLEAN DEFAULT FALSE,
   result_limit INT DEFAULT 50,
   result_offset INT DEFAULT 0
 )
@@ -741,13 +742,10 @@ BEGIN
     c.is_public = true
     -- Full-text search on weighted search_vector OR pattern matching for exact/partial matches
     AND (
-      -- Full-text search using weighted vector
+      -- Full-text search using weighted vector (includes tags=A, title=B, description=C)
       c.search_vector @@ plainto_tsquery('english', search_query)
       OR
-      -- Pattern matching for title
-      c.title ILIKE '%' || search_query || '%'
-      OR
-      -- Exact tag match
+      -- Exact tag match (highest priority)
       search_query = ANY(c.tags)
       OR
       -- Partial tag match (e.g., "atsamd" matches "atsamd21")
@@ -755,6 +753,9 @@ BEGIN
         SELECT 1 FROM unnest(c.tags) AS tag
         WHERE tag ILIKE '%' || search_query || '%'
       )
+      OR
+      -- Pattern matching for title
+      c.title ILIKE '%' || search_query || '%'
       OR
       -- Pattern matching for description
       c.description ILIKE '%' || search_query || '%'
@@ -765,8 +766,10 @@ BEGIN
     AND (filter_tag IS NULL OR filter_tag = ANY(c.tags))
     -- License filter
     AND (filter_license IS NULL OR c.license = filter_license)
-    -- Exclude user filter
+    -- Exclude user filter (deprecated)
     AND (exclude_user_id IS NULL OR c.user_id != exclude_user_id)
+    -- Exclude bulk imported circuits
+    AND (exclude_imported = FALSE OR c.batch_import_id IS NULL)
   ORDER BY
     -- Custom weighted ranking:
     -- 1. Exact tag match (highest priority)
@@ -780,9 +783,11 @@ BEGIN
     CASE WHEN c.title ILIKE search_query THEN 500 ELSE 0 END DESC,
     -- 4. Title contains query
     CASE WHEN c.title ILIKE '%' || search_query || '%' THEN 250 ELSE 0 END DESC,
-    -- 5. Full-text search rank (uses weighted search_vector: tags=A, title=B, description=C)
+    -- 5. Description contains query
+    CASE WHEN c.description ILIKE '%' || search_query || '%' THEN 100 ELSE 0 END DESC,
+    -- 6. Full-text search rank (uses weighted search_vector: tags=A, title=B, description=C)
     ts_rank(c.search_vector, plainto_tsquery('english', search_query)) DESC,
-    -- 6. Copy count as tiebreaker
+    -- 7. Copy count as tiebreaker
     c.copy_count DESC NULLS LAST
   LIMIT result_limit
   OFFSET result_offset;
