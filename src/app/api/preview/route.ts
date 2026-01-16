@@ -1,11 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isClipboardSnippet, wrapSnippetToFullFile } from "@/lib/kicad-parser";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { previewCache } from "@/lib/preview-cache";
+
+/**
+ * Try to get a Supabase client that can upload to storage.
+ * Falls back to null if no valid client available.
+ */
+async function getStorageClient() {
+  // First try regular auth client (works if user is authenticated)
+  try {
+    const client = await createClient();
+    return client;
+  } catch {
+    console.log("Preview API: Auth client not available");
+  }
+
+  // Then try admin client (works if service role key is set)
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (supabaseUrl && supabaseServiceRoleKey) {
+      const { createClient: createAdminClient } = await import(
+        "@supabase/supabase-js"
+      );
+      return createAdminClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+    }
+  } catch {
+    console.log("Preview API: Admin client not available");
+  }
+
+  return null;
+}
 
 /**
  * POST: Store a preview schematic and return its ID
- * Uses Supabase storage with admin client to bypass RLS
- * This ensures previews work across serverless instances on Vercel
+ * Tries Supabase storage first (persists across serverless instances),
+ * falls back to in-memory cache if storage unavailable.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -34,19 +68,38 @@ export async function POST(request: NextRequest) {
     // Generate unique preview ID
     const previewId = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // Store in Supabase storage using admin client (bypasses RLS)
-    const supabase = createAdminClient();
-    const { error: uploadError } = await supabase.storage
-      .from("previews")
-      .upload(`${previewId}.kicad_sch`, fullFile, {
-        contentType: "text/plain",
-        upsert: true,
-      });
+    // Try Supabase storage first
+    const supabase = await getStorageClient();
+    let storedInSupabase = false;
 
-    if (uploadError) {
-      console.error("Failed to upload preview:", uploadError);
-      throw new Error("Failed to store preview");
+    if (supabase) {
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from("previews")
+          .upload(`${previewId}.kicad_sch`, fullFile, {
+            contentType: "text/plain",
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          storedInSupabase = true;
+          console.log("Preview API: Stored in Supabase storage");
+        } else {
+          console.error("Preview API: Supabase upload failed:", uploadError);
+        }
+      } catch (e) {
+        console.error("Preview API: Supabase storage error:", e);
+      }
     }
+
+    // Always store in cache as well (for same-instance requests)
+    previewCache.set(previewId, {
+      sexpr: fullFile,
+      timestamp: Date.now(),
+    });
+    console.log(
+      `Preview API: Stored in cache${storedInSupabase ? " (also in Supabase)" : " (Supabase unavailable)"}`,
+    );
 
     return NextResponse.json({ previewId });
   } catch (error) {
@@ -60,6 +113,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET: Retrieve a preview schematic by ID
+ * Tries in-memory cache first (fast), then Supabase storage.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -73,32 +127,52 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Retrieve from Supabase storage using admin client
-    const supabase = createAdminClient();
-    const { data, error } = await supabase.storage
-      .from("previews")
-      .download(`${previewId}.kicad_sch`);
-
-    if (error || !data) {
-      console.error("Failed to retrieve preview:", error);
-      return NextResponse.json(
-        { error: "Preview not found or expired" },
-        { status: 404 },
-      );
+    // Try cache first (fast, same-instance)
+    const cached = previewCache.get(previewId);
+    if (cached) {
+      console.log("Preview API: Retrieved from cache");
+      return new NextResponse(cached.sexpr, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": 'inline; filename="preview.kicad_sch"',
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      });
     }
 
-    // Convert Blob to text
-    const text = await data.text();
+    // Try Supabase storage (cross-instance)
+    const supabase = await getStorageClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.storage
+          .from("previews")
+          .download(`${previewId}.kicad_sch`);
 
-    // Return the schematic as a .kicad_sch file
-    // IMPORTANT: Use text/plain (not application/x-kicad-schematic) - this is what KiCanvas expects
-    return new NextResponse(text, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": 'inline; filename="preview.kicad_sch"',
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-      },
-    });
+        if (!error && data) {
+          const text = await data.text();
+          console.log("Preview API: Retrieved from Supabase storage");
+
+          // Cache it for future requests
+          previewCache.set(previewId, { sexpr: text, timestamp: Date.now() });
+
+          return new NextResponse(text, {
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Content-Disposition": 'inline; filename="preview.kicad_sch"',
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+            },
+          });
+        }
+      } catch (e) {
+        console.error("Preview API: Supabase download error:", e);
+      }
+    }
+
+    console.error("Preview not found:", previewId);
+    return NextResponse.json(
+      { error: "Preview not found or expired" },
+      { status: 404 },
+    );
   } catch (error) {
     console.error("Preview GET error:", error);
     return NextResponse.json(
