@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { previewCache } from "@/lib/preview-cache";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * GET: Retrieve a preview schematic by ID from a filename-based URL
@@ -21,20 +21,26 @@ export async function GET(
       );
     }
 
-    // Retrieve from LRU cache
-    const cached = previewCache.get(previewId);
+    // Retrieve from Supabase storage using admin client
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.storage
+      .from("previews")
+      .download(`${previewId}.kicad_sch`);
 
-    if (!cached) {
-      console.error("Preview not found in cache:", previewId);
+    if (error || !data) {
+      console.error("Failed to retrieve preview:", error);
       return NextResponse.json(
         { error: "Preview not found or expired" },
         { status: 404 },
       );
     }
 
+    // Convert Blob to text
+    const text = await data.text();
+
     // Return the schematic as a .kicad_sch file
     // IMPORTANT: Use text/plain (not application/x-kicad-schematic) - this is what KiCanvas expects
-    return new NextResponse(cached.sexpr, {
+    return new NextResponse(text, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Disposition": `inline; filename="${params.filename}"`,
