@@ -1033,14 +1033,41 @@ export function suggestCategory(metadata: ParsedMetadata): string {
  * - Individual (sheet ...) elements (hierarchical sheet symbols on schematic)
  */
 export function removeHierarchicalSheets(sexpr: string): string {
-  // Remove (sheet_instances ...) blocks which contain references to other sheets
-  const sheetInstancesRegex = /\(sheet_instances[^)]*(?:\([^)]*\)[^)]*)*\)/g;
-  let result = sexpr.replace(sheetInstancesRegex, "");
+  let result = sexpr;
 
-  // Remove individual (sheet ...) elements (hierarchical sheet symbols on schematic)
-  // Match (sheet ... ) including nested parentheses
-  const sheetRegex = /\(sheet\s+[^(]*(?:\([^)]*\)[^(]*)*\)/g;
-  result = result.replace(sheetRegex, "");
+  // Remove (sheet_instances ...) blocks using balanced extraction
+  // Find all occurrences and remove them from end to start to preserve positions
+  const sheetInstancesPositions: number[] = [];
+  const sheetInstancesRegex = /\(sheet_instances\s/g;
+  let match;
+  while ((match = sheetInstancesRegex.exec(result)) !== null) {
+    sheetInstancesPositions.push(match.index);
+  }
+
+  // Process from end to start so positions stay valid
+  for (let i = sheetInstancesPositions.length - 1; i >= 0; i--) {
+    const pos = sheetInstancesPositions[i];
+    const extracted = extractBalancedSExpr(result, pos);
+    if (extracted) {
+      result = result.slice(0, pos) + result.slice(pos + extracted.length);
+    }
+  }
+
+  // Remove individual (sheet ...) elements (hierarchical sheet symbols)
+  const sheetPositions: number[] = [];
+  // Match (sheet followed by whitespace but not (sheet_instances
+  const sheetRegex = /\(sheet\s+(?!instances)/g;
+  while ((match = sheetRegex.exec(result)) !== null) {
+    sheetPositions.push(match.index);
+  }
+
+  for (let i = sheetPositions.length - 1; i >= 0; i--) {
+    const pos = sheetPositions[i];
+    const extracted = extractBalancedSExpr(result, pos);
+    if (extracted) {
+      result = result.slice(0, pos) + result.slice(pos + extracted.length);
+    }
+  }
 
   return result;
 }
