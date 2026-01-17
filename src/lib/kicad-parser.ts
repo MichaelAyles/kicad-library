@@ -234,49 +234,92 @@ ${snippet}
 }
 
 /**
+ * Valid top-level elements that should be included in a clipboard snippet.
+ * These are elements that can be copied from KiCad and pasted back.
+ */
+const SNIPPET_ELEMENTS = [
+  "lib_symbols", // Library symbol definitions (required for symbols)
+  "symbol", // Placed component instances
+  "wire", // Wires connecting components
+  "bus", // Bus lines
+  "bus_entry", // Bus entry points
+  "junction", // Wire junctions
+  "no_connect", // No-connect flags
+  "label", // Local labels
+  "global_label", // Global labels
+  "hierarchical_label", // Hierarchical sheet labels
+  "text", // Text annotations
+  "polyline", // Graphic polylines
+  "rectangle", // Graphic rectangles
+  "circle", // Graphic circles
+  "arc", // Graphic arcs
+];
+
+/**
  * Extract snippet from a full .kicad_sch file
- * Removes the kicad_sch wrapper, keeping only lib_symbols and symbol content
+ * Removes the kicad_sch wrapper and metadata, keeping only pasteable schematic content.
+ *
+ * Uses balanced parentheses matching to extract complete elements while
+ * preserving original formatting (avoids lossy tree reconstruction).
  */
 export function extractSnippetFromFullFile(fullFile: string): string {
-  try {
-    const tree = parseSExpression(fullFile);
+  const snippetParts: string[] = [];
 
-    if (tree.type !== "list" || !tree.children) {
-      throw new Error("Invalid S-expression structure");
+  // Build regex pattern for all valid snippet elements
+  const elementPattern = new RegExp(
+    `^(\\s*)(\\((?:${SNIPPET_ELEMENTS.join("|")})\\s)`,
+    "gm",
+  );
+
+  // Find each top-level element and extract it with balanced parentheses
+  let match;
+  while ((match = elementPattern.exec(fullFile)) !== null) {
+    const startPos = match.index + match[1].length; // Skip leading whitespace
+    const extracted = extractBalancedSExpr(fullFile, startPos);
+    if (extracted) {
+      snippetParts.push(extracted);
     }
+  }
 
-    // Find lib_symbols and symbol nodes
-    const snippetParts: string[] = [];
+  return snippetParts.join("\n\n");
+}
 
-    for (const child of tree.children) {
-      if (child.type === "list" && child.children) {
-        const tag = child.children[0];
-        if (
-          tag.type === "atom" &&
-          (tag.value === "lib_symbols" || tag.value === "symbol")
-        ) {
-          // Reconstruct this node as S-expression text
-          snippetParts.push(nodeToString(child));
+/**
+ * Extract a balanced S-expression starting at the given position.
+ * Returns the complete S-expression including all nested content.
+ */
+function extractBalancedSExpr(text: string, startPos: number): string | null {
+  if (text[startPos] !== "(") {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let i = startPos;
+
+  while (i < text.length) {
+    const char = text[i];
+    const prevChar = i > startPos ? text[i - 1] : "";
+
+    // Track string boundaries (handle escaped quotes)
+    if (char === '"' && prevChar !== "\\") {
+      inString = !inString;
+    } else if (!inString) {
+      if (char === "(") {
+        depth++;
+      } else if (char === ")") {
+        depth--;
+        if (depth === 0) {
+          // Found the matching closing paren
+          return text.slice(startPos, i + 1);
         }
       }
     }
-
-    return snippetParts.join("\n\n");
-  } catch (error) {
-    // If parsing fails, fall back to regex extraction
-    const libSymbolsMatch = fullFile.match(
-      /(\(lib_symbols[\s\S]*?\n\)(?=\s*\n\s*\())/,
-    );
-    const symbolsMatch = fullFile.match(
-      /(\(symbol[\s\S]*?\n\s*\)(?=\s*\n\s*\())/g,
-    );
-
-    const parts: string[] = [];
-    if (libSymbolsMatch) parts.push(libSymbolsMatch[1]);
-    if (symbolsMatch) parts.push(...symbolsMatch);
-
-    return parts.join("\n\n");
+    i++;
   }
+
+  // Unbalanced - didn't find matching close paren
+  return null;
 }
 
 /**

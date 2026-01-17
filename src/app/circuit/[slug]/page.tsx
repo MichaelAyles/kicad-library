@@ -25,6 +25,10 @@ import {
   validateSExpression,
   selectSheetSize,
 } from "@/lib/kicad-parser";
+import {
+  validateClipboardData,
+  sanitizeClipboardData,
+} from "@/lib/clipboard-validation";
 import { SchematicViewer } from "@/components/SchematicViewer";
 import { CommentList } from "@/components/CommentList";
 import { FlagCircuitModal } from "@/components/FlagCircuitModal";
@@ -156,11 +160,41 @@ export default function CircuitDetailPage() {
       return;
     }
 
+    // Validate clipboard data before copying
+    const validation = validateClipboardData(snippetData);
+
+    if (!validation.valid) {
+      console.error("Clipboard validation failed:", validation.errors);
+      alert(
+        `Cannot copy circuit: ${validation.errors.join(". ")}\n\nThis circuit may contain corrupted data. Please try downloading the file instead.`,
+      );
+      return;
+    }
+
+    // Log warnings but still allow copy
+    if (validation.warnings.length > 0) {
+      console.warn("Clipboard validation warnings:", validation.warnings);
+    }
+
+    // Sanitize the data if there were warnings
+    const dataToCopy =
+      validation.warnings.length > 0
+        ? sanitizeClipboardData(snippetData)
+        : snippetData;
+
     // Copy snippet data only (no kicad_sch wrapper)
     // Users can paste this directly into KiCad
     try {
-      await navigator.clipboard.writeText(snippetData);
+      await navigator.clipboard.writeText(dataToCopy);
       setCopied(true);
+
+      // Log copy stats for debugging
+      console.log("Copied circuit to clipboard:", {
+        size: validation.stats.size,
+        symbols: validation.stats.symbolCount,
+        wires: validation.stats.wireCount,
+        labels: validation.stats.labelCount,
+      });
 
       // Increment copy count in database
       try {
