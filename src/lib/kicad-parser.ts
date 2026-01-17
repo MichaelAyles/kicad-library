@@ -265,9 +265,16 @@ const SNIPPET_ELEMENTS = [
 export function extractSnippetFromFullFile(fullFile: string): string {
   const snippetParts: string[] = [];
 
+  // Determine the base indentation level (elements inside kicad_sch are indented)
+  // We want to extract only top-level schematic elements, not nested ones
+  const hasKicadSchWrapper = fullFile.includes("(kicad_sch");
+
   // Build regex pattern for all valid snippet elements
+  // For full files, match elements with exactly one tab/indent level (direct children of kicad_sch)
+  // For snippets, match elements at line start
+  const indentPattern = hasKicadSchWrapper ? "\\t" : "";
   const elementPattern = new RegExp(
-    `^(\\s*)(\\((?:${SNIPPET_ELEMENTS.join("|")})\\s)`,
+    `^(${indentPattern})(\\((?:${SNIPPET_ELEMENTS.join("|")})(?:\\s|$))`,
     "gm",
   );
 
@@ -278,6 +285,9 @@ export function extractSnippetFromFullFile(fullFile: string): string {
     const extracted = extractBalancedSExpr(fullFile, startPos);
     if (extracted) {
       snippetParts.push(extracted);
+      // IMPORTANT: Advance regex past the extracted content to avoid
+      // matching nested elements (e.g., symbols inside lib_symbols)
+      elementPattern.lastIndex = match.index + match[1].length + extracted.length;
     }
   }
 
