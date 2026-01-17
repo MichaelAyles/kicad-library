@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, Upload, Copy, Zap } from "lucide-react";
+import { Search, Upload, Copy, Zap, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -20,6 +20,7 @@ export default function HomePage() {
   const { theme } = useTheme();
   const [topCircuits, setTopCircuits] = useState<Circuit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showBanner, setShowBanner] = useState(true);
   const [stats, setStats] = useState<Stats>({
     circuits: 0,
     copies: 0,
@@ -61,6 +62,45 @@ export default function HomePage() {
   return (
     <div className="flex flex-col">
       <Header />
+
+      {/* Bug Fix Banner */}
+      {showBanner && (
+        <div className="bg-primary/10 border-b border-primary/20">
+          <div className="container mx-auto max-w-6xl px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-foreground">
+                <span className="font-medium">Heads up:</span> We recently fixed
+                issues with some schematics not importing correctly into KiCad,
+                and the preview renderer being flaky during upload. Both should
+                be working now! If you spot any bugs, please{" "}
+                <a
+                  href="https://github.com/MichaelAyles/kicad-library/issues"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline font-medium"
+                >
+                  open a GitHub issue
+                </a>{" "}
+                or email{" "}
+                <a
+                  href="mailto:mike@mikeayles.com"
+                  className="text-primary hover:underline font-medium"
+                >
+                  mike@mikeayles.com
+                </a>
+                .
+              </p>
+              <button
+                onClick={() => setShowBanner(false)}
+                className="shrink-0 p-1 hover:bg-primary/20 rounded transition-colors"
+                aria-label="Dismiss banner"
+              >
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero Section - Green Theme */}
       <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden py-20 px-4">
