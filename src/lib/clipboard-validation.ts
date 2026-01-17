@@ -204,6 +204,16 @@ function validateStructure(data: string): {
 function checkSuspiciousPatterns(data: string): string[] {
   const warnings: string[] = [];
 
+  // Check for suspiciously low characters per line (indicates broken formatting)
+  // Normal KiCad files have 30-50+ chars per line; broken nodeToString output has ~12
+  const lines = data.split("\n");
+  const avgCharsPerLine = data.length / lines.length;
+  if (avgCharsPerLine < 20 && lines.length > 100) {
+    warnings.push(
+      `Suspiciously low characters per line (${avgCharsPerLine.toFixed(1)} avg). Data may have corrupted formatting.`,
+    );
+  }
+
   // Check for excessive whitespace (could indicate nodeToString bug)
   const maxConsecutiveSpaces = 100;
   const spacePattern = new RegExp(` {${maxConsecutiveSpaces},}`);
@@ -233,6 +243,15 @@ function checkSuspiciousPatterns(data: string): string[] {
   // Check for null bytes or other binary artifacts
   if (data.includes("\0")) {
     warnings.push("Data contains null bytes which is invalid in S-expressions.");
+  }
+
+  // Check for symbols without any connections (suspicious for non-trivial schematics)
+  const symbolCount = (data.match(/^\s*\(symbol\s+\(/gm) || []).length;
+  const wireCount = (data.match(/^\s*\(wire\b/gm) || []).length;
+  if (symbolCount > 10 && wireCount === 0) {
+    warnings.push(
+      `Schematic has ${symbolCount} symbols but no wires. Elements may not have been extracted properly.`,
+    );
   }
 
   return warnings;
