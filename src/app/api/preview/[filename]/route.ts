@@ -1,5 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { previewCache } from "@/lib/preview-cache";
+
+/**
+ * Try to get a Supabase client for storage operations.
+ */
+async function getStorageClient() {
+  try {
+    const client = await createClient();
+    return client;
+  } catch {
+    // Fallback to admin client if available
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (supabaseUrl && supabaseServiceRoleKey) {
+        const { createClient: createAdminClient } = await import(
+          "@supabase/supabase-js"
+        );
+        return createAdminClient(supabaseUrl, supabaseServiceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+      }
+    } catch {
+      // No client available
+    }
+  }
+  return null;
+}
 
 /**
  * GET: Retrieve a preview schematic by ID from a filename-based URL
@@ -21,32 +50,52 @@ export async function GET(
       );
     }
 
-    // Retrieve from Supabase storage
-    const supabase = await createClient();
-    const { data, error } = await supabase.storage
-      .from("previews")
-      .download(`${previewId}.kicad_sch`);
-
-    if (error || !data) {
-      console.error("Failed to retrieve preview:", error);
-      return NextResponse.json(
-        { error: "Preview not found or expired" },
-        { status: 404 },
-      );
+    // Try cache first (fast, same-instance)
+    const cached = previewCache.get(previewId);
+    if (cached) {
+      console.log("Preview API [filename]: Retrieved from cache");
+      return new NextResponse(cached.sexpr, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `inline; filename="${params.filename}"`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      });
     }
 
-    // Convert Blob to text
-    const text = await data.text();
+    // Try Supabase storage (cross-instance)
+    const supabase = await getStorageClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.storage
+          .from("previews")
+          .download(`${previewId}.kicad_sch`);
 
-    // Return the schematic as a .kicad_sch file
-    // IMPORTANT: Use text/plain (not application/x-kicad-schematic) - this is what KiCanvas expects
-    return new NextResponse(text, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": `inline; filename="${params.filename}"`,
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-      },
-    });
+        if (!error && data) {
+          const text = await data.text();
+          console.log("Preview API [filename]: Retrieved from Supabase");
+
+          // Cache for future requests
+          previewCache.set(previewId, { sexpr: text, timestamp: Date.now() });
+
+          return new NextResponse(text, {
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Content-Disposition": `inline; filename="${params.filename}"`,
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+            },
+          });
+        }
+      } catch (e) {
+        console.error("Preview API [filename]: Supabase download error:", e);
+      }
+    }
+
+    console.error("Preview not found:", previewId);
+    return NextResponse.json(
+      { error: "Preview not found or expired" },
+      { status: 404 },
+    );
   } catch (error) {
     console.error("Preview GET error:", error);
     return NextResponse.json(
