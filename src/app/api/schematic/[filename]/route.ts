@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  isClipboardSnippet,
-  wrapSnippetToFullFile,
-  removeHierarchicalSheets,
-  replacePaperSize,
-  validateSExpression,
-  selectSheetSize,
-  type SheetSize,
-} from "@/lib/kicad-parser";
 import { getCircuitBySlug } from "@/lib/circuits";
+import { processAndUploadSchematic } from "@/lib/r2-schematic";
+import type { SheetSize } from "@/lib/kicad-parser";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+}
 
 /**
- * API endpoint to serve schematic files for KiCanvas viewer
- * Fetches circuit from database and serves the raw S-expression as a .kicad_sch file
+ * API endpoint to serve schematic files for KiCanvas viewer.
+ *
+ * Lazy write-through cache: if the circuit already has a processed schematic
+ * in R2, redirect there (zero compute). Otherwise, process once, upload to R2,
+ * update the DB, and serve the result inline.
  */
 export async function GET(
   request: NextRequest,
@@ -41,12 +46,17 @@ export async function GET(
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "Content-Disposition": `inline; filename="${params.filename}"`,
-          "Cache-Control": "public, max-age=3600",
+          "Cache-Control": "public, max-age=31536000, immutable",
         },
       });
     }
 
-    // Get raw S-expression from database
+    // Fast path: if R2 URL exists, redirect to CDN-cached schematic
+    if (circuit.schematic_r2_url) {
+      return NextResponse.redirect(circuit.schematic_r2_url, 302);
+    }
+
+    // Slow path: no R2 URL — process, upload, and serve
     const rawData = circuit.raw_sexpr;
 
     if (!rawData) {
@@ -68,7 +78,6 @@ export async function GET(
       console.error(
         `Circuit ${slug} contains corrupted data (HTML/XML instead of schematic)`,
       );
-      // Return empty schematic stub for corrupted data
       const emptySchematic = `(kicad_sch (version 20230121) (generator "CircuitSnips")
   (uuid 00000000-0000-0000-0000-000000000000)
   (paper "A4")
@@ -81,7 +90,7 @@ export async function GET(
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "Content-Disposition": `inline; filename="${params.filename}"`,
-          "Cache-Control": "no-cache", // Don't cache corrupted data
+          "Cache-Control": "no-cache",
         },
       });
     }
@@ -89,7 +98,6 @@ export async function GET(
     // Check if it starts with a valid S-expression
     if (!trimmedData.startsWith("(kicad_sch") && !trimmedData.startsWith("(")) {
       console.error(`Circuit ${slug} data is not a valid KiCad S-expression`);
-      // Return empty schematic stub for invalid data
       const emptySchematic = `(kicad_sch (version 20230121) (generator "CircuitSnips")
   (uuid 00000000-0000-0000-0000-000000000000)
   (paper "A4")
@@ -107,45 +115,28 @@ export async function GET(
       });
     }
 
-    // Determine the appropriate paper size
-    // Priority: 1) User override from database, 2) Auto-detect from bounding box
-    let paperSize: SheetSize = "A4";
-    if (circuit.sheet_size) {
-      // User specified a sheet size override
-      paperSize = circuit.sheet_size as SheetSize;
-    } else {
-      // Auto-detect from bounding box
-      const validation = validateSExpression(rawData);
-      if (validation.valid && validation.metadata) {
-        paperSize = selectSheetSize(validation.metadata.boundingBox).size;
-      }
-    }
-
-    // Check if raw data is a snippet or full file, and prepare accordingly
-    let schematicFile: string;
-    if (isClipboardSnippet(rawData)) {
-      // It's a snippet - wrap it for serving as .kicad_sch file
-      schematicFile = wrapSnippetToFullFile(rawData, {
-        title: circuit.title,
-        uuid: circuit.id, // Use circuit UUID
-        paperSize,
-      });
-    } else {
-      // It's already a full file - replace paper size with calculated/override value
-      schematicFile = replacePaperSize(rawData, paperSize);
-    }
-
-    // Remove hierarchical sheet references to prevent KiCanvas from trying to load non-existent files
-    schematicFile = removeHierarchicalSheets(schematicFile);
-
-    // Return with proper content type
-    return new NextResponse(schematicFile, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": `inline; filename="${params.filename}"`,
-        "Cache-Control": "public, max-age=3600", // Cache for 1 hour
-      },
+    // Process and upload to R2
+    const r2Url = await processAndUploadSchematic({
+      circuitId: circuit.id,
+      rawSexpr: rawData,
+      title: circuit.title,
+      sheetSizeOverride: (circuit.sheet_size as SheetSize) || null,
     });
+
+    // Update DB with R2 URL for future requests
+    const supabase = getSupabase();
+    const { error: dbError } = await supabase
+      .from("circuits")
+      .update({ schematic_r2_url: r2Url })
+      .eq("id", circuit.id);
+
+    if (dbError) {
+      console.error(`Failed to update schematic_r2_url for ${slug}:`, dbError);
+      // Non-fatal — we still have the processed content via R2
+    }
+
+    // Redirect to the newly uploaded R2 URL
+    return NextResponse.redirect(r2Url, 302);
   } catch (error) {
     console.error("Failed to serve schematic:", error);
     return NextResponse.json(
