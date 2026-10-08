@@ -207,8 +207,11 @@ export function wrapSnippetToFullFile(
     paperSize?: SheetSize;
   },
 ): string {
-  const uuid = options?.uuid || `circuit-${Date.now()}`;
-  const title = options?.title || "Circuit Snippet";
+  const uuid =
+    options?.uuid ||
+    globalThis.crypto?.randomUUID?.() ||
+    `circuit-${Date.now()}`;
+  const title = escapeSExprString(options?.title || "Circuit Snippet");
   const paperSize = options?.paperSize || "A4";
 
   // Create a complete KiCad schematic file structure
@@ -365,8 +368,168 @@ function nodeToString(node: SExprNode, indent = 0): string {
 }
 
 /**
- * Add attribution comments to a full .kicad_sch file
+ * Escape a value for use inside a quoted S-expression string
+ */
+export function escapeSExprString(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]+/g, " ");
+}
+
+function unescapeSExprString(value: string): string {
+  return value.replace(/\\(.)/g, "$1");
+}
+
+interface TopLevelNode {
+  name: string;
+  start: number; // index of "("
+  end: number; // index after ")"
+}
+
+/**
+ * Find the direct children of the root (kicad_sch ...) list.
+ * Depth-aware and string-aware, so it never matches nested nodes.
+ */
+function findTopLevelNodes(file: string): TopLevelNode[] {
+  const nodes: TopLevelNode[] = [];
+  const nameRe = /\(\s*([^\s()"]+)/y;
+  let depth = 0;
+  let inString = false;
+  let nodeStart = -1;
+
+  for (let i = 0; i < file.length; i++) {
+    const ch = file[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "(") {
+      depth++;
+      if (depth === 2) nodeStart = i;
+    } else if (ch === ")") {
+      if (depth === 2 && nodeStart >= 0) {
+        nameRe.lastIndex = nodeStart;
+        const name = nameRe.exec(file)?.[1] ?? "";
+        nodes.push({ name, start: nodeStart, end: i + 1 });
+        nodeStart = -1;
+      }
+      depth--;
+    }
+  }
+
+  return nodes;
+}
+
+/**
+ * Remove (comment N "...") nodes placed directly under kicad_sch.
+ * Older CircuitSnips versions wrote attribution there, which is invalid
+ * (comments belong in title_block) and KiCad 10 refuses to load the file.
+ */
+function extractTopLevelComments(file: string): {
+  cleaned: string;
+  comments: string[];
+} {
+  const commentNodes = findTopLevelNodes(file).filter(
+    (n) => n.name === "comment",
+  );
+  const comments: string[] = [];
+  if (commentNodes.length === 0) return { cleaned: file, comments };
+  let cleaned = file;
+
+  // Remove from the end so earlier indices stay valid
+  for (const node of [...commentNodes].reverse()) {
+    const text = /"((?:[^"\\]|\\.)*)"/.exec(
+      file.slice(node.start, node.end),
+    )?.[1];
+    if (text !== undefined) comments.unshift(unescapeSExprString(text));
+
+    // Also swallow the line's leading indentation and trailing newline
+    let from = node.start;
+    while (from > 0 && (cleaned[from - 1] === " " || cleaned[from - 1] === "\t"))
+      from--;
+    let to = node.end;
+    if (cleaned[to] === "\n") to++;
+    cleaned = cleaned.slice(0, from) + cleaned.slice(to);
+  }
+
+  // Collapse blank lines left behind by the removed block
+  cleaned = cleaned.replace(/\n[ \t]*\n([ \t]*\n)+/g, "\n\n");
+
+  return { cleaned, comments };
+}
+
+const MAX_TITLE_BLOCK_COMMENTS = 9;
+
+/**
+ * Add comment lines to the file's title_block, using only the comment
+ * slots (1-9) the original author left free. Creates a title_block if
+ * the file has none. Lines that don't fit are dropped.
+ */
+function addTitleBlockComments(file: string, lines: string[]): string {
+  if (!/^\s*\(kicad_sch\b/.test(file)) return file;
+
+  const nodes = findTopLevelNodes(file);
+  const titleBlock = nodes.find((n) => n.name === "title_block");
+
+  const used = new Set<number>();
+  if (titleBlock) {
+    const body = file.slice(titleBlock.start, titleBlock.end);
+    for (const m of body.matchAll(/\(comment\s+(\d+)/g)) used.add(Number(m[1]));
+  }
+
+  const entries: string[] = [];
+  let slot = 1;
+  for (const line of lines) {
+    while (slot <= MAX_TITLE_BLOCK_COMMENTS && used.has(slot)) slot++;
+    if (slot > MAX_TITLE_BLOCK_COMMENTS) break;
+    entries.push(`(comment ${slot} "${escapeSExprString(line)}")`);
+    slot++;
+  }
+  if (entries.length === 0) return file;
+
+  if (titleBlock) {
+    // Insert before the title_block's closing paren
+    const close = titleBlock.end - 1;
+    let lineStart = close;
+    while (lineStart > 0 && /[ \t]/.test(file[lineStart - 1])) lineStart--;
+    const closeIndent = file.slice(lineStart, close);
+    const childIndent = closeIndent + (closeIndent.includes("\t") ? "\t" : "  ");
+    const insertion = entries.map((e) => `${childIndent}${e}\n`).join("");
+    if (file[lineStart - 1] === "\n") {
+      return file.slice(0, lineStart) + insertion + file.slice(lineStart);
+    }
+    return (
+      file.slice(0, close) +
+      "\n" +
+      insertion +
+      closeIndent +
+      file.slice(close)
+    );
+  }
+
+  // No title_block: add one after paper, uuid, or generator info
+  const anchor = [...nodes]
+    .reverse()
+    .find((n) =>
+      ["paper", "uuid", "generator_version", "generator", "version"].includes(
+        n.name,
+      ),
+    );
+  const insertAt = anchor ? anchor.end : file.indexOf("(kicad_sch") + 10;
+  const block = `\n  (title_block\n${entries.map((e) => `    ${e}\n`).join("")}  )`;
+  return file.slice(0, insertAt) + block + file.slice(insertAt);
+}
+
+/**
+ * Add attribution to a full .kicad_sch file
  * Should only be called on full files, not snippets
+ *
+ * Attribution goes in title_block comments. Any legacy top-level comments
+ * (from older imports) are moved there too, since KiCad 10 rejects them.
  */
 export function addAttribution(
   fullFile: string,
@@ -377,34 +540,14 @@ export function addAttribution(
     title?: string;
   },
 ): string {
-  const lines = fullFile.split("\n");
-  let insertIndex = 0;
-
-  // Find where to insert (after generator, version, or uuid)
-  for (let i = 0; i < lines.length; i++) {
-    if (
-      lines[i].includes("(generator") ||
-      lines[i].includes("(version") ||
-      lines[i].includes("(uuid")
-    ) {
-      insertIndex = i + 1;
-    }
-    if (lines[i].includes("(paper")) {
-      break;
-    }
-  }
-
+  const { cleaned, comments } = extractTopLevelComments(fullFile);
   const today = new Date().toISOString().split("T")[0];
-  const attribution = [
-    `  (comment 1 "Source: ${options.url}")`,
-    `  (comment 2 "Author: ${options.author}")`,
-    `  (comment 3 "License: ${options.license}")`,
-    `  (comment 4 "Downloaded: ${today}")`,
-    "",
-  ].join("\n");
 
-  lines.splice(insertIndex, 0, attribution);
-  return lines.join("\n");
+  return addTitleBlockComments(cleaned, [
+    `Source: ${options.url}`,
+    `Author: ${options.author} | License: ${options.license} | Downloaded: ${today}`,
+    ...comments,
+  ]);
 }
 
 /**
@@ -432,37 +575,16 @@ export function addGitHubAttribution(
       })
     : sexpr;
 
-  const lines = fullFile.split("\n");
-  let insertIndex = 0;
-
-  // Find where to insert (after generator, version, or uuid)
-  for (let i = 0; i < lines.length; i++) {
-    if (
-      lines[i].includes("(generator") ||
-      lines[i].includes("(version") ||
-      lines[i].includes("(uuid")
-    ) {
-      insertIndex = i + 1;
-    }
-    if (lines[i].includes("(paper")) {
-      break;
-    }
-  }
-
   const today = new Date().toISOString().split("T")[0];
   const scoreText =
     options.score !== undefined ? ` | Quality: ${options.score}/10` : "";
 
-  const attribution = [
-    `  (comment 1 "GitHub: ${options.repoUrl}")`,
-    `  (comment 2 "Source: ${options.repoOwner}/${options.repoName} | ${options.filePath}")`,
-    `  (comment 3 "License: ${options.license}${scoreText}")`,
-    `  (comment 4 "Imported: ${today} | CircuitSnips.com")`,
-    "",
-  ].join("\n");
-
-  lines.splice(insertIndex, 0, attribution);
-  return lines.join("\n");
+  return addTitleBlockComments(extractTopLevelComments(fullFile).cleaned, [
+    `GitHub: ${options.repoUrl}`,
+    `Source: ${options.repoOwner}/${options.repoName} | ${options.filePath}`,
+    `License: ${options.license}${scoreText}`,
+    `Imported: ${today} | CircuitSnips.com`,
+  ]);
 }
 
 // ============================================================================
