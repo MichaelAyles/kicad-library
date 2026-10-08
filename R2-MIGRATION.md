@@ -120,9 +120,9 @@ src/app/api/upload-thumbnail/       -- New API route (copy from r2-thumbgen)
 Add to main site `.env.local`:
 ```env
 # Cloudflare R2 Configuration
-R2_ACCOUNT_ID=8a48d886a6cd7ca8fbd53045cde3550c
-R2_ACCESS_KEY_ID=aceb713ff1f49c45e8178cefe30d33de
-R2_SECRET_ACCESS_KEY=b3fd49002385d64beeacb1ebf6ad8ab9ee7eba2aa4150a854bca7530ce5003ef
+R2_ACCOUNT_ID=<your-account-id>
+R2_ACCESS_KEY_ID=<your-access-key-id>
+R2_SECRET_ACCESS_KEY=<your-secret-access-key>
 R2_BUCKET_NAME=circuitsnips
 R2_PUBLIC_URL=https://pub-5cfb1ad5b22e451db2e5711b584b49c9.r2.dev
 ```
