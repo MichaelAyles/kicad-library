@@ -121,6 +121,30 @@ CREATE POLICY "Anyone can flag circuits"
   ON public.circuit_flags FOR INSERT
   WITH CHECK (flagged_by IS NULL OR flagged_by = auth.uid());
 
+-- Flags were publicly readable (reporter ids, details, admin notes).
+-- Reporters can still see their own via "Users can view own flags".
+DROP POLICY IF EXISTS "Anyone can view flags" ON public.circuit_flags;
+
+DROP POLICY IF EXISTS "Admins can view all flags" ON public.circuit_flags;
+CREATE POLICY "Admins can view all flags"
+  ON public.circuit_flags FOR SELECT
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- These previously trusted user_metadata (user-writable)
+DROP POLICY IF EXISTS "Admins can update flags" ON public.circuit_flags;
+CREATE POLICY "Admins can update flags"
+  ON public.circuit_flags FOR UPDATE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+DROP POLICY IF EXISTS "Admins can delete flags" ON public.circuit_flags;
+CREATE POLICY "Admins can delete flags"
+  ON public.circuit_flags FOR DELETE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 
 -- ----------------------------------------------------------------------------
 -- 7. previews bucket: only the uploader can delete
@@ -131,6 +155,75 @@ DROP POLICY IF EXISTS "Users can delete own previews" ON storage.objects;
 CREATE POLICY "Users can delete own previews"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'previews' AND owner = auth.uid());
+
+
+-- ----------------------------------------------------------------------------
+-- Counter triggers, RPC exposure, search_path, counter backfill
+-- ----------------------------------------------------------------------------
+
+-- 8. Counter triggers ran as the calling user, so RLS on circuits /
+--    circuit_comments silently blocked updates to rows the user doesn't own
+--    (favorite/comment/like counts never moved for others' content).
+--    Run them as the owner instead; triggers don't need EXECUTE grants.
+ALTER FUNCTION public.update_circuit_favorite_count() SECURITY DEFINER;
+ALTER FUNCTION public.update_circuit_comment_count() SECURITY DEFINER;
+ALTER FUNCTION public.update_comment_likes_count() SECURITY DEFINER;
+
+-- 9. Trigger-only SECURITY DEFINER functions shouldn't be callable via /rpc
+REVOKE EXECUTE ON FUNCTION public.update_circuit_favorite_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_circuit_comment_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_comment_likes_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_global_circuit_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_global_user_count() FROM PUBLIC, anon, authenticated;
+
+-- 10. Pin search_path on every remaining function in public
+DO $$
+DECLARE
+  fn RECORD;
+BEGIN
+  FOR fn IN
+    SELECT p.oid::regprocedure AS sig
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.prokind = 'f'
+      AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%')
+  LOOP
+    EXECUTE format('ALTER FUNCTION %s SET search_path = public, pg_temp', fn.sig);
+  END LOOP;
+END $$;
+
+-- 11. Backfill counters that drifted because of (8)
+UPDATE public.circuits ci
+SET favorite_count = sub.n
+FROM (
+  SELECT ci2.id, COUNT(f.circuit_id) AS n
+  FROM public.circuits ci2
+  LEFT JOIN public.favorites f ON f.circuit_id = ci2.id
+  GROUP BY ci2.id
+) sub
+WHERE sub.id = ci.id AND ci.favorite_count IS DISTINCT FROM sub.n;
+
+UPDATE public.circuits ci
+SET comment_count = sub.n
+FROM (
+  SELECT ci2.id, COUNT(c.circuit_id) AS n
+  FROM public.circuits ci2
+  LEFT JOIN public.circuit_comments c ON c.circuit_id = ci2.id
+  GROUP BY ci2.id
+) sub
+WHERE sub.id = ci.id AND ci.comment_count IS DISTINCT FROM sub.n;
+
+UPDATE public.circuit_comments cc
+SET likes_count = sub.n
+FROM (
+  SELECT cc2.id, COUNT(l.comment_id) AS n
+  FROM public.circuit_comments cc2
+  LEFT JOIN public.comment_likes l ON l.comment_id = cc2.id
+  GROUP BY cc2.id
+) sub
+WHERE sub.id = cc.id AND cc.likes_count IS DISTINCT FROM sub.n;
 
 
 -- ----------------------------------------------------------------------------
