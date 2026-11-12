@@ -418,7 +418,7 @@ function ProfileContent() {
                     href="/upload"
                     className="text-primary hover:underline font-medium inline-block"
                   >
-                    Upload your first circuit →
+                    Upload your first circuit
                   </Link>
                 )}
               </div>

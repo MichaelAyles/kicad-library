@@ -23,7 +23,7 @@ export function CookieNotice() {
   if (!showNotice) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-card border-t shadow-lg">
+    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-card border-t border-border">
       <div className="container mx-auto max-w-6xl">
         <div className="flex items-start gap-4">
           <div className="flex-1">
@@ -45,7 +45,7 @@ export function CookieNotice() {
             </p>
             <button
               onClick={handleDismiss}
-              className="px-6 py-2 green-gradient text-black rounded-md font-semibold hover:shadow-lg green-glow-hover transition-all"
+              className="px-5 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
               Got it
             </button>

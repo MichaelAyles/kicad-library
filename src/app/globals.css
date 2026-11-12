@@ -2,65 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Site theme, taken from KiCad's own schematic colours.
+ *
+ * Light is KiCad's default paper and ink; dark is the KiCanvas paper,
+ * so schematic thumbnails sit on the page without a visible edge.
+ *
+ * --primary       net-label amber, the fill for primary actions
+ * --primary-text  the same amber, darkened in light mode so it passes
+ *                 contrast as text, borders and focus rings on paper
+ *                 (Tailwind maps text-/border-/ring-primary to it)
+ * --wire          KiCad wire green, for wires, junctions and success
+ * --frame         sheet border colour (the homepage title block)
+ */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 4%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 4%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 4%;
-    /* Green theme primary: #00ff87 -> HSL: 150 100% 50% */
-    --primary: 150 100% 50%;
-    --primary-foreground: 0 0% 0%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 0 0% 4%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 0 0% 46%;
-    --accent: 150 100% 50%;
-    --accent-foreground: 0 0% 0%;
-    --destructive: 0 84.2% 60.2%;
+    --background: 50 23% 95%; /* #F5F4EF KiCad paper */
+    --foreground: 30 11% 11%; /* #1E1B18 */
+    --card: 45 33% 98%; /* #FBFAF7 */
+    --card-foreground: 30 11% 11%;
+    --popover: 45 33% 98%;
+    --popover-foreground: 30 11% 11%;
+    --primary: 44 68% 58%; /* #DDB54A net-label amber */
+    --primary-foreground: 257 14% 10%; /* #17151C */
+    --primary-text: 42 100% 24%; /* #7A5600 */
+    --secondary: 42 24% 89%; /* #EAE6DD */
+    --secondary-foreground: 30 11% 11%;
+    --muted: 42 24% 89%;
+    --muted-foreground: 36 6% 33%; /* #5A5650 */
+    --accent: 42 24% 89%;
+    --accent-foreground: 30 11% 11%;
+    --destructive: 3 71% 41%; /* #B3261E */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 91%;
-    --input: 0 0% 91%;
-    --ring: 150 100% 50%;
-    --radius: 0.5rem;
-
-    /* Custom green theme colors */
-    --green-accent: 150 100% 50%; /* #00ff87 */
-    --cyan-accent: 186 100% 69%; /* #60efff */
-    --dark-bg: 0 0% 4%; /* #0a0a0a */
-    --pcb-green: 150 44% 20%; /* #1a4a2e */
+    --border: 32 20% 83%; /* #DDD5CC */
+    --input: 36 8% 51%; /* #8C8478, 3:1 on paper */
+    --ring: 42 100% 24%;
+    --wire: 120 80% 28%; /* #0E7F0E */
+    --frame: 0 52% 35%; /* #8A2B2B */
+    --radius: 0.375rem;
   }
 
   .dark {
-    /* Dark theme with green accents */
-    --background: 0 0% 4%; /* #0a0a0a */
-    --foreground: 0 0% 98%;
-    --card: 0 0% 7%; /* #121212 */
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 4%;
-    --popover-foreground: 0 0% 98%;
-    /* Green theme primary: #00ff87 */
-    --primary: 150 100% 50%;
-    --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 13%; /* #222 */
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 13%;
-    --muted-foreground: 0 0% 65%;
-    --accent: 150 100% 50%;
-    --accent-foreground: 0 0% 0%;
-    --destructive: 0 63% 31%;
+    --background: 250 14% 8%; /* #131218 KiCanvas paper */
+    --foreground: 256 33% 94%; /* #ECE9F4 */
+    --card: 252 17% 11%; /* #1A1822 */
+    --card-foreground: 256 33% 94%;
+    --popover: 252 17% 11%;
+    --popover-foreground: 256 33% 94%;
+    --primary: 47 68% 65%; /* #E3C96A */
+    --primary-foreground: 257 14% 10%;
+    --primary-text: 47 68% 65%;
+    --secondary: 251 15% 14%; /* #211F2A */
+    --secondary-foreground: 256 33% 94%;
+    --muted: 251 15% 14%;
+    --muted-foreground: 251 14% 69%; /* #A9A5BB */
+    --accent: 251 15% 14%;
+    --accent-foreground: 256 33% 94%;
+    --destructive: 358 75% 59%; /* #E5484D */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 13%;
-    --input: 0 0% 13%;
-    --ring: 150 100% 50%;
-
-    /* Custom green theme colors */
-    --green-accent: 150 100% 50%; /* #00ff87 */
-    --cyan-accent: 186 100% 69%; /* #60efff */
-    --dark-bg: 0 0% 4%; /* #0a0a0a */
-    --pcb-green: 150 44% 20%; /* #1a4a2e */
+    --border: 199 20% 21%; /* #2B3A41 */
+    --input: 206 12% 42%; /* #5E6C77, 3:1 on paper */
+    --ring: 47 68% 65%;
+    --wire: 165 37% 62%; /* #79C2B0 */
+    --frame: 190 29% 41%; /* #4A7C86 */
   }
 }
 
@@ -69,194 +73,24 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+  /* A visible ring for anything that doesn't draw its own */
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
-/* Green theme custom styles */
-@layer utilities {
-  .green-gradient {
-    background: linear-gradient(135deg, #00ff87, #60efff);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
-
-  .green-gradient-text {
-    background: linear-gradient(135deg, #00ff87, #60efff);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .circuit-pattern {
-    background-image:
-      linear-gradient(90deg, rgba(17, 17, 17, 0.5) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(17, 17, 17, 0.5) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
-
-  .pcb-green-bg {
-    background-color: #1a4a2e;
-  }
-
-  .green-glow {
-    box-shadow: 0 0 20px rgba(0, 255, 135, 0.3);
-  }
-
-  .green-glow-hover:hover {
-    box-shadow: 0 10px 30px rgba(0, 255, 135, 0.3);
-  }
-}
-
-/* Animations */
-@keyframes circuitMove {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(40px, 40px); }
-}
-
-@keyframes floatPCB {
-  0%, 100% {
-    transform: perspective(1000px) rotateY(-10deg) rotateX(5deg) translateY(0);
-  }
-  50% {
-    transform: perspective(1000px) rotateY(-10deg) rotateX(5deg) translateY(-10px);
-  }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.7; }
-}
-
-@keyframes traceGlow {
-  0% {
-    opacity: 0.4;
-    box-shadow: 0 0 2px rgba(0, 255, 135, 0.4);
-  }
-  50% {
-    opacity: 1;
-    box-shadow: 0 0 8px rgba(0, 255, 135, 0.8), 0 0 12px rgba(0, 255, 135, 0.4);
-  }
-  100% {
-    opacity: 0.4;
-    box-shadow: 0 0 2px rgba(0, 255, 135, 0.4);
-  }
-}
-
-@keyframes dataPulseH {
-  0% {
-    left: 0;
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    left: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes dataPulseV {
-  0% {
-    top: 0;
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    top: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes ledBlink {
-  0%, 100% {
-    opacity: 0.3;
-    transform: scale(1);
-    box-shadow: 0 0 4px currentColor;
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.2);
-    box-shadow: 0 0 12px currentColor, 0 0 20px currentColor;
-  }
-}
-
-@keyframes chipProcess {
-  0%, 100% {
-    background-color: rgba(0, 255, 135, 0.1);
-    box-shadow: 0 0 4px rgba(0, 255, 135, 0.3);
-  }
-  50% {
-    background-color: rgba(0, 255, 135, 0.4);
-    box-shadow: 0 0 12px rgba(0, 255, 135, 0.6), 0 0 20px rgba(0, 255, 135, 0.3);
-  }
-}
-
-@keyframes rotate3d {
-  0% {
-    transform: perspective(1000px) rotateY(-10deg) rotateX(5deg) translateY(0) rotateZ(0deg);
-  }
-  33% {
-    transform: perspective(1000px) rotateY(-15deg) rotateX(8deg) translateY(-10px) rotateZ(1deg);
-  }
-  66% {
-    transform: perspective(1000px) rotateY(-5deg) rotateX(2deg) translateY(-5px) rotateZ(-1deg);
-  }
-  100% {
-    transform: perspective(1000px) rotateY(-10deg) rotateX(5deg) translateY(0) rotateZ(0deg);
-  }
-}
-
-.animate-circuit {
-  animation: circuitMove 20s linear infinite;
-}
-
-.perspective-1000 {
-  perspective: 1000px;
-}
-
-.pcb-3d {
-  animation: rotate3d 8s ease-in-out infinite;
-  transform-style: preserve-3d;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
-}
-
-.trace-glow {
-  animation: traceGlow 2s ease-in-out infinite;
-}
-
-.data-pulse-h {
-  position: absolute;
-  width: 8px;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0, 255, 135, 1), transparent);
-  border-radius: 4px;
-  animation: dataPulseH 2s ease-in-out infinite;
-}
-
-.data-pulse-v {
-  position: absolute;
-  width: 100%;
-  height: 8px;
-  background: linear-gradient(180deg, transparent, rgba(0, 255, 135, 1), transparent);
-  border-radius: 4px;
-  animation: dataPulseV 2s ease-in-out infinite;
-}
-
-.led-blink {
-  animation: ledBlink 1.5s ease-in-out infinite;
-}
-
-.chip-process {
-  animation: chipProcess 2s ease-in-out infinite;
 }

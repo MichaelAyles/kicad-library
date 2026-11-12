@@ -25,7 +25,7 @@ export default function DocsPage() {
                 href="#"
                 className="text-primary hover:underline text-sm font-medium"
               >
-                Read guide →
+                Read guide
               </Link>
             </div>
 
@@ -39,7 +39,7 @@ export default function DocsPage() {
                 href="#"
                 className="text-primary hover:underline text-sm font-medium"
               >
-                Read guide →
+                Read guide
               </Link>
             </div>
 
@@ -55,7 +55,7 @@ export default function DocsPage() {
                 href="#"
                 className="text-primary hover:underline text-sm font-medium"
               >
-                Read guide →
+                Read guide
               </Link>
             </div>
 
@@ -72,7 +72,7 @@ export default function DocsPage() {
                 href="#"
                 className="text-primary hover:underline text-sm font-medium"
               >
-                Read guide →
+                Read guide
               </Link>
             </div>
 
@@ -89,7 +89,7 @@ export default function DocsPage() {
                 href="#"
                 className="text-primary hover:underline text-sm font-medium"
               >
-                Read guide →
+                Read guide
               </Link>
             </div>
 

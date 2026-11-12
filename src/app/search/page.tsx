@@ -97,7 +97,7 @@ function SearchContent() {
       <main className="flex-1">
         <div className="container mx-auto px-4 py-16 max-w-6xl">
           <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold mb-4 green-gradient bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold mb-4">
               Search Circuits
             </h1>
             <p className="text-muted-foreground text-lg">
@@ -182,7 +182,7 @@ function SearchContent() {
                   key={circuit.id}
                   href={`/circuit/${circuit.slug}`}
                   prefetch={false}
-                  className="group border rounded-lg overflow-hidden hover:shadow-xl transition-all hover:border-primary/50"
+                  className="group border rounded-lg overflow-hidden transition-colors hover:border-primary/50"
                 >
                   <div className="aspect-video bg-muted relative overflow-hidden">
                     <Image

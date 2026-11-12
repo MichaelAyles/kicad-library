@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Filter, Loader, X } from "lucide-react";
+import { Search, Filter, Loader, X, Copy, Star, MessageSquare } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -234,9 +234,7 @@ function BrowsePageContent() {
           {/* Page Header */}
           <div className="mb-8">
             <h1 className="text-5xl font-bold mb-2">
-              <span className="green-gradient-text">
-                {isSearchMode ? "Search Results" : "Browse Circuits"}
-              </span>
+              {isSearchMode ? "Search Results" : "Browse Circuits"}
             </h1>
             <p className="text-muted-foreground text-lg">
               {isSearchMode
@@ -319,7 +317,7 @@ function BrowsePageContent() {
                 >
                   Relevance
                   {sortBy === "relevance" && (
-                    <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />
+                    <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-primary" />
                   )}
                 </button>
               )}
@@ -333,7 +331,7 @@ function BrowsePageContent() {
               >
                 Most Copied
                 {sortBy === "copies" && (
-                  <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />
+                  <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-primary" />
                 )}
               </button>
               <button
@@ -346,7 +344,7 @@ function BrowsePageContent() {
               >
                 Recent
                 {sortBy === "recent" && (
-                  <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />
+                  <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-primary" />
                 )}
               </button>
               <button
@@ -359,7 +357,7 @@ function BrowsePageContent() {
               >
                 Favorites
                 {sortBy === "favorites" && (
-                  <span className="absolute -bottom-1 left-0 w-full h-0.5 green-gradient" />
+                  <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-primary" />
                 )}
               </button>
             </div>
@@ -427,7 +425,7 @@ function BrowsePageContent() {
                     key={circuit.id}
                     href={`/circuit/${circuit.slug}`}
                     prefetch={false}
-                    className="bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 hover:shadow-lg green-glow-hover transition-all group"
+                    className="bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 transition-colors group"
                   >
                     {/* Circuit Thumbnail */}
                     <div className="aspect-video bg-muted relative overflow-hidden group-hover:bg-muted/80 transition-colors">
@@ -448,7 +446,7 @@ function BrowsePageContent() {
 
                     {/* Content */}
                     <div className="p-4">
-                      <h3 className="font-semibold mb-2 group-hover:green-gradient-text transition-all line-clamp-1">
+                      <h3 className="font-semibold mb-2 group-hover:text-primary transition-colors line-clamp-1">
                         {circuit.title}
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
@@ -485,15 +483,21 @@ function BrowsePageContent() {
                                 : "unknown") || "unknown"}
                         </span>
                         <div className="flex items-center gap-3">
-                          <span className="group-hover:text-primary transition-colors">
-                            📋 {circuit.copy_count}
+                          <span className="inline-flex items-center gap-1 group-hover:text-primary transition-colors">
+                            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            {circuit.copy_count}
+                            <span className="sr-only"> copies</span>
                           </span>
-                          <span className="group-hover:text-primary transition-colors">
-                            ⭐ {circuit.favorite_count}
+                          <span className="inline-flex items-center gap-1 group-hover:text-primary transition-colors">
+                            <Star className="w-3.5 h-3.5" aria-hidden="true" />
+                            {circuit.favorite_count}
+                            <span className="sr-only"> favorites</span>
                           </span>
                           {"comment_count" in circuit && (
-                            <span className="group-hover:text-primary transition-colors">
-                              💬 {circuit.comment_count}
+                            <span className="inline-flex items-center gap-1 group-hover:text-primary transition-colors">
+                              <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                              {circuit.comment_count}
+                              <span className="sr-only"> comments</span>
                             </span>
                           )}
                         </div>

@@ -610,7 +610,7 @@ export default function CircuitDetailPage() {
               When using this circuit, please include this attribution in your
               documentation:
             </p>
-            <div className="bg-card border rounded-md p-4 font-mono text-sm">
+            <div className="bg-card border rounded-md p-4 font-mono text-sm break-words">
               <div>&quot;{circuit.title}&quot;</div>
               {circuit.user && <div>by @{circuit.user.username}</div>}
               <div>https://circuitsnips.com/circuit/{circuit.slug}</div>

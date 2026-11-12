@@ -58,7 +58,7 @@ export default function AboutPage() {
 
                 {/* Special KiCanvas Attribution */}
                 <div className="bg-primary/5 border border-primary/20 rounded-md p-4 mb-4">
-                  <h3 className="font-semibold mb-2">🎨 KiCanvas</h3>
+                  <h3 className="font-semibold mb-2">KiCanvas</h3>
                   <p className="text-sm text-muted-foreground mb-2">
                     Special thanks to <strong>Stargirl Flowers</strong> for
                     creating{" "}
@@ -247,7 +247,7 @@ export default function AboutPage() {
 
                 <div className="bg-muted/50 rounded-md p-3 mt-4">
                   <p className="text-sm text-muted-foreground">
-                    <strong>💡 Tip:</strong> If unsure, CERN-OHL-S-2.0 is
+                    <strong>Tip:</strong> If unsure, CERN-OHL-S-2.0 is
                     designed specifically for open hardware and provides good
                     protection while ensuring designs stay open.
                   </p>

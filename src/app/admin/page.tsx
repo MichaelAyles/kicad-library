@@ -718,7 +718,7 @@ export default function AdminDashboard() {
                       <button
                         onClick={handleBulkDismiss}
                         disabled={isBulkProcessing}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 bg-wire text-background rounded-md text-sm hover:bg-wire/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         {isBulkProcessing ? (
                           <Loader className="w-4 h-4 animate-spin" />
@@ -752,7 +752,7 @@ export default function AdminDashboard() {
                 </div>
               ) : flags.length === 0 ? (
                 <div className="text-center py-12 bg-card border rounded-lg">
-                  <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                  <CheckCircle className="w-12 h-12 mx-auto mb-4 text-wire" />
                   <h3 className="text-lg font-semibold mb-2">
                     No flags to review
                   </h3>
@@ -852,7 +852,7 @@ export default function AdminDashboard() {
 
                                   <button
                                     onClick={() => handleDismissFlag(flag.id)}
-                                    className="px-3 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors flex items-center gap-2"
+                                    className="px-3 py-2 bg-wire text-background rounded-md text-sm hover:bg-wire/90 transition-colors flex items-center gap-2"
                                     title="Dismiss flag - circuit is OK"
                                   >
                                     <CheckCircle className="w-4 h-4" />
@@ -939,8 +939,8 @@ export default function AdminDashboard() {
 
                       <div className="bg-muted/30 rounded-lg p-6 border">
                         <div className="flex items-center gap-3 mb-2">
-                          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                            <Copy className="w-5 h-5 text-green-500" />
+                          <div className="w-10 h-10 rounded-full bg-wire/10 flex items-center justify-center">
+                            <Copy className="w-5 h-5 text-wire" />
                           </div>
                           <div>
                             <p className="text-sm text-muted-foreground">
@@ -1138,8 +1138,8 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
-                            <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                              <Copy className="w-4 h-4 text-green-500" />
+                            <div className="w-8 h-8 rounded-full bg-wire/10 flex items-center justify-center">
+                              <Copy className="w-4 h-4 text-wire" />
                             </div>
                             <div>
                               <div className="font-semibold">
@@ -1188,7 +1188,7 @@ export default function AdminDashboard() {
                     <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                     <div className="text-sm">
                       <p className="font-medium text-red-600 dark:text-red-400 mb-1">
-                        ⚠️ Permanent Deletion Warning
+                        Permanent Deletion Warning
                       </p>
                       <p className="text-muted-foreground">
                         Deleting a user is permanent and cannot be undone. This
