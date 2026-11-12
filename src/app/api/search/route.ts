@@ -67,10 +67,16 @@ export async function GET(request: NextRequest) {
             )
           `,
           )
-          .eq("is_public", true)
-          .or(
-            `tags.cs.{${searchQuery}},title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`,
+          .eq("is_public", true);
+
+        // Strip PostgREST filter syntax and LIKE wildcards from user input so
+        // it can't alter the .or() filter structure.
+        const safeQuery = searchQuery.replace(/[,(){}"\\%*]/g, " ").trim();
+        if (safeQuery) {
+          fallbackQuery = fallbackQuery.or(
+            `tags.cs.{"${safeQuery}"},title.ilike.%${safeQuery}%,description.ilike.%${safeQuery}%`,
           );
+        }
 
         if (category) fallbackQuery = fallbackQuery.eq("category", category);
         if (tag) fallbackQuery = fallbackQuery.contains("tags", [tag]);

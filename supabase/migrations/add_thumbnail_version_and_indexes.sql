@@ -99,24 +99,14 @@ DROP POLICY IF EXISTS "Only admins can update history" ON public.thumbnail_histo
 CREATE POLICY "Only admins can update history"
   ON public.thumbnail_history
   FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-    )
-  );
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- Only admins can delete history
 DROP POLICY IF EXISTS "Only admins can delete history" ON public.thumbnail_history;
 CREATE POLICY "Only admins can delete history"
   ON public.thumbnail_history
   FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-    )
-  );
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ============================================================================
 -- COMMENTS

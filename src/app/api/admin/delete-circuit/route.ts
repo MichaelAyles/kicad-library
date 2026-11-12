@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
+import { userIsAdmin } from "@/lib/api-auth";
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -48,9 +49,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Check if user has admin role
-    const userRole = user.user_metadata?.role;
-    if (userRole !== "admin") {
+    // Check if user has admin role (app_metadata is only writable by service role)
+    if (!userIsAdmin(user)) {
       return NextResponse.json(
         { error: "Unauthorized - Admin access required" },
         { status: 403 },

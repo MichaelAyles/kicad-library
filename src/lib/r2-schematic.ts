@@ -10,7 +10,9 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import {
   isClipboardSnippet,
@@ -162,6 +164,40 @@ export async function deleteSchematic(circuitId: string): Promise<void> {
   });
 
   await client.send(command);
+}
+
+/**
+ * Delete every R2 object belonging to a circuit: its schematic and all
+ * thumbnails (including versioned ones) under `thumbnails/<id>/`.
+ */
+export async function deleteCircuitFiles(circuitId: string): Promise<void> {
+  const client = getR2Client();
+  const bucket = getBucketName();
+
+  const keys = [getSchematicKey(circuitId)];
+  let continuationToken: string | undefined;
+  do {
+    const listed = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: `thumbnails/${circuitId}/`,
+        ContinuationToken: continuationToken,
+      }),
+    );
+    for (const obj of listed.Contents ?? []) {
+      if (obj.Key) keys.push(obj.Key);
+    }
+    continuationToken = listed.IsTruncated
+      ? listed.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+
+  await client.send(
+    new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+    }),
+  );
 }
 
 /**
