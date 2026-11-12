@@ -61,14 +61,21 @@ export async function PUT(
     } = body;
 
     // Thumbnails must be this circuit's own files in our R2 bucket, so a
-    // circuit can't be pointed at arbitrary external images.
-    const thumbnailPrefix = `${process.env.R2_PUBLIC_URL}/thumbnails/${params.id}/`;
+    // circuit can't be pointed at arbitrary external images. Compare the
+    // parsed origin and normalized path (URL parsing resolves "../").
+    const r2Origin = new URL(process.env.R2_PUBLIC_URL!).origin;
+    const thumbnailDir = `/thumbnails/${params.id}/`;
+    const isOwnThumbnail = (value: unknown) => {
+      if (typeof value !== "string") return false;
+      try {
+        const url = new URL(value);
+        return url.origin === r2Origin && url.pathname.startsWith(thumbnailDir);
+      } catch {
+        return false;
+      }
+    };
     for (const url of [thumbnail_light_url, thumbnail_dark_url]) {
-      if (
-        url !== undefined &&
-        url !== null &&
-        (typeof url !== "string" || !url.startsWith(thumbnailPrefix))
-      ) {
+      if (url !== undefined && url !== null && !isOwnThumbnail(url)) {
         return NextResponse.json(
           { error: "Invalid thumbnail URL" },
           { status: 400 },

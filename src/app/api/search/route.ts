@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
           .range(offset, offset + limit - 1);
 
         const fallbackResult = await fallbackQuery;
+        if (fallbackResult.error) throw fallbackResult.error;
         circuits = fallbackResult.data || [];
       } else {
         circuits = data || [];
@@ -147,7 +148,8 @@ export async function GET(request: NextRequest) {
         .order("id")
         .range(offset, offset + limit - 1);
 
-      const { data } = await supabaseQuery;
+      const { data, error: listError } = await supabaseQuery;
+      if (listError) throw listError;
       circuits = data || [];
     }
 
@@ -170,7 +172,7 @@ export async function GET(request: NextRequest) {
     console.error("Error in search API:", error);
     return NextResponse.json(
       { error: "Failed to search circuits" },
-      { status: 500 },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }
 }

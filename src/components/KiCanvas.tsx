@@ -17,6 +17,8 @@ function ensureKiCanvasScript() {
   const script = document.createElement("script");
   script.type = "module";
   script.src = KICANVAS_SRC;
+  // On failure, remove the tag so a later viewer mount can retry the load
+  script.onerror = () => script.remove();
   document.head.appendChild(script);
 }
 
