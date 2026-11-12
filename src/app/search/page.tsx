@@ -20,7 +20,7 @@ interface PopularTag {
 function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const [circuits, setCircuits] = useState<SearchCircuit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -188,7 +188,7 @@ function SearchContent() {
                     <Image
                       src={
                         toR2ThumbnailUrl(
-                          theme === "dark"
+                          resolvedTheme === "dark"
                             ? circuit.thumbnail_dark_url
                             : circuit.thumbnail_light_url,
                         ) || "/placeholder-circuit.png"

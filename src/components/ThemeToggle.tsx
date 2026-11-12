@@ -5,7 +5,7 @@ import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   // Prevent hydration mismatch
@@ -19,7 +19,7 @@ export function ThemeToggle() {
     );
   }
 
-  const isDark = theme === "dark";
+  const isDark = resolvedTheme === "dark";
 
   return (
     <button

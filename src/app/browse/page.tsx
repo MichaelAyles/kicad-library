@@ -18,7 +18,7 @@ const CIRCUITS_PER_PAGE = 50;
 function BrowsePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const [circuits, setCircuits] = useState<(Circuit | SearchCircuit)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -415,7 +415,7 @@ function BrowsePageContent() {
               {circuits.map((circuit) => {
                 // Use theme-appropriate thumbnail, transformed to R2 URL
                 const thumbnailUrl = toR2ThumbnailUrl(
-                  theme === "dark"
+                  resolvedTheme === "dark"
                     ? circuit.thumbnail_dark_url
                     : circuit.thumbnail_light_url,
                 );
