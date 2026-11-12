@@ -8,7 +8,20 @@ import { quickSearch, type SearchCircuit } from "@/lib/search";
 import { toR2ThumbnailUrl } from "@/lib/thumbnail-url";
 import Image from "next/image";
 
-export function SearchAutocomplete() {
+interface SearchAutocompleteProps {
+  /** Optional overrides used by the homepage hero; defaults keep the header look. */
+  id?: string;
+  placeholder?: string;
+  className?: string;
+  inputClassName?: string;
+}
+
+export function SearchAutocomplete({
+  id,
+  placeholder = "Search circuits...",
+  className = "relative w-full max-w-xl",
+  inputClassName = "w-full pl-10 pr-10 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary",
+}: SearchAutocompleteProps = {}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchCircuit[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -63,7 +76,14 @@ export function SearchAutocomplete() {
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (!isOpen) return;
+      if (!isOpen) {
+        // Enter before suggestions arrive still runs the search
+        if (e.key === "Enter" && query.trim()) {
+          e.preventDefault();
+          router.push(`/browse?q=${encodeURIComponent(query.trim())}`);
+        }
+        return;
+      }
 
       switch (e.key) {
         case "ArrowDown":
@@ -109,21 +129,22 @@ export function SearchAutocomplete() {
   };
 
   return (
-    <div className="relative w-full max-w-xl">
+    <div className={className}>
       {/* Search Input */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <input
           ref={inputRef}
-          type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() =>
             query.trim().length >= 2 && results.length > 0 && setIsOpen(true)
           }
-          placeholder="Search circuits..."
-          className="w-full pl-10 pr-10 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          id={id}
+          type="text"
+          placeholder={placeholder}
+          className={inputClassName}
         />
         {isLoading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">

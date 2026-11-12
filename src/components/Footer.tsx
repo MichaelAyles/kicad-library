@@ -45,7 +45,7 @@ export function Footer() {
               <span>Contact</span>
             </a>
           </div>
-          <div className="text-center md:text-right">© 2025 CircuitSnips</div>
+          <div className="text-center md:text-right">© {new Date().getFullYear()} CircuitSnips</div>
         </div>
       </div>
     </footer>
