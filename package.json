@@ -12,27 +12,27 @@
     "import:test": "tsx scripts/export-and-import.ts --limit 10 --dry-run"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.940.0",
-    "@supabase/ssr": "^0.9.0",
+    "@aws-sdk/client-s3": "^3.1165.0",
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.75.0",
-    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/typography": "^0.5.20",
     "@tanstack/react-query": "^5.107.1",
     "@vercel/analytics": "^2.0.1",
-    "autoprefixer": "^10.4.21",
+    "autoprefixer": "^10.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.4.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.469.0",
     "next": "14.2.35",
-    "next-themes": "^0.2.1",
+    "next-themes": "^0.4.6",
     "quick-lru": "^7.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.5.0",
+    "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -43,11 +43,11 @@
     "better-sqlite3": "^12.8.0",
     "dotenv": "^17.4.2",
     "eslint": "^8",
-    "eslint-config-next": "^15.5.7",
+    "eslint-config-next": "^15.5.29",
     "postcss": "^8",
     "puppeteer": "^24.30.0",
     "tailwindcss": "^3.4.1",
-    "tsx": "^4.20.6",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }
