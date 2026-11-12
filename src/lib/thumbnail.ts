@@ -191,6 +191,13 @@ async function captureKiCanvasElement(
     throw new Error("kicanvas-embed element not found in container");
   }
 
+  // KiCanvas loads lazily; wait for the element definition (bounded so a
+  // failed script load still falls through to the html2canvas fallback)
+  await Promise.race([
+    customElements.whenDefined("kicanvas-embed"),
+    new Promise((resolve) => setTimeout(resolve, RENDER_CONFIG.RENDER_TIMEOUT)),
+  ]);
+
   // Try to click to dismiss any overlay
   (kicanvasEmbed as HTMLElement).click();
   await new Promise((resolve) =>
