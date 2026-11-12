@@ -426,6 +426,7 @@ function BrowsePageContent() {
                   <Link
                     key={circuit.id}
                     href={`/circuit/${circuit.slug}`}
+                    prefetch={false}
                     className="bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 hover:shadow-lg green-glow-hover transition-all group"
                   >
                     {/* Circuit Thumbnail */}

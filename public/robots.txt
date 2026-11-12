@@ -1,0 +1,19 @@
+# CircuitSnips
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /settings
+Disallow: /upload
+Disallow: /auth/
+Disallow: /circuit/*/edit
+
+# Bulk AI-training crawlers: please don't hammer the site.
+User-agent: GPTBot
+User-agent: CCBot
+User-agent: ClaudeBot
+User-agent: Google-Extended
+User-agent: Bytespider
+User-agent: Amazonbot
+User-agent: meta-externalagent
+Disallow: /

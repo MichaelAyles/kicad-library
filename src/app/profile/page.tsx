@@ -436,6 +436,7 @@ function ProfileContent() {
                     <Link
                       key={circuit.id}
                       href={`/circuit/${circuit.slug}`}
+                      prefetch={false}
                       className="block border rounded-lg p-4 hover:border-primary/50 transition-colors group"
                     >
                       <div className="flex gap-4">

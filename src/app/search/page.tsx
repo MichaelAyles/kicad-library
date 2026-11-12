@@ -181,6 +181,7 @@ function SearchContent() {
                 <Link
                   key={circuit.id}
                   href={`/circuit/${circuit.slug}`}
+                  prefetch={false}
                   className="group border rounded-lg overflow-hidden hover:shadow-xl transition-all hover:border-primary/50"
                 >
                   <div className="aspect-video bg-muted relative overflow-hidden">

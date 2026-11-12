@@ -18,10 +18,10 @@ The comparison to Thingiverse is deliberate: this is for side projects and quick
 **Copy circuit in KiCad → Paste on CircuitSnips → Someone else searches → Copies to their project. That's it.**
 
 ### Copy Flow
-![Copy Process Demo](public/copy.gif)
+![Copy Process Demo](docs/assets/copy.gif)
 
 ### Upload Flow
-![Upload Process Demo](public/upload.gif)
+![Upload Process Demo](docs/assets/upload.gif)
 
 ## The Problem
 

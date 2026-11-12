@@ -7,12 +7,22 @@ import {
 } from "@/lib/rate-limit";
 
 /**
- * Middleware to:
- * 1. Apply rate limiting to API routes
- * 2. Refresh Supabase auth tokens
+ * Middleware for API routes only (see `config.matcher`):
+ * 1. Apply rate limiting
+ * 2. Refresh Supabase auth cookies for routes that act on the signed-in user
  *
- * Runs on every request to keep user sessions valid and prevent abuse
+ * Pages don't need it: they're client components and the browser Supabase
+ * client refreshes its own session. Keeping middleware off page/asset requests
+ * avoids a middleware invocation on every page view, prefetch and bot hit.
  */
+
+// API routes that read the signed-in user and may need refreshed cookies
+const AUTH_API_PREFIXES = [
+  "/api/admin",
+  "/api/circuits",
+  "/api/upload-",
+  "/api/user",
+];
 export async function middleware(request: NextRequest) {
   // Store rate limit result for later header addition
   let rateLimitResult = null;
@@ -110,8 +120,13 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // Refresh session if expired
-  await supabase.auth.getUser();
+  const needsAuth = AUTH_API_PREFIXES.some((prefix) =>
+    request.nextUrl.pathname.startsWith(prefix),
+  );
+  if (needsAuth) {
+    // Refresh session cookies if expired
+    await supabase.auth.getUser();
+  }
 
   // Add rate limit headers to successful API requests
   if (rateLimitResult) {
@@ -127,14 +142,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  // API routes only, minus the public read-only routes that are served from
+  // the edge cache (middleware would otherwise run on every cached hit).
+  matcher: ["/api/((?!search|stats|tags|schematic/).*)"],
 };

@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient, publicCacheHeaders } from "@/lib/supabase/public";
 
 export const dynamic = "force-dynamic";
 
+// Sort column for each sort option (applied in SQL before pagination)
+const SORT_COLUMNS: Record<string, string> = {
+  recent: "created_at",
+  popular: "copy_count",
+  views: "view_count",
+  favorites: "favorite_count",
+};
+
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
     const searchParams = request.nextUrl.searchParams;
 
     const query = searchParams.get("q") || "";
@@ -13,8 +21,13 @@ export async function GET(request: NextRequest) {
     const tag = searchParams.get("tag") || "";
     const license = searchParams.get("license") || "";
     const sort = searchParams.get("sort") || "relevance";
-    const limit = parseInt(searchParams.get("limit") || "50", 10);
-    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const limit = Math.min(
+      Math.max(parseInt(searchParams.get("limit") || "50", 10) || 50, 1),
+      100,
+    );
+    const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0);
+    // Without a query there's no relevance score; default to popular
+    const sortColumn = SORT_COLUMNS[sort] ?? "copy_count";
     const excludeImported = searchParams.get("excludeImported") === "true";
 
     // Build base query
@@ -34,7 +47,7 @@ export async function GET(request: NextRequest) {
         filter_license: license || null,
         exclude_user_id: null, // Deprecated - using exclude_imported instead
         exclude_imported: excludeImported,
-        result_limit: Math.min(limit, 100),
+        result_limit: limit,
         result_offset: offset,
       });
 
@@ -85,10 +98,10 @@ export async function GET(request: NextRequest) {
           fallbackQuery = fallbackQuery.is("batch_import_id", null);
         }
 
-        fallbackQuery = fallbackQuery.range(
-          offset,
-          offset + Math.min(limit, 100) - 1,
-        );
+        fallbackQuery = fallbackQuery
+          .order(sortColumn, { ascending: false })
+          .order("id")
+          .range(offset, offset + limit - 1);
 
         const fallbackResult = await fallbackQuery;
         circuits = fallbackResult.data || [];
@@ -129,41 +142,30 @@ export async function GET(request: NextRequest) {
         supabaseQuery = supabaseQuery.is("batch_import_id", null);
       }
 
-      supabaseQuery = supabaseQuery.range(
-        offset,
-        offset + Math.min(limit, 100) - 1,
-      );
+      supabaseQuery = supabaseQuery
+        .order(sortColumn, { ascending: false })
+        .order("id")
+        .range(offset, offset + limit - 1);
 
       const { data } = await supabaseQuery;
       circuits = data || [];
     }
 
-    // Apply sorting (only for non-search queries, search results are pre-sorted by relevance)
-    if (!query || sort !== "relevance") {
-      circuits = circuits.sort((a, b) => {
-        switch (sort) {
-          case "recent":
-            return (
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime()
-            );
-          case "popular":
-            return (b.copy_count || 0) - (a.copy_count || 0);
-          case "views":
-            return (b.view_count || 0) - (a.view_count || 0);
-          case "favorites":
-            return (b.favorite_count || 0) - (a.favorite_count || 0);
-          default:
-            // For relevance, results are already sorted by weighted search
-            return 0;
-        }
-      });
+    // The weighted-search RPC only orders by relevance, so other sorts are
+    // applied to the returned page. (Non-query and fallback paths sort in SQL.)
+    if (query && sort !== "relevance" && SORT_COLUMNS[sort]) {
+      const col = SORT_COLUMNS[sort];
+      circuits = circuits.sort((a, b) =>
+        col === "created_at"
+          ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          : (b[col] || 0) - (a[col] || 0),
+      );
     }
 
-    return NextResponse.json({
-      circuits: circuits || [],
-      count: circuits?.length || 0,
-    });
+    return NextResponse.json(
+      { circuits: circuits || [], count: circuits?.length || 0 },
+      { headers: publicCacheHeaders(60) },
+    );
   } catch (error) {
     console.error("Error in search API:", error);
     return NextResponse.json(

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient, publicCacheHeaders } from "@/lib/supabase/public";
 
-// Force dynamic rendering since we use Supabase client (accesses cookies)
 export const dynamic = "force-dynamic";
+
+const CACHE = publicCacheHeaders(300);
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
 
     // Get stats from global_stats table (single row, super fast)
     const { data: globalStats, error: statsError } = await supabase
@@ -34,7 +35,7 @@ export async function GET() {
         circuits: circuitCount || 0,
         copies: 0, // Can't efficiently calculate without migration
         makers: makerCount || 0,
-      });
+      }, { headers: CACHE });
     }
 
     return NextResponse.json({
@@ -42,7 +43,7 @@ export async function GET() {
       copies: globalStats.total_copies || 0,
       makers: globalStats.total_users || 0,
       lastSynced: globalStats.last_synced_at,
-    });
+    }, { headers: CACHE });
   } catch (error) {
     console.error("Error fetching stats:", error);
     return NextResponse.json(

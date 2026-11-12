@@ -44,10 +44,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* KiCanvas library for interactive schematic viewing - self-hosted from michaelayles/kicanvas fork */}
-        <script type="module" src="/kicanvas/kicanvas.js" async />
-      </head>
       <body className={inter.className}>
         <ThemeProvider>
           <div className="min-h-screen flex flex-col">{children}</div>
