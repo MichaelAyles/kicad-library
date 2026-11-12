@@ -69,7 +69,7 @@ function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const [profileUser, setProfileUser] = useState<any>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [circuits, setCircuits] = useState<Circuit[]>([]);
@@ -418,7 +418,7 @@ function ProfileContent() {
                     href="/upload"
                     className="text-primary hover:underline font-medium inline-block"
                   >
-                    Upload your first circuit →
+                    Upload your first circuit
                   </Link>
                 )}
               </div>
@@ -426,7 +426,7 @@ function ProfileContent() {
               <div className="space-y-4">
                 {circuits.map((circuit) => {
                   const thumbnailUrl = toR2ThumbnailUrl(
-                    theme === "dark"
+                    resolvedTheme === "dark"
                       ? circuit.thumbnail_dark_url
                       : circuit.thumbnail_light_url,
                   );

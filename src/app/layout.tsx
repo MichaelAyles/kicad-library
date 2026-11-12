@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
+import { b612, b612Mono } from "./fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CookieNotice } from "@/components/CookieNotice";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "CircuitSnips - Share KiCad Subcircuits",
@@ -43,8 +41,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+    <html
+      lang="en"
+      className={`${b612.variable} ${b612Mono.variable}`}
+      suppressHydrationWarning
+    >
+      <body>
         <ThemeProvider>
           <div className="min-h-screen flex flex-col">{children}</div>
           <CookieNotice />

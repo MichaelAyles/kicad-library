@@ -43,6 +43,27 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // KiCad wire green and sheet-frame colour
+        wire: "hsl(var(--wire))",
+        frame: "hsl(var(--frame))",
+      },
+      // Amber as text, borders and rings uses the contrast-safe shade;
+      // bg-primary keeps the brighter net-label fill.
+      textColor: {
+        primary: {
+          DEFAULT: "hsl(var(--primary-text))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+      },
+      borderColor: {
+        primary: "hsl(var(--primary-text))",
+      },
+      ringColor: {
+        primary: "hsl(var(--primary-text))",
+      },
+      fontFamily: {
+        sans: ["var(--font-b612)", "system-ui", "sans-serif"],
+        mono: ["var(--font-b612-mono)", "ui-monospace", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -53,6 +74,39 @@ const config: Config = {
         DEFAULT: {
           css: {
             maxWidth: 'none',
+            // Follow the site tokens in both themes
+            '--tw-prose-body': 'hsl(var(--foreground))',
+            '--tw-prose-headings': 'hsl(var(--foreground))',
+            '--tw-prose-lead': 'hsl(var(--muted-foreground))',
+            '--tw-prose-links': 'hsl(var(--primary-text))',
+            '--tw-prose-bold': 'hsl(var(--foreground))',
+            '--tw-prose-counters': 'hsl(var(--muted-foreground))',
+            '--tw-prose-bullets': 'hsl(var(--muted-foreground))',
+            '--tw-prose-hr': 'hsl(var(--border))',
+            '--tw-prose-quotes': 'hsl(var(--muted-foreground))',
+            '--tw-prose-quote-borders': 'hsl(var(--border))',
+            '--tw-prose-captions': 'hsl(var(--muted-foreground))',
+            '--tw-prose-code': 'hsl(var(--foreground))',
+            '--tw-prose-pre-code': 'hsl(var(--foreground))',
+            '--tw-prose-pre-bg': 'hsl(var(--muted))',
+            '--tw-prose-th-borders': 'hsl(var(--border))',
+            '--tw-prose-td-borders': 'hsl(var(--border))',
+            '--tw-prose-invert-body': 'hsl(var(--foreground))',
+            '--tw-prose-invert-headings': 'hsl(var(--foreground))',
+            '--tw-prose-invert-lead': 'hsl(var(--muted-foreground))',
+            '--tw-prose-invert-links': 'hsl(var(--primary-text))',
+            '--tw-prose-invert-bold': 'hsl(var(--foreground))',
+            '--tw-prose-invert-counters': 'hsl(var(--muted-foreground))',
+            '--tw-prose-invert-bullets': 'hsl(var(--muted-foreground))',
+            '--tw-prose-invert-hr': 'hsl(var(--border))',
+            '--tw-prose-invert-quotes': 'hsl(var(--muted-foreground))',
+            '--tw-prose-invert-quote-borders': 'hsl(var(--border))',
+            '--tw-prose-invert-captions': 'hsl(var(--muted-foreground))',
+            '--tw-prose-invert-code': 'hsl(var(--foreground))',
+            '--tw-prose-invert-pre-code': 'hsl(var(--foreground))',
+            '--tw-prose-invert-pre-bg': 'hsl(var(--muted))',
+            '--tw-prose-invert-th-borders': 'hsl(var(--border))',
+            '--tw-prose-invert-td-borders': 'hsl(var(--border))',
           },
         },
       },

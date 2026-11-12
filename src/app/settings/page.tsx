@@ -235,7 +235,7 @@ export default function SettingsPage() {
               <div
                 className={`mb-4 p-3 rounded-md flex items-center gap-2 ${
                   message.type === "success"
-                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                    ? "bg-wire/10 text-wire"
                     : "bg-red-500/10 text-red-600 dark:text-red-400"
                 }`}
               >

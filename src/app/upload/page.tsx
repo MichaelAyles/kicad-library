@@ -516,18 +516,18 @@ export default function UploadPage() {
                 <div
                   className={`mt-4 p-4 rounded-md border ${
                     validation.valid
-                      ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800"
+                      ? "bg-wire/10 border-wire/40"
                       : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"
                   }`}
                 >
                   {validation.valid ? (
                     <div>
-                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-medium mb-2">
+                      <div className="flex items-center gap-2 text-wire font-medium mb-2">
                         <CheckCircle2 className="w-5 h-5" />
                         Valid KiCad Schematic (v{metadata?.version})
                       </div>
                       {metadata && (
-                        <div className="text-sm text-green-600 dark:text-green-400 space-y-1">
+                        <div className="text-sm text-wire space-y-1">
                           <p>✓ {metadata.stats.componentCount} components</p>
                           <p>
                             ✓ {metadata.footprints.assigned}/
@@ -547,7 +547,7 @@ export default function UploadPage() {
                                   : ""
                               }
                             >
-                              {sheetSizeResult.isOversized ? "⚠️" : "✓"} Sheet
+                              {sheetSizeResult.isOversized ? "Warning:" : "✓"} Sheet
                               size: {sheetSizeResult.size}
                               {sheetSizeResult.size === "A3" &&
                                 !sheetSizeResult.isOversized &&
@@ -562,13 +562,13 @@ export default function UploadPage() {
                         </div>
                       )}
                       {validation.warnings.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-800">
+                        <div className="mt-2 pt-2 border-t border-wire/40">
                           {validation.warnings.map((w, i) => (
                             <p
                               key={i}
                               className="text-sm text-yellow-600 dark:text-yellow-400"
                             >
-                              ⚠️ {w}
+                              Warning: {w}
                             </p>
                           ))}
                         </div>
@@ -738,7 +738,7 @@ export default function UploadPage() {
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   {metadata.footprints.unassigned === 0 ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <CheckCircle2 className="w-5 h-5 text-wire" />
                   ) : (
                     <AlertCircle className="w-5 h-5 text-yellow-600" />
                   )}
@@ -1138,7 +1138,7 @@ export default function UploadPage() {
           {/* Step 5: Success */}
           {currentStep === "success" && (
             <div className="bg-card border rounded-lg p-6 text-center">
-              <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-green-500" />
+              <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-wire" />
               <h2 className="text-2xl font-semibold mb-2">
                 Circuit Published!
               </h2>

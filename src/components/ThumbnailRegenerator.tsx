@@ -776,7 +776,7 @@ export function ThumbnailRegenerator() {
   if (circuits.length === 0) {
     return (
       <div className="text-center py-12 bg-card border rounded-lg">
-        <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
+        <CheckCircle className="w-12 h-12 mx-auto mb-4 text-wire" />
         <h3 className="text-lg font-semibold mb-2">No circuits found</h3>
         <p className="text-muted-foreground">
           No circuits found from circuitsnips-importer user.
@@ -826,7 +826,7 @@ export function ThumbnailRegenerator() {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Success</p>
-            <p className="text-2xl font-bold text-green-500">{successCount}</p>
+            <p className="text-2xl font-bold text-wire">{successCount}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Failed</p>
@@ -1026,7 +1026,7 @@ export function ThumbnailRegenerator() {
                       <Loader className="w-5 h-5 animate-spin text-primary" />
                     )}
                     {result.status === "success" && (
-                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <CheckCircle className="w-5 h-5 text-wire" />
                     )}
                     {result.status === "error" && (
                       <XCircle className="w-5 h-5 text-red-500" />

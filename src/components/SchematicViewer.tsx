@@ -96,9 +96,9 @@ export function SchematicViewer({
       )}
 
       {/* Info Footer */}
-      <div className="bg-blue-50 dark:bg-blue-950/30 px-4 py-3 border-t text-sm text-blue-900 dark:text-blue-100">
+      <div className="bg-muted/50 px-4 py-3 border-t text-sm text-muted-foreground">
         <p>
-          💡 <strong>Tip:</strong> Use the interactive viewer above to explore
+          <strong>Tip:</strong> Use the interactive viewer above to explore
           the circuit. Click &quot;Copy to Clipboard&quot; button on the main
           page to get this circuit with attribution, then paste directly into
           your KiCad project (Ctrl+V).

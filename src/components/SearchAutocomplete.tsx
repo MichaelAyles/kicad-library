@@ -30,7 +30,7 @@ export function SearchAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   // Debounced search using centralized search utility
   useEffect(() => {
@@ -175,7 +175,7 @@ export function SearchAutocomplete({
                   <Image
                     src={
                       toR2ThumbnailUrl(
-                        theme === "dark"
+                        resolvedTheme === "dark"
                           ? circuit.thumbnail_dark_url
                           : circuit.thumbnail_light_url,
                       ) || ""

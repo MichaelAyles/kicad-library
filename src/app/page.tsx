@@ -6,7 +6,6 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SearchAutocomplete } from "@/components/SearchAutocomplete";
 import { getCircuits, type Circuit } from "@/lib/circuits";
-import { b612, b612Mono } from "@/components/home/fonts";
 import { TitleBlock, type LibraryStats } from "@/components/home/TitleBlock";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { MostCopied } from "@/components/home/MostCopied";
@@ -53,7 +52,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className={`${styles.home} ${b612.variable} ${b612Mono.variable}`}>
+    <div className={styles.home}>
       <Header />
 
       <main>

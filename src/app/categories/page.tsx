@@ -48,7 +48,7 @@ export default function CategoriesPage() {
           <div className="text-center mb-12">
             <div className="flex items-center justify-center gap-3 mb-4">
               <Tag className="w-10 h-10 text-primary" />
-              <h1 className="text-4xl font-bold green-gradient-text">
+              <h1 className="text-4xl font-bold">
                 Popular Tags
               </h1>
             </div>
@@ -74,7 +74,7 @@ export default function CategoriesPage() {
                 <Link
                   key={tagData.tag}
                   href={`/browse?q=${encodeURIComponent(tagData.tag)}`}
-                  className="group p-4 border rounded-lg hover:shadow-lg hover:border-primary/50 transition-all bg-card flex flex-col items-center justify-center text-center min-h-[100px]"
+                  className="group p-4 border rounded-lg hover:border-primary/50 transition-colors bg-card flex flex-col items-center justify-center text-center min-h-[100px]"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <Tag className="w-4 h-4 text-primary" />

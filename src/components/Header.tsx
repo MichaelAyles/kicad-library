@@ -39,7 +39,7 @@ export function Header() {
           <Link
             href="/"
             onClick={handleLogoClick}
-            className="text-2xl font-bold green-gradient-text hover:opacity-80 transition-opacity flex-shrink-0"
+            className="text-2xl font-bold text-foreground hover:text-primary transition-colors flex-shrink-0"
           >
             CircuitSnips
           </Link>
@@ -48,24 +48,21 @@ export function Header() {
           <nav className="hidden lg:flex items-center gap-6">
             <Link
               href="/browse"
-              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors"
             >
               Browse
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
             </Link>
             <Link
               href="/categories"
-              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors"
             >
               Categories
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
             </Link>
             <Link
               href="/upload"
-              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors relative group"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors"
             >
               Upload
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 green-gradient group-hover:w-full transition-all duration-300" />
             </Link>
           </nav>
 
@@ -114,7 +111,7 @@ export function Header() {
             ) : (
               <Link
                 href="/login"
-                className="px-4 py-2 text-sm font-medium green-gradient text-black rounded-md hover:shadow-lg green-glow-hover transition-all"
+                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
               >
                 Sign In
               </Link>
