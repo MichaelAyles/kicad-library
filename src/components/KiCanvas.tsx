@@ -3,6 +3,23 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 
+const KICANVAS_SRC = "/kicanvas/kicanvas.js";
+
+/**
+ * Load the KiCanvas web component (self-hosted from the michaelayles/kicanvas
+ * fork) only on pages that render a viewer, instead of on every page.
+ * Existing <kicanvas-embed> elements upgrade once the script defines them.
+ */
+function ensureKiCanvasScript() {
+  if (typeof document === "undefined") return;
+  if (customElements.get("kicanvas-embed")) return;
+  if (document.querySelector(`script[src="${KICANVAS_SRC}"]`)) return;
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = KICANVAS_SRC;
+  document.head.appendChild(script);
+}
+
 // Declare the kicanvas-embed custom element for TypeScript
 declare global {
   namespace JSX {
@@ -80,8 +97,9 @@ export function KiCanvas({
   const { theme: pageTheme, resolvedTheme } = useTheme();
   const viewerRef = useRef<KiCanvasElement>(null);
 
-  // Prevent hydration mismatch
+  // Prevent hydration mismatch; load the viewer script on first use
   useEffect(() => {
+    ensureKiCanvasScript();
     setMounted(true);
   }, []);
 

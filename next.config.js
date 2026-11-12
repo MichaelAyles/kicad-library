@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    // Serve images as-is: thumbnails come pre-sized from R2 and avatars from
+    // GitHub, so Vercel Image Optimization would only add cost.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

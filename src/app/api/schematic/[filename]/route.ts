@@ -53,7 +53,7 @@ export async function GET(
 
     // Fast path: if R2 URL exists, redirect to CDN-cached schematic
     if (circuit.schematic_r2_url) {
-      return NextResponse.redirect(circuit.schematic_r2_url, 302);
+      return withEdgeCache(NextResponse.redirect(circuit.schematic_r2_url, 302));
     }
 
     // Slow path: no R2 URL — process, upload, and serve
@@ -136,7 +136,7 @@ export async function GET(
     }
 
     // Redirect to the newly uploaded R2 URL
-    return NextResponse.redirect(r2Url, 302);
+    return withEdgeCache(NextResponse.redirect(r2Url, 302));
   } catch (error) {
     console.error("Failed to serve schematic:", error);
     return NextResponse.json(
@@ -144,4 +144,13 @@ export async function GET(
       { status: 500 },
     );
   }
+}
+
+/** Let Vercel's edge cache serve repeat redirects without invoking the function. */
+function withEdgeCache(res: NextResponse): NextResponse {
+  res.headers.set(
+    "Cache-Control",
+    "public, s-maxage=86400, stale-while-revalidate=604800",
+  );
+  return res;
 }
