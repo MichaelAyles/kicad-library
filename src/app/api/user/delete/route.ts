@@ -1,22 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { deleteUserAccount } from "@/lib/account-deletion";
 
 /**
  * DELETE /api/user/delete
- * Delete user account and all associated data
- * This will cascade delete:
- * - Profile
- * - All circuits
- * - All favorites
- * - All comments
- * - All comment likes
- * - All circuit copies
+ * Delete the signed-in user's account and all associated data.
+ *
+ * Removing the auth user cascades to profile, circuits, favorites, comments,
+ * comment likes and copies. R2 schematics/thumbnails are removed as well.
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
-    const supabase = await createClient();
+    const supabase = createClient();
 
-    // Check if user is authenticated
     const {
       data: { user },
       error: authError,
@@ -29,32 +25,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log("Deleting user account:", user.id);
+    await deleteUserAccount(user.id);
 
-    // Delete user data from database (cascades to all related tables)
-    const { error: deleteProfileError } = await supabase
-      .from("profiles")
-      .delete()
-      .eq("id", user.id);
-
-    if (deleteProfileError) {
-      console.error("Error deleting profile:", deleteProfileError);
-      return NextResponse.json(
-        { error: "Failed to delete account data" },
-        { status: 500 },
-      );
-    }
-
-    // Delete user from auth system
-    const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(
-      user.id,
-    );
-
-    if (deleteAuthError) {
-      console.error("Error deleting auth user:", deleteAuthError);
-      // Continue anyway - profile is deleted, just log the error
-      console.warn("Profile deleted but auth user deletion failed");
-    }
+    // Clear the session cookies; the user no longer exists
+    await supabase.auth.signOut();
 
     return NextResponse.json({
       success: true,
@@ -63,7 +37,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error("Error in DELETE /api/user/delete:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to delete account" },
       { status: 500 },
     );
   }

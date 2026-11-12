@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Call the sync function
-    const { error: syncError } = await supabase.rpc("sync_global_stats");
+    // sync_global_stats is only executable by the service role
+    const { error: syncError } = await createAdminClient().rpc(
+      "sync_global_stats",
+    );
 
     if (syncError) {
       console.error("Error syncing global stats:", syncError);

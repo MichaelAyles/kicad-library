@@ -8,15 +8,14 @@ import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
 /**
- * Check if a user has admin role
- * Admin role is stored in raw_user_meta_data->>'role'
+ * Check if a user has admin role.
+ *
+ * Admin role is stored in app_metadata (raw_app_meta_data->>'role'), which
+ * only the service role can write. Do NOT use user_metadata here: users can
+ * modify it themselves via supabase.auth.updateUser().
  */
 export async function isAdmin(user?: User | null): Promise<boolean> {
-  if (!user) return false;
-
-  // Check if user has admin role in metadata
-  const role = user.user_metadata?.role;
-  return role === "admin";
+  return user?.app_metadata?.role === "admin";
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin";
+import { deleteUserAccount } from "@/lib/account-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -61,29 +62,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Count user's circuits for response
-    const { count: circuitCount } = await supabase
-      .from("circuits")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
-
-    // Delete from auth.users (this cascades to profiles and all related data via ON DELETE CASCADE)
-    // We need to use the service role for this operation
-    const supabaseAdmin = await createClient();
-
-    // Note: Direct auth.users deletion requires service role key
-    // Since we're using the regular client, we'll delete the profile
-    // which should cascade due to foreign key constraints
-
-    const { error: deleteError } = await supabase
-      .from("profiles")
-      .delete()
-      .eq("id", userId);
-
-    if (deleteError) {
-      console.error("Error deleting user:", deleteError);
-      throw deleteError;
-    }
+    // Delete from auth.users with the service role; this cascades to the
+    // profile and all related data, then R2 files are cleaned up.
+    const { circuitCount } = await deleteUserAccount(userId);
 
     return NextResponse.json({
       success: true,

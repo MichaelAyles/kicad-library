@@ -18,6 +18,10 @@
 -- All statements use IF NOT EXISTS or CREATE OR REPLACE
 --
 -- Version: 2025-01-20
+--
+-- AFTER running this, also run migrations/add_thumbnail_version_and_indexes.sql
+-- and migrations/security_hardening.sql (counter protection, function
+-- search_path, admin-only RPCs). Admin role lives in auth app_metadata.
 -- ============================================================================
 
 -- Enable necessary extensions
@@ -711,7 +715,7 @@ ALTER TABLE public.circuit_flags ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can flag circuits" ON public.circuit_flags;
 CREATE POLICY "Anyone can flag circuits"
   ON public.circuit_flags FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (flagged_by IS NULL OR flagged_by = auth.uid());
 
 DROP POLICY IF EXISTS "Users can view own flags" ON public.circuit_flags;
 CREATE POLICY "Users can view own flags"
@@ -844,9 +848,10 @@ CREATE POLICY "Authenticated users can update previews"
   );
 
 DROP POLICY IF EXISTS "Anyone can delete old previews" ON storage.objects;
-CREATE POLICY "Anyone can delete old previews"
+DROP POLICY IF EXISTS "Users can delete own previews" ON storage.objects;
+CREATE POLICY "Users can delete own previews"
   ON storage.objects FOR DELETE
-  USING (bucket_id = 'previews');
+  USING (bucket_id = 'previews' AND owner = auth.uid());
 
 -- ============================================================================
 -- HELPER FUNCTIONS
