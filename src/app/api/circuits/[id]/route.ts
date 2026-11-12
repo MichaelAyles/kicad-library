@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  deleteCircuitFiles,
+  processAndUploadSchematic,
+} from "@/lib/r2-schematic";
+import type { SheetSize } from "@/lib/kicad-parser";
 
 /**
  * PUT /api/circuits/[id]
@@ -200,9 +205,34 @@ export async function PUT(
       );
     }
 
+    // The R2 schematic bakes in the sheet size and title, so rebuild it after a
+    // metadata edit. Version the URL so caches pick up the new file. A failure
+    // here doesn't fail the save: the previous schematic keeps working.
+    let circuitOut = updatedCircuit;
+    if (!isThumbnailOnlyUpdate && updatedCircuit?.raw_sexpr) {
+      try {
+        const r2Url = await processAndUploadSchematic({
+          circuitId: params.id,
+          rawSexpr: updatedCircuit.raw_sexpr,
+          title: updatedCircuit.title,
+          sheetSizeOverride: (updatedCircuit.sheet_size as SheetSize) ?? null,
+        });
+        const versionedUrl = `${r2Url}?v=${Date.now()}`;
+        const { data: withUrl } = await supabase
+          .from("circuits")
+          .update({ schematic_r2_url: versionedUrl })
+          .eq("id", params.id)
+          .select()
+          .single();
+        if (withUrl) circuitOut = withUrl;
+      } catch (regenError) {
+        console.error("Failed to regenerate R2 schematic:", regenError);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      circuit: updatedCircuit,
+      circuit: circuitOut,
     });
   } catch (error) {
     console.error("Error in PUT /api/circuits/[id]:", error);
@@ -269,6 +299,13 @@ export async function DELETE(
         { error: "Failed to delete circuit" },
         { status: 500 },
       );
+    }
+
+    // Remove the circuit's public files from R2 (best effort)
+    try {
+      await deleteCircuitFiles(params.id);
+    } catch (r2Error) {
+      console.error("Circuit deleted but R2 cleanup failed:", r2Error);
     }
 
     return NextResponse.json({

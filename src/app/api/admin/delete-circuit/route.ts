@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
-import { userIsAdmin } from "@/lib/api-auth";
+import { isUuid, userIsAdmin } from "@/lib/api-auth";
+import { deleteCircuitFiles } from "@/lib/r2-schematic";
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -63,9 +64,9 @@ export async function DELETE(request: NextRequest) {
     // Get circuit ID from request body
     const { circuitId } = await request.json();
 
-    if (!circuitId) {
+    if (!isUuid(circuitId)) {
       return NextResponse.json(
-        { error: "Missing circuitId in request body" },
+        { error: "Missing or invalid circuitId in request body" },
         { status: 400 },
       );
     }
@@ -82,6 +83,13 @@ export async function DELETE(request: NextRequest) {
         { error: "Failed to delete circuit", details: error.message },
         { status: 500 },
       );
+    }
+
+    // Remove the circuit's public files from R2 (best effort)
+    try {
+      await deleteCircuitFiles(circuitId);
+    } catch (r2Error) {
+      console.error("Circuit deleted but R2 cleanup failed:", r2Error);
     }
 
     return NextResponse.json({
