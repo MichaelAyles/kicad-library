@@ -60,6 +60,22 @@ export async function PUT(
       thumbnail_version,
     } = body;
 
+    // Thumbnails must be this circuit's own files in our R2 bucket, so a
+    // circuit can't be pointed at arbitrary external images.
+    const thumbnailPrefix = `${process.env.R2_PUBLIC_URL}/thumbnails/${params.id}/`;
+    for (const url of [thumbnail_light_url, thumbnail_dark_url]) {
+      if (
+        url !== undefined &&
+        url !== null &&
+        (typeof url !== "string" || !url.startsWith(thumbnailPrefix))
+      ) {
+        return NextResponse.json(
+          { error: "Invalid thumbnail URL" },
+          { status: 400 },
+        );
+      }
+    }
+
     // Build update object - only include fields that are provided
     const updateData: any = {
       updated_at: new Date().toISOString(),
