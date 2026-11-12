@@ -1,0 +1,503 @@
+/*
+ * Homepage design tokens, borrowed from KiCad's own schematic colours.
+ * Scoped to the homepage: the rest of the site keeps the shared theme.
+ *
+ * sheet  - page background (KiCad paper / KiCanvas dark paper, so the
+ *          schematic thumbnails sit on the page without a visible edge)
+ * frame  - sheet border colour, used only for the title block
+ * wire   - wires and junctions
+ * label  - net-label amber, the single action colour
+ * ink / muted / rule - text and hairlines
+ */
+.home {
+  --sheet: #f5f4ef;
+  --frame: #8a2b2b;
+  --wire: #0e7f0e;
+  --label: #ddb54a;
+  --label-ink: #17151c;
+  --label-strong: #8a6100;
+  --ink: #1e1b18;
+  --muted: #5a5650;
+  --rule: #ddd5cc;
+  --field: #a39b90;
+
+  /* Map the shared shadcn tokens so Header, Footer and the search
+     dropdown pick up the same palette on this page. */
+  --background: 50 23% 95%;
+  --foreground: 30 11% 11%;
+  --card: 45 33% 98%;
+  --card-foreground: 30 11% 11%;
+  --popover: 45 33% 98%;
+  --popover-foreground: 30 11% 11%;
+  --muted: 42 24% 89%;
+  --muted-foreground: 36 6% 33%;
+  --border: 32 20% 83%;
+  --input: 32 20% 83%;
+  --primary: 42 100% 27%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 42 100% 27%;
+
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: var(--sheet);
+  color: var(--ink);
+  font-family: var(--font-b612), system-ui, sans-serif;
+}
+
+:global(.dark) .home {
+  --sheet: #131218;
+  --frame: #4a7c86;
+  --wire: #79c2b0;
+  --label: #e3c96a;
+  --label-ink: #17151c;
+  --label-strong: #e3c96a;
+  --ink: #ece9f4;
+  --muted: #a9a5bb;
+  --rule: #2b3a41;
+  --field: #4d5a63;
+
+  --background: 250 14% 8%;
+  --foreground: 256 33% 94%;
+  --card: 252 17% 11%;
+  --card-foreground: 256 33% 94%;
+  --popover: 252 17% 11%;
+  --popover-foreground: 256 33% 94%;
+  --muted: 251 15% 14%;
+  --muted-foreground: 251 14% 69%;
+  --border: 199 20% 21%;
+  --input: 199 20% 21%;
+  --primary: 47 68% 65%;
+  --primary-foreground: 257 14% 10%;
+  --ring: 47 68% 65%;
+}
+
+/* Header uses the site's green gradient utilities; on this page they
+   become plain ink and the net-label amber. */
+.home :global(.green-gradient-text) {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--ink);
+}
+.home :global(.green-gradient) {
+  background: var(--label);
+  color: var(--label-ink);
+}
+.home :global(.green-glow-hover:hover) {
+  box-shadow: none;
+}
+.home :focus-visible {
+  outline: 2px solid var(--label-strong);
+  outline-offset: 3px;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 32px clamp(32px, 5vw, 72px);
+  align-items: end;
+  padding: clamp(40px, 7vw, 88px) 0 clamp(48px, 7vw, 88px);
+}
+.h1 {
+  font-size: clamp(36px, 5vw, 60px);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+  margin: 0 0 20px;
+}
+.h1 span {
+  display: block;
+}
+.lede {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 46ch;
+  margin: 0 0 28px;
+}
+.searchLabel {
+  display: block;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.search {
+  max-width: 560px;
+}
+.searchInput {
+  width: 100%;
+  height: 52px;
+  padding: 0 40px 0 42px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: hsl(var(--card));
+  border: 1px solid var(--field);
+  border-radius: 2px;
+}
+.searchInput::placeholder {
+  color: var(--muted);
+}
+.searchInput:focus-visible {
+  outline: 2px solid var(--label-strong);
+  outline-offset: 2px;
+}
+.popular {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  color: var(--muted);
+}
+.popular a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+}
+.popular a:hover {
+  text-decoration-color: var(--label-strong);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+  margin-top: 32px;
+}
+
+/* Primary button in the shape of a KiCad global label */
+.netLabel {
+  --h: 46px;
+  display: inline-flex;
+  align-items: center;
+  height: var(--h);
+  padding: 0 calc(var(--h) / 2 + 10px) 0 20px;
+  background: var(--label);
+  color: var(--label-ink);
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--h) / 2) 0,
+    100% 50%,
+    calc(100% - var(--h) / 2) 100%,
+    0 100%
+  );
+}
+.netLabel:hover {
+  filter: brightness(1.06);
+}
+/* clip-path hides an outline, so the focus ring goes on a wrapper */
+.netLabelWrap {
+  display: inline-block;
+  padding: 3px;
+}
+.netLabelWrap:focus-within {
+  outline: 2px solid var(--label-strong);
+  outline-offset: 2px;
+}
+.netLabel:focus-visible {
+  outline: none;
+}
+.textLink {
+  color: var(--ink);
+  font-size: 15px;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 4px;
+}
+.textLink:hover {
+  text-decoration-color: var(--label-strong);
+}
+
+/* ---------- Title block (the one bold element) ---------- */
+.titleBlock {
+  border: 1.5px solid var(--frame);
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  font-size: 13px;
+  align-self: end;
+}
+.cell {
+  padding: 8px 12px 10px;
+  border-color: var(--frame);
+  border-style: solid;
+  border-width: 0 0 1px 1px;
+}
+.cell.first {
+  border-left-width: 0;
+}
+.third {
+  grid-column: span 2;
+}
+.wide {
+  grid-column: 1 / -1;
+}
+.full {
+  grid-column: 1 / -1;
+  border-left-width: 0;
+  border-bottom-width: 0;
+}
+.k {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.v {
+  display: block;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.big {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.titleValue {
+  display: block;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.v a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Sections ---------- */
+.section {
+  border-top: 1px solid var(--rule);
+  padding: clamp(48px, 7vw, 88px) 0;
+}
+.h2 {
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.15;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+.intro {
+  color: var(--muted);
+  margin: 0 0 40px;
+  max-width: 58ch;
+}
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px 24px;
+  margin-bottom: 32px;
+}
+
+/* ---------- How it works: three steps on one wire ---------- */
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 clamp(24px, 4vw, 48px);
+  position: relative;
+}
+.steps::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 0;
+  top: 4px;
+  height: 1.5px;
+  background: var(--wire);
+}
+.step {
+  position: relative;
+  padding-top: 28px;
+}
+.step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--wire);
+}
+.stepNo {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.step h3 {
+  font-size: 18px;
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+.step p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 38ch;
+}
+.kbd {
+  font-family: var(--font-b612-mono), ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+
+/* ---------- Most copied ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px 32px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+.card:first-child {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+.thumb {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+}
+.card:first-child .thumb {
+  flex: 1;
+  aspect-ratio: auto;
+  min-height: 300px;
+}
+.thumb img {
+  transform: scale(1.3);
+}
+.card:hover .thumb {
+  border-color: var(--label-strong);
+}
+.noPreview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.cardTitle {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 12px 0 4px;
+}
+.card:first-child .cardTitle {
+  font-size: 20px;
+}
+.card:hover .cardTitle {
+  text-decoration: underline;
+  text-decoration-color: var(--label-strong);
+  text-underline-offset: 4px;
+}
+.cardDesc {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 0 0 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: auto;
+}
+.meta strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+.status {
+  color: var(--muted);
+  padding: 24px 0;
+}
+.skeleton {
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--rule);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1000px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .titleBlock {
+    max-width: 520px;
+  }
+}
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .card:first-child {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .card:first-child .thumb {
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+  }
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .steps::before {
+    left: 4px;
+    right: auto;
+    top: 4px;
+    bottom: 4px;
+    width: 1.5px;
+    height: auto;
+  }
+  .step {
+    padding: 0 0 0 32px;
+  }
+}
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .lede {
+    font-size: 17px;
+  }
+  .big {
+    font-size: 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

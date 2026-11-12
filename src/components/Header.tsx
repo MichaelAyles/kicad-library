@@ -11,7 +11,8 @@ import { SearchAutocomplete } from "./SearchAutocomplete";
 export function Header() {
   const { user, isLoading, signOut } = useAuth();
   const pathname = usePathname();
-  const isCategoriesPage = pathname === "/categories";
+  // The homepage and categories page have their own search, so skip the header one
+  const hideHeaderSearch = pathname === "/categories" || pathname === "/";
 
   const handleSignOut = async () => {
     try {
@@ -69,7 +70,7 @@ export function Header() {
           </nav>
 
           {/* Desktop Search - Hide on categories page */}
-          {!isCategoriesPage && (
+          {!hideHeaderSearch && (
             <div className="hidden md:block flex-1 max-w-xl mx-4">
               <SearchAutocomplete />
             </div>
@@ -122,7 +123,7 @@ export function Header() {
         </div>
 
         {/* Mobile Search Row - Hide on categories page */}
-        {!isCategoriesPage && (
+        {!hideHeaderSearch && (
           <div className="md:hidden mt-4">
             <SearchAutocomplete />
           </div>
