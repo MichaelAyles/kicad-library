@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
-import { createClient as createAnonClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isAdmin } from "@/lib/admin";
-import { deleteKeys, parseThumbnailKey } from "@/lib/r2-schematic";
-
-// R2 client singleton
-function getR2Client() {
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-  });
-}
+import { requireAdmin } from "@/lib/api-auth";
+import {
+  deleteKeys,
+  listKeys,
+  parseThumbnailKey,
+} from "@/lib/r2-schematic";
 
 // Increase timeout for large operations
 export const maxDuration = 60; // 60 seconds max (requires Vercel Pro)
@@ -62,57 +52,18 @@ function createErrorResponse(
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // Get the Authorization header with bearer token
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token) {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) {
       return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "No authentication token provided",
-        "The Authorization header is missing or invalid",
-        "Please include a valid Bearer token in the Authorization header",
-        401,
-      );
-    }
-
-    // Create a client with the anon key to verify the token
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-    const supabase = createAnonClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
-    // Verify the token by getting the user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "Invalid authentication token",
-        authError?.message,
-        "Please log in again to get a fresh authentication token",
-        401,
-      );
-    }
-
-    // Check if user has admin role using centralized helper
-    const adminStatus = await isAdmin(user);
-    if (!adminStatus) {
-      return createErrorResponse(
-        ErrorCategory.AUTHORIZATION,
-        "Admin access required",
-        "This endpoint is restricted to administrators only",
-        "Contact an administrator if you believe you should have access",
-        403,
+        auth.status === 401
+          ? ErrorCategory.AUTHENTICATION
+          : ErrorCategory.AUTHORIZATION,
+        auth.error,
+        undefined,
+        auth.status === 401
+          ? "Please log in again to get a fresh authentication token"
+          : "Contact an administrator if you believe you should have access",
+        auth.status,
       );
     }
 
@@ -188,43 +139,19 @@ export async function DELETE(request: NextRequest) {
     let failedFiles = 0;
 
     try {
-      const r2 = getR2Client();
-      const bucketName = process.env.R2_BUCKET_NAME!;
-
       // Build set of circuit IDs for quick lookup
-      const circuitIdSet = new Set(circuits.map((c) => c.id));
+      const circuitIdSet = new Set(
+        circuits.map((c) => String(c.id).toLowerCase()),
+      );
 
-      // List all thumbnail files in R2
+      // List all thumbnail files in R2. parseThumbnailKey matches every
+      // layout (thumbnails/<id>/v<N>-<theme>.png, thumbnails/<id>/<theme>.png,
+      // thumbnails/<id>-v<N>-<theme>.png) and returns lowercase ids.
       console.log("Listing all thumbnail files in R2...");
-      let continuationToken: string | undefined;
-      const keysToDelete: string[] = [];
-
-      do {
-        const listCommand = new ListObjectsV2Command({
-          Bucket: bucketName,
-          Prefix: "thumbnails/",
-          ContinuationToken: continuationToken,
-          MaxKeys: 1000,
-        });
-
-        const listResult = await r2.send(listCommand);
-
-        if (listResult.Contents) {
-          for (const obj of listResult.Contents) {
-            if (!obj.Key) continue;
-            // Matches every layout: thumbnails/<id>/v<N>-<theme>.png,
-            // thumbnails/<id>/<theme>.png and thumbnails/<id>-v<N>-<theme>.png
-            const parsed = parseThumbnailKey(obj.Key);
-            if (parsed && circuitIdSet.has(parsed.circuitId)) {
-              keysToDelete.push(obj.Key);
-            }
-          }
-        }
-
-        continuationToken = listResult.IsTruncated
-          ? listResult.NextContinuationToken
-          : undefined;
-      } while (continuationToken);
+      const keysToDelete = (await listKeys("thumbnails/")).filter((key) => {
+        const parsed = parseThumbnailKey(key);
+        return parsed !== null && circuitIdSet.has(parsed.circuitId);
+      });
 
       console.log(
         `Found ${keysToDelete.length} thumbnail files to delete in R2`,

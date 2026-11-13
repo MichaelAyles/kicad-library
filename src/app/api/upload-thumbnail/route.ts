@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireCircuitOwnerOrAdmin } from "@/lib/api-auth";
+import { uploadThumbnailObject, type ThumbnailTheme } from "@/lib/r2-schematic";
 import {
-  listCircuitThumbnails,
-  uploadThumbnailObject,
-  type ThumbnailTheme,
-} from "@/lib/r2-schematic";
+  recordThumbnailHistory,
+  reserveThumbnailVersion,
+} from "@/lib/thumbnail-versions";
 
 // Max decoded size per thumbnail image
 const MAX_THUMBNAIL_BYTES = 5 * 1024 * 1024;
 const PNG_SIGNATURE = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]);
-// thumbnail_version is a Postgres INTEGER
-const MAX_VERSION = 2147483647;
 const MAX_HISTORY_NOTE_LENGTH = 200;
 
 /**
@@ -36,25 +34,25 @@ function decodePngDataUrl(dataUrl: unknown): Buffer | string {
 /**
  * POST /api/upload-thumbnail
  *
- * Body: { circuitId, lightDataUrl?, darkDataUrl?, version?, historyNote? }
+ * Body: { circuitId, lightDataUrl?, darkDataUrl?, historyNote? }
  *
- * Each upload goes to a new immutable key, `thumbnails/<id>/v<N>-<theme>.png`.
- * The server picks N so an existing key is never overwritten: it starts from
- * the requested `version` (or the circuit's thumbnail_version + 1 when
- * omitted) and raises it, if needed, to one above the highest version already
- * stored for the themes being written. The client hint only exists so callers
- * that upload light and dark in two separate requests land on one version.
- *
- * When both themes are sent together, the circuit's thumbnail_version is set
- * to N too, and if `historyNote` is given a thumbnail_history row is recorded
- * for N and marked current.
+ * Every request reserves a new thumbnail version N (atomically, on
+ * circuits.thumbnail_version) before writing anything, then stores the
+ * images at the immutable keys `thumbnails/<id>/v<N>-<theme>.png` and points
+ * the circuit at them. Send both themes in one request so they share N; a
+ * request with both themes is also recorded in thumbnail_history as the
+ * current version, labelled with `historyNote`.
  *
  * Response: { success, circuitId, urls: { light?, dark? }, version }
  */
 export async function POST(request: NextRequest) {
   try {
-    const { circuitId, lightDataUrl, darkDataUrl, version, historyNote } =
-      await request.json();
+    const body = (await request.json()) ?? {};
+    const { lightDataUrl, darkDataUrl, historyNote } = body;
+    const circuitId: unknown =
+      typeof body.circuitId === "string"
+        ? body.circuitId.toLowerCase()
+        : body.circuitId;
 
     const access = await requireCircuitOwnerOrAdmin(circuitId);
     if (!access.ok) {
@@ -63,21 +61,11 @@ export async function POST(request: NextRequest) {
         { status: access.status },
       );
     }
+    const id = circuitId as string;
 
     if (!lightDataUrl && !darkDataUrl) {
       return NextResponse.json(
         { error: "Missing thumbnail data" },
-        { status: 400 },
-      );
-    }
-
-    if (
-      version !== undefined &&
-      version !== null &&
-      !(Number.isInteger(version) && version >= 1 && version <= MAX_VERSION)
-    ) {
-      return NextResponse.json(
-        { error: "version must be a positive integer" },
         { status: 400 },
       );
     }
@@ -107,67 +95,45 @@ export async function POST(request: NextRequest) {
       }
       images.push({ theme, buffer: decoded });
     }
-    const isCompleteSet = images.length === 2;
 
-    const adminClient = createAdminClient();
-
-    const { data: circuit, error: circuitError } = await adminClient
-      .from("circuits")
-      .select("thumbnail_version")
-      .eq("id", circuitId)
-      .single();
-    if (circuitError || !circuit) {
-      return NextResponse.json({ error: "Circuit not found" }, { status: 404 });
-    }
-
-    // Pick a version whose keys don't exist yet for the themes being written
-    // and that thumbnail_history hasn't used. Only stored keys of the themes
-    // in this request count, so a light-then-dark pair of single-theme
-    // requests resolves to the same version for both.
-    const themes = new Set(images.map((i) => i.theme));
-    const stored = await listCircuitThumbnails(circuitId);
-    const { data: latestHistory } = await adminClient
-      .from("thumbnail_history")
-      .select("version")
-      .eq("circuit_id", circuitId)
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const highestStored = Math.max(
-      latestHistory?.version ?? 0,
-      ...stored.filter((t) => themes.has(t.theme)).map((t) => t.version),
+    // Reserve the version before uploading so no two requests share a key
+    const reservation = await reserveThumbnailVersion(
+      id,
+      access.circuit.thumbnail_version,
     );
-    const requested: number =
-      typeof version === "number"
-        ? version
-        : (circuit.thumbnail_version ?? 0) + 1;
-    const newVersion = Math.max(requested, highestStored + 1);
+    if (!reservation.ok) {
+      const status = reservation.reason === "not_found" ? 404 : 409;
+      return NextResponse.json(
+        {
+          error:
+            reservation.reason === "not_found"
+              ? "Circuit not found"
+              : reservation.reason === "exhausted"
+                ? "Thumbnail version limit reached"
+                : "Another thumbnail upload is in progress; please retry",
+        },
+        { status },
+      );
+    }
+    const version = reservation.version;
 
     const results: { light?: string; dark?: string } = {};
     for (const { theme, buffer } of images) {
-      results[theme] = await uploadThumbnailObject(
-        circuitId,
-        newVersion,
-        theme,
-        buffer,
-      );
+      results[theme] = await uploadThumbnailObject(id, version, theme, buffer);
     }
 
-    // Point the circuit at the new images. thumbnail_version is only set for
-    // a complete light+dark pair; single-theme callers set it themselves.
+    // Point the circuit at the new images (thumbnail_version is already N)
     const updateData: {
       thumbnail_light_url?: string;
       thumbnail_dark_url?: string;
-      thumbnail_version?: number;
     } = {};
     if (results.light) updateData.thumbnail_light_url = results.light;
     if (results.dark) updateData.thumbnail_dark_url = results.dark;
-    if (isCompleteSet) updateData.thumbnail_version = newVersion;
 
-    const { error: dbError } = await adminClient
+    const { error: dbError } = await createAdminClient()
       .from("circuits")
       .update(updateData)
-      .eq("id", circuitId);
+      .eq("id", id);
 
     if (dbError) {
       console.error("Failed to update Supabase:", dbError);
@@ -175,47 +141,35 @@ export async function POST(request: NextRequest) {
         {
           error: "Uploaded to R2 but failed to update database",
           urls: results,
-          version: newVersion,
+          version,
         },
         { status: 500 },
       );
     }
 
-    if (isCompleteSet && historyNote !== undefined) {
+    if (results.light && results.dark) {
       // History is an audit trail; failures here don't fail the upload
-      const { error: clearError } = await adminClient
-        .from("thumbnail_history")
-        .update({ is_current: false })
-        .eq("circuit_id", circuitId)
-        .eq("is_current", true);
-      const { error: historyError } = await adminClient
-        .from("thumbnail_history")
-        .upsert(
-          {
-            circuit_id: circuitId,
-            version: newVersion,
-            thumbnail_light_url: results.light,
-            thumbnail_dark_url: results.dark,
-            regenerated_by: access.user.id,
-            regenerated_at: new Date().toISOString(),
-            is_current: true,
-            notes: historyNote || null,
-          },
-          { onConflict: "circuit_id,version" },
-        );
-      if (clearError || historyError) {
+      const historyError = await recordThumbnailHistory({
+        circuitId: id,
+        version,
+        lightUrl: results.light,
+        darkUrl: results.dark,
+        regeneratedBy: access.user.id,
+        notes: historyNote || null,
+      });
+      if (historyError) {
         console.warn(
           "Thumbnail history update failed (non-critical):",
-          clearError ?? historyError,
+          historyError,
         );
       }
     }
 
     return NextResponse.json({
       success: true,
-      circuitId,
+      circuitId: id,
       urls: results,
-      version: newVersion,
+      version,
     });
   } catch (error) {
     console.error("Upload failed:", error);

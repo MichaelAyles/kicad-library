@@ -29,11 +29,17 @@ export async function deleteUserAccount(
     throw new Error(`Failed to delete user: ${deleteError.message}`);
   }
 
+  // A few circuits at a time: each one is several R2 list/delete calls, and
+  // an account can own thousands of circuits
   const circuitIds = (circuits ?? []).map((c) => c.id as string);
-  const results = await Promise.allSettled(
-    circuitIds.map((id) => deleteCircuitFiles(id)),
-  );
-  const failed = results.filter((r) => r.status === "rejected").length;
+  const CONCURRENCY = 8;
+  let failed = 0;
+  for (let i = 0; i < circuitIds.length; i += CONCURRENCY) {
+    const results = await Promise.allSettled(
+      circuitIds.slice(i, i + CONCURRENCY).map((id) => deleteCircuitFiles(id)),
+    );
+    failed += results.filter((r) => r.status === "rejected").length;
+  }
   if (failed > 0) {
     console.error(
       `Account ${userId} deleted, but R2 cleanup failed for ${failed}/${circuitIds.length} circuits`,

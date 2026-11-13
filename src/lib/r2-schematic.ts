@@ -181,11 +181,16 @@ export type ThumbnailTheme = "light" | "dark";
 
 const UUID_PATTERN =
   "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// The id part is case-insensitive (Postgres accepts either case, and older
+// code wrote keys using the id exactly as the client sent it). Parsed ids are
+// returned lowercase.
 const THUMBNAIL_KEY_RE = new RegExp(
   `^thumbnails/(${UUID_PATTERN})(?:/(?:v(\\d+)-)?|-v(\\d+)-)(light|dark)\\.png$`,
+  "i",
 );
 
 export interface ParsedThumbnailKey {
+  /** Always lowercase. */
   circuitId: string;
   theme: ThumbnailTheme;
   /** Version number, or 0 for the unversioned `thumbnails/<id>/<theme>.png`. */
@@ -200,7 +205,9 @@ export interface ParsedThumbnailKey {
 export function parseThumbnailKey(key: string): ParsedThumbnailKey | null {
   const match = THUMBNAIL_KEY_RE.exec(key);
   if (!match) return null;
-  const [, circuitId, dirVersion, flatVersion, theme] = match;
+  const [, rawId, dirVersion, flatVersion, rawTheme] = match;
+  const circuitId = rawId.toLowerCase();
+  const theme = rawTheme.toLowerCase();
   if (flatVersion !== undefined) {
     return {
       circuitId,
@@ -223,10 +230,11 @@ export function getThumbnailKey(
   version: number,
   theme: ThumbnailTheme,
 ): string {
-  return `thumbnails/${circuitId}/v${version}-${theme}.png`;
+  return `thumbnails/${circuitId.toLowerCase()}/v${version}-${theme}.png`;
 }
 
-async function listKeys(prefix: string): Promise<string[]> {
+/** List every key under a prefix, following pagination. */
+export async function listKeys(prefix: string): Promise<string[]> {
   const client = getR2Client();
   const keys: string[] = [];
   let continuationToken: string | undefined;
@@ -254,18 +262,27 @@ async function listKeys(prefix: string): Promise<string[]> {
  * The legacy flat layout shares the `thumbnails/<id>-` prefix with nothing
  * else in practice, but keys are still matched exactly against this id so a
  * different circuit's objects can never be returned.
+ *
+ * R2 prefixes are case-sensitive. New keys are always lowercase; pass
+ * `includeUppercase` to also find keys an older client wrote with an
+ * uppercase id (used when deleting, where missing a key leaks it forever).
  */
 export async function listCircuitThumbnails(
   circuitId: string,
+  { includeUppercase = false }: { includeUppercase?: boolean } = {},
 ): Promise<(ParsedThumbnailKey & { key: string })[]> {
-  const [dirKeys, flatKeys] = await Promise.all([
-    listKeys(`thumbnails/${circuitId}/`),
-    listKeys(`thumbnails/${circuitId}-`),
-  ]);
+  const id = circuitId.toLowerCase();
+  const ids = includeUppercase ? [id, id.toUpperCase()] : [id];
+  const listings = await Promise.all(
+    ids.flatMap((v) => [
+      listKeys(`thumbnails/${v}/`),
+      listKeys(`thumbnails/${v}-`),
+    ]),
+  );
   const results: (ParsedThumbnailKey & { key: string })[] = [];
-  for (const key of [...dirKeys, ...flatKeys]) {
+  for (const key of new Set(listings.flat())) {
     const parsed = parseThumbnailKey(key);
-    if (parsed && parsed.circuitId === circuitId) {
+    if (parsed && parsed.circuitId === id) {
       results.push({ ...parsed, key });
     }
   }
@@ -330,8 +347,11 @@ export async function deleteKeys(
  * its thumbnails, in both the current and legacy key layouts.
  */
 export async function deleteCircuitFiles(circuitId: string): Promise<void> {
-  const thumbnails = await listCircuitThumbnails(circuitId);
-  const keys = [getSchematicKey(circuitId), ...thumbnails.map((t) => t.key)];
+  const id = circuitId.toLowerCase();
+  const thumbnails = await listCircuitThumbnails(id, {
+    includeUppercase: true,
+  });
+  const keys = [getSchematicKey(id), ...thumbnails.map((t) => t.key)];
   const { failed } = await deleteKeys(keys);
   if (failed > 0) {
     throw new Error(

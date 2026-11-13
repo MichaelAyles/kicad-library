@@ -27,8 +27,7 @@ import {
   type SheetSizeResult,
   type SheetSize,
 } from "@/lib/kicad-parser";
-import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
-import { createClient } from "@/lib/supabase/client";
+import { captureThumbnails, uploadThumbnailsToR2 } from "@/lib/thumbnail";
 import { MAX_RAW_SEXPR_BYTES } from "@/lib/circuit-limits";
 
 const KICANVAS_HEIGHT = "350px";
@@ -64,7 +63,6 @@ type UploadStep =
 export default function UploadPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const supabase = createClient();
 
   // Redirect if not logged in
   useEffect(() => {
@@ -337,47 +335,12 @@ export default function UploadPage() {
     // failure here isn't fatal: thumbnails can be regenerated later.
     let thumbnailsFailed = false;
     try {
-      const version = 1;
-      setUploadProgress("Uploading light theme thumbnail...");
-      const lightUrl = await uploadThumbnail(
-        supabase,
-        user.id,
-        circuit.id,
-        "light",
-        lightThumb,
-        version,
-      );
-
-      setUploadProgress("Uploading dark theme thumbnail...");
-      const darkUrl = await uploadThumbnail(
-        supabase,
-        user.id,
-        circuit.id,
-        "dark",
-        darkThumb,
-        version,
-      );
-
-      // /api/upload-thumbnail stores the URLs on the circuit (and
-      // thumbnail_version defaults to 1), so only the history record remains.
-      // 3. Create initial thumbnail history record
-      setUploadProgress("Finalizing...");
-      const { error: historyError } = await supabase
-        .from("thumbnail_history")
-        .insert({
-          circuit_id: circuit.id,
-          version: version,
-          thumbnail_light_url: lightUrl,
-          thumbnail_dark_url: darkUrl,
-          regenerated_by: user.id,
-          is_current: true,
-          notes: "Initial upload",
-        });
-
-      if (historyError) {
-        console.error("Error creating thumbnail history:", historyError);
-        // Don't fail the upload if history creation fails
-      }
+      // Both themes in one request so they share a version. The server
+      // stores the URLs on the circuit and records the thumbnail history.
+      setUploadProgress("Uploading thumbnails...");
+      await uploadThumbnailsToR2(circuit.id, lightThumb, darkThumb, {
+        historyNote: "Initial upload",
+      });
     } catch (thumbError) {
       console.error("Thumbnail upload failed:", thumbError);
       thumbnailsFailed = true;

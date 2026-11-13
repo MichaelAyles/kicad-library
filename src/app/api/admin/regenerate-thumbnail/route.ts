@@ -10,12 +10,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient as createAnonClient } from "@supabase/supabase-js";
-import { isAdmin } from "@/lib/admin";
+import { requireAdmin } from "@/lib/api-auth";
+import { uploadThumbnailObject } from "@/lib/r2-schematic";
 import {
-  listCircuitThumbnails,
-  uploadThumbnailObject,
-} from "@/lib/r2-schematic";
+  recordThumbnailHistory,
+  reserveThumbnailVersion,
+} from "@/lib/thumbnail-versions";
 
 // Force Node.js runtime for Buffer support
 export const runtime = "nodejs";
@@ -68,62 +68,23 @@ const RegenerateThumbnailSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the Authorization header with bearer token
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token) {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) {
       return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "No authentication token provided",
-        "The Authorization header is missing or invalid",
-        "Please include a valid Bearer token in the Authorization header",
-        401,
+        auth.status === 401
+          ? ErrorCategory.AUTHENTICATION
+          : ErrorCategory.AUTHORIZATION,
+        auth.error,
+        undefined,
+        auth.status === 401
+          ? "Please log in again to get a fresh authentication token"
+          : "Contact an administrator if you believe you should have access",
+        auth.status,
       );
     }
+    const { user } = auth;
 
-    // Create a client with the anon key to verify the token
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-    const supabase = createAnonClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
-    // Verify the token by getting the user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "Invalid authentication token",
-        authError?.message,
-        "Please log in again to get a fresh authentication token",
-        401,
-      );
-    }
-
-    // Check if user has admin role using centralized helper
-    // This checks app_metadata (server-controlled), user_metadata (fallback), and database
-    const adminStatus = await isAdmin(user);
-    if (!adminStatus) {
-      return createErrorResponse(
-        ErrorCategory.AUTHORIZATION,
-        "Admin access required",
-        "This endpoint is restricted to administrators only",
-        "Contact an administrator if you believe you should have access",
-        403,
-      );
-    }
-
-    // Use admin client for storage operations (bypasses RLS)
+    // Use admin client for database operations (bypasses RLS)
     const adminSupabase = createAdminClient();
 
     // Get request data and validate with Zod
@@ -147,8 +108,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { circuitId, userId, lightThumbBase64, darkThumbBase64 } =
-      validationResult.data;
+    const { lightThumbBase64, darkThumbBase64 } = validationResult.data;
+    // Normalise ids: R2 keys are case-sensitive, Postgres uuids are not
+    const circuitId = validationResult.data.circuitId.toLowerCase();
+    const userId = validationResult.data.userId.toLowerCase();
 
     // Verify circuit exists and belongs to the specified user (security check)
     const { data: circuit, error: circuitError } = await adminSupabase
@@ -178,87 +141,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Highest version already used, in R2 (any key layout) or in
-    // thumbnail_history. The DB value can be lower than this after a rollback
-    // via "Set as Active", and versioned keys must never be reused, so
-    // allocation starts above all of them.
-    // Failing to list is fatal: guessing could overwrite an immutable key.
-    let storageVersion = 0;
+    // Reserve a new version with an optimistic lock on the actual DB value
+    // (NULL included). It is max(db, R2, history) + 1, so it never reuses a
+    // number even after a rollback via "Set as Active".
+    let reservation;
     try {
-      const stored = await listCircuitThumbnails(circuitId);
-      storageVersion = Math.max(0, ...stored.map((t) => t.version));
-    } catch (storageError: any) {
+      reservation = await reserveThumbnailVersion(
+        circuitId,
+        circuit.thumbnail_version,
+      );
+    } catch (error: any) {
       throw new Error(
-        `[STORAGE] Could not list existing thumbnail versions: ${storageError.message}`,
+        `[STORAGE] Could not allocate a thumbnail version: ${error.message}`,
       );
     }
-    const { data: latestHistory } = await adminSupabase
-      .from("thumbnail_history")
-      .select("version")
-      .eq("circuit_id", circuitId)
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    storageVersion = Math.max(storageVersion, latestHistory?.version ?? 0);
-
-    console.log(
-      `[Thumbnail Regen] Circuit ${circuitId}: DB version=${circuit.thumbnail_version}, Storage version=${storageVersion}`,
-    );
-
-    // Atomically increment version using optimistic locking with retry.
-    // The lock compares against the value actually in the DB (which may be
-    // NULL); the new version is max(db, storage) + 1.
-    let newVersion: number | null = null;
-    let retries = 0;
-    const MAX_RETRIES = 3;
-
-    while (newVersion === null && retries < MAX_RETRIES) {
-      const dbVersion: number | null = circuit.thumbnail_version ?? null;
-      const nextVersion = Math.max(dbVersion ?? 0, storageVersion) + 1;
-
-      const lockQuery = adminSupabase
-        .from("circuits")
-        .update({ thumbnail_version: nextVersion })
-        .eq("id", circuitId);
-      const { data: updated, error: updateError } = await (
-        dbVersion === null
-          ? lockQuery.is("thumbnail_version", null)
-          : lockQuery.eq("thumbnail_version", dbVersion)
-      )
-        .select("thumbnail_version")
-        .maybeSingle();
-
-      if (!updateError && updated) {
-        newVersion = updated.thumbnail_version;
-      } else {
-        // Version changed, retry
-        retries++;
-        if (retries >= MAX_RETRIES) {
-          return createErrorResponse(
-            ErrorCategory.CONFLICT,
-            "Version allocation failed",
-            `Unable to allocate thumbnail version after ${MAX_RETRIES} attempts due to concurrent updates`,
-            "Please try again in a moment",
-            409,
-          );
-        }
-        // Re-fetch current version for next retry
-        const { data: refreshed } = await adminSupabase
-          .from("circuits")
-          .select("thumbnail_version")
-          .eq("id", circuitId)
-          .single();
-        if (refreshed) {
-          circuit.thumbnail_version = refreshed.thumbnail_version;
-        }
+    if (!reservation.ok) {
+      if (reservation.reason === "not_found") {
+        return createErrorResponse(
+          ErrorCategory.NOT_FOUND,
+          "Circuit not found",
+          `Circuit ${circuitId} was deleted during regeneration`,
+          undefined,
+          404,
+        );
       }
+      return createErrorResponse(
+        ErrorCategory.CONFLICT,
+        "Version allocation failed",
+        reservation.reason === "exhausted"
+          ? "Thumbnail version limit reached"
+          : "Unable to allocate thumbnail version due to concurrent updates",
+        "Please try again in a moment",
+        409,
+      );
     }
-
-    if (newVersion === null) {
-      // Unreachable (the loop returns 409 when retries run out); narrows type
-      throw new Error("Version allocation failed");
-    }
-    const version: number = newVersion;
+    const version = reservation.version;
 
     // Upload to R2 under the shared versioned layout:
     // thumbnails/<id>/v<N>-<theme>.png (immutable, long-cached)
@@ -283,50 +200,7 @@ export async function POST(request: NextRequest) {
     const lightUrl = await uploadThumbnail(lightThumbBase64, "light");
     const darkUrl = await uploadThumbnail(darkThumbBase64, "dark");
 
-    // Try to save to thumbnail_history table (optional - table may not exist)
-    try {
-      // Mark previous versions as not current
-      const { error: historyUpdateError } = await adminSupabase
-        .from("thumbnail_history")
-        .update({ is_current: false })
-        .eq("circuit_id", circuitId)
-        .eq("is_current", true);
-
-      if (historyUpdateError) {
-        console.warn(
-          "Error updating thumbnail history (non-critical):",
-          historyUpdateError,
-        );
-      }
-
-      // Insert new version into history
-      const { error: historyInsertError } = await adminSupabase
-        .from("thumbnail_history")
-        .insert({
-          circuit_id: circuitId,
-          version: newVersion,
-          thumbnail_light_url: lightUrl,
-          thumbnail_dark_url: darkUrl,
-          regenerated_by: user.id,
-          is_current: true,
-          notes: "Admin regeneration",
-        });
-
-      if (historyInsertError) {
-        console.warn(
-          "Error inserting thumbnail history (non-critical):",
-          historyInsertError,
-        );
-      }
-    } catch (historyError: any) {
-      // Thumbnail history is optional - log but don't fail the request
-      console.warn(
-        "Thumbnail history operations skipped (table may not exist):",
-        historyError.message,
-      );
-    }
-
-    // Update circuit record with new thumbnail URLs (version already set atomically)
+    // Update circuit record with new thumbnail URLs (version already reserved)
     const { error: updateError } = await adminSupabase
       .from("circuits")
       .update({
@@ -346,12 +220,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // History is an audit trail; failures here don't fail the request
+    const historyError = await recordThumbnailHistory({
+      circuitId,
+      version,
+      lightUrl,
+      darkUrl,
+      regeneratedBy: user.id,
+      notes: "Admin regeneration",
+    });
+    if (historyError) {
+      console.warn(
+        "Thumbnail history update failed (non-critical):",
+        historyError,
+      );
+    }
+
     return NextResponse.json({
       success: true,
       lightUrl,
       darkUrl,
-      version: newVersion,
-      message: `Thumbnails uploaded successfully (v${newVersion})`,
+      version,
+      message: `Thumbnails uploaded successfully (v${version})`,
     });
   } catch (error: any) {
     console.error("Error in regenerate thumbnail endpoint:", error);
