@@ -6,6 +6,7 @@
  * by the cascade, so they're removed separately on a best-effort basis.
  */
 
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteCircuitFiles } from "@/lib/r2-schematic";
 
@@ -14,10 +15,10 @@ export async function deleteUserAccount(
 ): Promise<{ circuitCount: number }> {
   const supabase = createAdminClient();
 
-  // Collect circuit IDs before the cascade removes them
+  // Collect circuit IDs and slugs before the cascade removes them
   const { data: circuits, error: listError } = await supabase
     .from("circuits")
-    .select("id")
+    .select("id, slug")
     .eq("user_id", userId);
 
   if (listError) {
@@ -27,6 +28,12 @@ export async function deleteUserAccount(
   const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
   if (deleteError) {
     throw new Error(`Failed to delete user: ${deleteError.message}`);
+  }
+
+  // Drop the ISR-cached pages of the deleted circuits. Must run inside a
+  // route handler or server action (both callers are route handlers).
+  for (const circuit of circuits ?? []) {
+    revalidatePath(`/circuit/${circuit.slug}`);
   }
 
   // A few circuits at a time: each one is several R2 list/delete calls, and
