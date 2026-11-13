@@ -59,6 +59,8 @@ CREATE POLICY "Only admins can delete history"
 
 -- ----------------------------------------------------------------------------
 -- 3. Protect counter columns from direct client writes
+--    SUPERSEDED by 20261113_circuit_write_guards.sql (guard_circuit_writes),
+--    which drops this trigger. If you re-run this file, re-run that one after.
 --    Owners could previously PATCH view_count/copy_count/etc on their own
 --    circuits. Counter changes made by triggers (pg_trigger_depth() > 1),
 --    SECURITY DEFINER functions (current_user = owner) and the service role
