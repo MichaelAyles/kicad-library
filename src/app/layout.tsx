@@ -20,12 +20,12 @@ export const metadata: Metadata = {
     "PCB",
     "electronic design",
   ],
-  authors: [{ name: "CircuitSnips", url: "https://circuitsnips.com" }],
+  authors: [{ name: "CircuitSnips", url: SITE_URL }],
   openGraph: {
     title: "CircuitSnips - Share KiCad Subcircuits",
     description:
       "Open-source platform for sharing reusable KiCad schematic subcircuits",
-    url: "https://circuitsnips.com",
+    url: SITE_URL,
     siteName: "CircuitSnips",
     type: "website",
   },
