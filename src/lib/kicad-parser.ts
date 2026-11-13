@@ -312,12 +312,14 @@ function extractBalancedSExpr(text: string, startPos: number): string | null {
 
   while (i < text.length) {
     const char = text[i];
-    const prevChar = i > startPos ? text[i - 1] : "";
 
-    // Track string boundaries (handle escaped quotes)
-    if (char === '"' && prevChar !== "\\") {
-      inString = !inString;
-    } else if (!inString) {
+    if (inString) {
+      // Skip whatever a backslash escapes, so "C:\\" ends at its last quote
+      if (char === "\\") i++;
+      else if (char === '"') inString = false;
+    } else if (char === '"') {
+      inString = true;
+    } else {
       if (char === "(") {
         depth++;
       } else if (char === ")") {
