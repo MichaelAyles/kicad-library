@@ -4,7 +4,7 @@
 upstream `theacodes/kicanvas`.
 
 - Fork: https://github.com/MichaelAyles/kicanvas
-- Branch: `rebase-upstream-2026-11`
+- Branch: `main`
 - Commit: `4882068`
 - Upstream base: `b031159` (2026-04-28), includes KiCad 10 property support
 
