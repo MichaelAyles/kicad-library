@@ -1196,10 +1196,11 @@ export function removeHierarchicalSheets(sexpr: string): string {
 
 /**
  * Replace the paper size in a full KiCad schematic file
- * Works for both (paper "A4") format and other paper declarations
+ *
+ * Handles (paper "A4"), (paper "A4" portrait) and (paper "User" w h).
+ * The result is always landscape, which is what selectSheetSize assumes.
  */
 export function replacePaperSize(sexpr: string, newSize: SheetSize): string {
-  // Match (paper "A4") or (paper "A3") etc.
-  const paperRegex = /\(paper\s+"[^"]+"\)/g;
+  const paperRegex = /\(paper\s+"[^"]*"(?:\s+[^\s()"]+)*\s*\)/g;
   return sexpr.replace(paperRegex, `(paper "${newSize}")`);
 }
