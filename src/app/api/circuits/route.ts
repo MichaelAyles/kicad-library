@@ -140,6 +140,8 @@ export async function POST(request: NextRequest) {
           component_count: stats.componentCount,
           wire_count: stats.wireCount,
           net_count: stats.netCount,
+          // No thumbnails yet; the first upload reserves v1
+          thumbnail_version: 0,
         })
         .select("id, slug")
         .single();

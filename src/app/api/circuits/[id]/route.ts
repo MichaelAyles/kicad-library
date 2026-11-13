@@ -63,8 +63,9 @@ export async function PUT(
       sheet_size,
       thumbnail_light_url,
       thumbnail_dark_url,
-      thumbnail_version,
     } = body;
+    // thumbnail_version is not accepted here: /api/upload-thumbnail reserves
+    // versions so their R2 keys are never reused.
 
     // Thumbnails must be this circuit's own files in our R2 bucket, so a
     // circuit can't be pointed at arbitrary external images. Compare the
@@ -107,9 +108,6 @@ export async function PUT(
       // Only update thumbnails
       updateData.thumbnail_light_url = thumbnail_light_url;
       updateData.thumbnail_dark_url = thumbnail_dark_url;
-      if (thumbnail_version !== undefined) {
-        updateData.thumbnail_version = thumbnail_version;
-      }
     } else {
       // Validate required fields for metadata update
       if (!title || !description || !tags || !license) {
@@ -186,8 +184,6 @@ export async function PUT(
         updateData.thumbnail_light_url = thumbnail_light_url;
       if (thumbnail_dark_url)
         updateData.thumbnail_dark_url = thumbnail_dark_url;
-      if (thumbnail_version !== undefined)
-        updateData.thumbnail_version = thumbnail_version;
     }
 
     // Update the circuit
