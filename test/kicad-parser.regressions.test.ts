@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractSnippetFromFullFile,
+  isClipboardSnippet,
   removeHierarchicalSheets,
   replacePaperSize,
   validateSExpression,
@@ -128,5 +129,95 @@ describe("extractSnippetFromFullFile with space indentation", () => {
     );
     expect(snippet.startsWith("(lib_symbols)")).toBe(true);
     expect(snippet).toContain("(circle");
+  });
+});
+
+describe("validateSExpression paren check ignores strings", () => {
+  it("accepts a real file with an unbalanced paren inside a text string", () => {
+    const text = `\t(text "Gain = 1 + R2/R1 :-)"
+\t\t(at 20.32 20.32 0)
+\t\t(effects
+\t\t\t(font
+\t\t\t\t(size 1.27 1.27)
+\t\t\t)
+\t\t)
+\t\t(uuid "5b0f3c1e-8f0e-4d7a-9a51-0c6f2b8e7d02")
+\t)
+`;
+    const file = insertBeforeRootClose(
+      fullFixture("kicad9-buck-regulator.kicad_sch"),
+      text,
+    );
+    const result = validateSExpression(file);
+    expect(result.errors).toEqual([]);
+    expect(result.metadata?.stats.componentCount).toBe(22);
+  });
+
+  it("accepts a symbol value like \"1)\" in a snippet", () => {
+    const snippet = snippetFixture(
+      "handmade-kicad6-spaces.clipboard.snippet",
+    ).replace('"22k"', '"22k (see note 1)"').replace('"10k"', '"10k 1)"');
+    const result = validateSExpression(snippet);
+    expect(result.valid).toBe(true);
+    expect(result.metadata?.components[0].value).toBe("10k 1)");
+  });
+
+  it("still rejects real paren imbalance and unclosed strings", () => {
+    expect(validateSExpression('(kicad_sch (version 20231120) "(")').valid).toBe(
+      true,
+    );
+    expect(validateSExpression('(kicad_sch (version 20231120) ")"').valid).toBe(
+      false,
+    );
+    expect(
+      validateSExpression('(kicad_sch (version 20231120) (title "x))').errors[0],
+    ).toMatch(/Unclosed string/i);
+  });
+});
+
+describe("isClipboardSnippet recognises every pasteable element", () => {
+  // KiCad only writes (lib_symbols) when the selection has symbols, so a
+  // copy of just wires and labels starts with (wire ...)
+  const wiresAndLabel = `(wire (pts (xy 100.33 50.8) (xy 110.49 50.8))
+  (stroke (width 0) (type default))
+  (uuid 6a0e0c56-1d1e-4c7e-9a40-2f3f6c1b0b01)
+)
+(label "SDA" (at 110.49 50.8 0)
+  (effects (font (size 1.27 1.27)) (justify left bottom))
+  (uuid 6a0e0c56-1d1e-4c7e-9a40-2f3f6c1b0b02)
+)
+`;
+
+  it("treats a wires-and-labels copy as a snippet", () => {
+    expect(isClipboardSnippet(wiresAndLabel)).toBe(true);
+    const result = validateSExpression(wiresAndLabel);
+    expect(result.valid).toBe(true);
+    expect(result.metadata?.stats.wireCount).toBe(1);
+    expect(result.metadata?.nets).toEqual([{ name: "SDA", type: "label" }]);
+  });
+
+  it("treats a graphics-only copy from a real file as a snippet", () => {
+    const snippet = extractSnippetFromFullFile(
+      fullFixture("kicad9-drawings.kicad_sch"),
+    ).replace("(lib_symbols)\n\n", "");
+    expect(snippet.startsWith("(circle")).toBe(true);
+    expect(isClipboardSnippet(snippet)).toBe(true);
+    expect(validateSExpression(snippet).valid).toBe(true);
+  });
+
+  it.each([
+    ["a word that starts with symbol", "(symbolic link)"],
+    ["JSON that mentions a symbol", '{"note": "(symbol here)"}'],
+    [
+      "a symbol library",
+      '(kicad_symbol_lib (version 20231120) (generator "kicad_symbol_editor") (symbol "R" (in_bom yes)))',
+    ],
+    [
+      "a PCB with a track arc",
+      '(kicad_pcb (version 20240108) (generator "pcbnew") (arc (start 0 0) (mid 1 1) (end 2 0) (width 0.25) (layer "F.Cu") (net 1)))',
+    ],
+  ])("is false for %s", (_label, input) => {
+    expect(isClipboardSnippet(input)).toBe(false);
+    expect(validateSExpression(input).valid).toBe(false);
   });
 });

@@ -165,28 +165,22 @@ export function selectSheetSize(boundingBox: {
 /**
  * Detect if this is a clipboard snippet (partial) or full schematic file
  *
- * Clipboard snippets start with (lib_symbols ...) without (kicad_sch ...)
- * Full files start with (kicad_sch ...)
+ * Clipboard snippets are bare top-level elements, usually (lib_symbols ...)
+ * then (symbol ...), (wire ...) etc. A copy of only wires or graphics has
+ * no lib_symbols. Full files start with (kicad_sch ...)
  */
 export function isClipboardSnippet(sexpr: string): boolean {
-  const trimmed = sexpr.trim();
-
   // Check if it has kicad_sch wrapper
-  if (trimmed.includes("(kicad_sch")) {
+  if (sexpr.includes("(kicad_sch")) {
     return false; // It's a full file
   }
 
-  // Check if it has lib_symbols or symbol (clipboard data)
-  if (trimmed.startsWith("(lib_symbols") || trimmed.includes("(lib_symbols")) {
-    return true; // It's a snippet
-  }
-
-  // If it has symbols but no kicad_sch, treat as snippet
-  if (trimmed.includes("(symbol")) {
-    return true;
-  }
-
-  return false;
+  // A snippet has at least one pasteable element at the top level. Checking
+  // only top-level lists rules out other KiCad files (kicad_pcb,
+  // kicad_symbol_lib), words like "(symbolic", and text inside strings.
+  return findNodesAtDepth(sexpr, 1).some((node) =>
+    SNIPPET_ELEMENTS.includes(node.name),
+  );
 }
 
 // ============================================================================
@@ -680,9 +674,17 @@ export function validateSExpression(sexpr: string): ValidationResult {
     };
   }
 
-  // Check for balanced parentheses
+  // Check for balanced parentheses, ignoring any inside quoted strings
   let depth = 0;
-  for (const char of sexpr) {
+  let inString = false;
+  for (let i = 0; i < sexpr.length; i++) {
+    const char = sexpr[i];
+    if (inString) {
+      if (char === "\\") i++;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
     if (char === "(") depth++;
     if (char === ")") depth--;
     if (depth < 0) {
@@ -695,6 +697,16 @@ export function validateSExpression(sexpr: string): ValidationResult {
         originalFormat: "full",
       };
     }
+  }
+  if (inString) {
+    errors.push("Unclosed string - missing closing quote");
+    return {
+      valid: false,
+      errors,
+      warnings,
+      isSnippet: false,
+      originalFormat: "full",
+    };
   }
   if (depth !== 0) {
     errors.push("Unbalanced parentheses - missing closing parenthesis");
