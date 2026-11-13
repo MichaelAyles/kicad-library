@@ -1,0 +1,2 @@
+# Keep schematic fixtures byte-for-byte (one is CRLF on purpose)
+test/fixtures/** -text

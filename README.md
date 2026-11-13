@@ -122,20 +122,21 @@ npm run dev
 npm run dev          # Start dev server (localhost:3000)
 npm run build        # Production build (includes type checking + linting)
 npm run lint         # ESLint
+npm test             # Vitest unit tests (test/)
 npm run import       # Run batch import script
 npm run import:test  # Test import (10 circuits, dry-run)
 ```
 
 Before committing:
-- `npm run build` must pass
-- `npm run lint` must pass
+- `npm run build`, `npm run lint` and `npm test` must pass
 - Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, etc.)
+
+GitHub Actions (`.github/workflows/ci.yml`) runs lint, `tsc --noEmit`, tests and the build on every pull request and push to `main`.
 
 ## Roadmap
 
 - KiCad plugin integration
-- Automated testing (unit + E2E)
-- CI/CD pipeline
+- End-to-end tests
 - Support for other EDA tools
 - Email notifications for comments and replies
 - Circuit versioning and revision history

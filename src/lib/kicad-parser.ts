@@ -165,28 +165,22 @@ export function selectSheetSize(boundingBox: {
 /**
  * Detect if this is a clipboard snippet (partial) or full schematic file
  *
- * Clipboard snippets start with (lib_symbols ...) without (kicad_sch ...)
- * Full files start with (kicad_sch ...)
+ * Clipboard snippets are bare top-level elements, usually (lib_symbols ...)
+ * then (symbol ...), (wire ...) etc. A copy of only wires or graphics has
+ * no lib_symbols. Full files start with (kicad_sch ...)
  */
 export function isClipboardSnippet(sexpr: string): boolean {
-  const trimmed = sexpr.trim();
-
   // Check if it has kicad_sch wrapper
-  if (trimmed.includes("(kicad_sch")) {
+  if (sexpr.includes("(kicad_sch")) {
     return false; // It's a full file
   }
 
-  // Check if it has lib_symbols or symbol (clipboard data)
-  if (trimmed.startsWith("(lib_symbols") || trimmed.includes("(lib_symbols")) {
-    return true; // It's a snippet
-  }
-
-  // If it has symbols but no kicad_sch, treat as snippet
-  if (trimmed.includes("(symbol")) {
-    return true;
-  }
-
-  return false;
+  // A snippet has at least one pasteable element at the top level. Checking
+  // only top-level lists rules out other KiCad files (kicad_pcb,
+  // kicad_symbol_lib), words like "(symbolic", and text inside strings.
+  return findNodesAtDepth(sexpr, 1).some((node) =>
+    SNIPPET_ELEMENTS.includes(node.name),
+  );
 }
 
 // ============================================================================
@@ -252,6 +246,11 @@ const SNIPPET_ELEMENTS = [
   "global_label", // Global labels
   "hierarchical_label", // Hierarchical sheet labels
   "text", // Text annotations
+  "text_box", // Text boxes (KiCad 7+)
+  "netclass_flag", // Net class directive labels (KiCad 7+)
+  "table", // Tables (KiCad 8+)
+  "image", // Embedded bitmaps
+  "rule_area", // Rule areas (KiCad 9+)
   "polyline", // Graphic polylines
   "rectangle", // Graphic rectangles
   "circle", // Graphic circles
@@ -262,77 +261,19 @@ const SNIPPET_ELEMENTS = [
  * Extract snippet from a full .kicad_sch file
  * Removes the kicad_sch wrapper and metadata, keeping only pasteable schematic content.
  *
- * Uses balanced parentheses matching to extract complete elements while
- * preserving original formatting (avoids lossy tree reconstruction).
+ * Walks the file depth- and string-aware, so it works whatever the
+ * indentation (KiCad 6/7 use spaces, KiCad 8+ tabs, wrapped snippets none)
+ * and slices each element out verbatim to preserve original formatting.
  */
 export function extractSnippetFromFullFile(fullFile: string): string {
-  const snippetParts: string[] = [];
+  // Elements are direct children of (kicad_sch ...) in a full file, and
+  // top-level lists in a snippet
+  const depth = fullFile.includes("(kicad_sch") ? 2 : 1;
 
-  // Determine the base indentation level (elements inside kicad_sch are indented)
-  // We want to extract only top-level schematic elements, not nested ones
-  const hasKicadSchWrapper = fullFile.includes("(kicad_sch");
-
-  // Build regex pattern for all valid snippet elements
-  // For full files, match elements with exactly one tab/indent level (direct children of kicad_sch)
-  // For snippets, match elements at line start
-  const indentPattern = hasKicadSchWrapper ? "\\t" : "";
-  const elementPattern = new RegExp(
-    `^(${indentPattern})(\\((?:${SNIPPET_ELEMENTS.join("|")})(?:\\s|$))`,
-    "gm",
-  );
-
-  // Find each top-level element and extract it with balanced parentheses
-  let match;
-  while ((match = elementPattern.exec(fullFile)) !== null) {
-    const startPos = match.index + match[1].length; // Skip leading whitespace
-    const extracted = extractBalancedSExpr(fullFile, startPos);
-    if (extracted) {
-      snippetParts.push(extracted);
-      // IMPORTANT: Advance regex past the extracted content to avoid
-      // matching nested elements (e.g., symbols inside lib_symbols)
-      elementPattern.lastIndex = match.index + match[1].length + extracted.length;
-    }
-  }
-
-  return snippetParts.join("\n\n");
-}
-
-/**
- * Extract a balanced S-expression starting at the given position.
- * Returns the complete S-expression including all nested content.
- */
-function extractBalancedSExpr(text: string, startPos: number): string | null {
-  if (text[startPos] !== "(") {
-    return null;
-  }
-
-  let depth = 0;
-  let inString = false;
-  let i = startPos;
-
-  while (i < text.length) {
-    const char = text[i];
-    const prevChar = i > startPos ? text[i - 1] : "";
-
-    // Track string boundaries (handle escaped quotes)
-    if (char === '"' && prevChar !== "\\") {
-      inString = !inString;
-    } else if (!inString) {
-      if (char === "(") {
-        depth++;
-      } else if (char === ")") {
-        depth--;
-        if (depth === 0) {
-          // Found the matching closing paren
-          return text.slice(startPos, i + 1);
-        }
-      }
-    }
-    i++;
-  }
-
-  // Unbalanced - didn't find matching close paren
-  return null;
+  return findNodesAtDepth(fullFile, depth)
+    .filter((node) => SNIPPET_ELEMENTS.includes(node.name))
+    .map((node) => fullFile.slice(node.start, node.end))
+    .join("\n\n");
 }
 
 /**
@@ -388,10 +329,10 @@ interface TopLevelNode {
 }
 
 /**
- * Find the direct children of the root (kicad_sch ...) list.
+ * Find the lists nested exactly `targetDepth` deep (1 = top-level lists).
  * Depth-aware and string-aware, so it never matches nested nodes.
  */
-function findTopLevelNodes(file: string): TopLevelNode[] {
+function findNodesAtDepth(file: string, targetDepth: number): TopLevelNode[] {
   const nodes: TopLevelNode[] = [];
   const nameRe = /\(\s*([^\s()"]+)/y;
   let depth = 0;
@@ -409,9 +350,9 @@ function findTopLevelNodes(file: string): TopLevelNode[] {
       inString = true;
     } else if (ch === "(") {
       depth++;
-      if (depth === 2) nodeStart = i;
+      if (depth === targetDepth) nodeStart = i;
     } else if (ch === ")") {
-      if (depth === 2 && nodeStart >= 0) {
+      if (depth === targetDepth && nodeStart >= 0) {
         nameRe.lastIndex = nodeStart;
         const name = nameRe.exec(file)?.[1] ?? "";
         nodes.push({ name, start: nodeStart, end: i + 1 });
@@ -422,6 +363,13 @@ function findTopLevelNodes(file: string): TopLevelNode[] {
   }
 
   return nodes;
+}
+
+/**
+ * Find the direct children of the root (kicad_sch ...) list.
+ */
+function findTopLevelNodes(file: string): TopLevelNode[] {
+  return findNodesAtDepth(file, 2);
 }
 
 /**
@@ -691,9 +639,17 @@ export function validateSExpression(sexpr: string): ValidationResult {
     };
   }
 
-  // Check for balanced parentheses
+  // Check for balanced parentheses, ignoring any inside quoted strings
   let depth = 0;
-  for (const char of sexpr) {
+  let inString = false;
+  for (let i = 0; i < sexpr.length; i++) {
+    const char = sexpr[i];
+    if (inString) {
+      if (char === "\\") i++;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
     if (char === "(") depth++;
     if (char === ")") depth--;
     if (depth < 0) {
@@ -706,6 +662,16 @@ export function validateSExpression(sexpr: string): ValidationResult {
         originalFormat: "full",
       };
     }
+  }
+  if (inString) {
+    errors.push("Unclosed string - missing closing quote");
+    return {
+      valid: false,
+      errors,
+      warnings,
+      isSnippet: false,
+      originalFormat: "full",
+    };
   }
   if (depth !== 0) {
     errors.push("Unbalanced parentheses - missing closing parenthesis");
@@ -1155,51 +1121,28 @@ export function suggestCategory(metadata: ParsedMetadata): string {
  * - Individual (sheet ...) elements (hierarchical sheet symbols on schematic)
  */
 export function removeHierarchicalSheets(sexpr: string): string {
+  // Both are direct children of (kicad_sch ...), or top-level in a snippet.
+  // Walking by depth skips any "(sheet" that appears inside a string.
+  const depth = sexpr.includes("(kicad_sch") ? 2 : 1;
+  const sheets = findNodesAtDepth(sexpr, depth).filter(
+    (node) => node.name === "sheet" || node.name === "sheet_instances",
+  );
+
+  // Remove from the end so earlier indices stay valid
   let result = sexpr;
-
-  // Remove (sheet_instances ...) blocks using balanced extraction
-  // Find all occurrences and remove them from end to start to preserve positions
-  const sheetInstancesPositions: number[] = [];
-  const sheetInstancesRegex = /\(sheet_instances\s/g;
-  let match;
-  while ((match = sheetInstancesRegex.exec(result)) !== null) {
-    sheetInstancesPositions.push(match.index);
+  for (const node of sheets.reverse()) {
+    result = result.slice(0, node.start) + result.slice(node.end);
   }
-
-  // Process from end to start so positions stay valid
-  for (let i = sheetInstancesPositions.length - 1; i >= 0; i--) {
-    const pos = sheetInstancesPositions[i];
-    const extracted = extractBalancedSExpr(result, pos);
-    if (extracted) {
-      result = result.slice(0, pos) + result.slice(pos + extracted.length);
-    }
-  }
-
-  // Remove individual (sheet ...) elements (hierarchical sheet symbols)
-  const sheetPositions: number[] = [];
-  // Match (sheet followed by whitespace but not (sheet_instances
-  const sheetRegex = /\(sheet\s+(?!instances)/g;
-  while ((match = sheetRegex.exec(result)) !== null) {
-    sheetPositions.push(match.index);
-  }
-
-  for (let i = sheetPositions.length - 1; i >= 0; i--) {
-    const pos = sheetPositions[i];
-    const extracted = extractBalancedSExpr(result, pos);
-    if (extracted) {
-      result = result.slice(0, pos) + result.slice(pos + extracted.length);
-    }
-  }
-
   return result;
 }
 
 /**
  * Replace the paper size in a full KiCad schematic file
- * Works for both (paper "A4") format and other paper declarations
+ *
+ * Handles (paper "A4"), (paper "A4" portrait) and (paper "User" w h).
+ * The result is always landscape, which is what selectSheetSize assumes.
  */
 export function replacePaperSize(sexpr: string, newSize: SheetSize): string {
-  // Match (paper "A4") or (paper "A3") etc.
-  const paperRegex = /\(paper\s+"[^"]+"\)/g;
+  const paperRegex = /\(paper\s+"[^"]*"(?:\s+[^\s()"]+)*\s*\)/g;
   return sexpr.replace(paperRegex, `(paper "${newSize}")`);
 }
