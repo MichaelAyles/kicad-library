@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { listPublicCircuitSlugs } from "@/lib/public-circuits";
 import { SITE_URL, circuitUrl } from "@/lib/site";
 
@@ -20,11 +21,23 @@ const STATIC_PAGES: Array<{
 ];
 
 /**
- * Query errors propagate on purpose: during ISR revalidation Next.js then
- * keeps serving the last good sitemap rather than caching a partial one.
+ * At runtime, query errors propagate on purpose: during ISR revalidation
+ * Next.js then keeps serving the last good sitemap rather than caching a
+ * partial one.
+ *
+ * At build time there is no previous version to fall back on, and throwing
+ * would fail the whole build (CI builds with placeholder Supabase settings),
+ * so the build ships the static pages only. The next revalidation fills in
+ * the circuits.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const circuits = await listPublicCircuitSlugs();
+  let circuits: Awaited<ReturnType<typeof listPublicCircuitSlugs>> = [];
+  try {
+    circuits = await listPublicCircuitSlugs();
+  } catch (error) {
+    if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD) throw error;
+    console.warn("sitemap: circuit list unavailable at build time:", error);
+  }
 
   return [
     ...STATIC_PAGES.map((page) => ({
