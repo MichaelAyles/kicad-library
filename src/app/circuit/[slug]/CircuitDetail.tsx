@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Copy,
@@ -40,35 +39,59 @@ import {
   incrementCopyCount,
   checkIfFavorited,
   toggleFavorite,
-  type Circuit,
 } from "@/lib/circuits";
+import type { CircuitView } from "@/lib/public-circuits";
+import {
+  summarizeMetadata,
+  type CircuitPartsSummary,
+} from "@/lib/circuit-summary";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
 
-export default function CircuitDetailPage() {
-  const params = useParams();
-  const slug = params?.slug as string;
+interface CircuitDetailProps {
+  slug: string;
+  /**
+   * Circuit fetched on the server (public circuits only). When null, e.g. for
+   * an owner's private circuit, the page loads it in the browser instead.
+   */
+  initialCircuit: CircuitView | null;
+  /** Server-parsed parts list and stats for initialCircuit. */
+  initialParts: CircuitPartsSummary | null;
+}
+
+export function CircuitDetail({
+  slug,
+  initialCircuit,
+  initialParts,
+}: CircuitDetailProps) {
   const { user } = useAuth();
 
-  const [circuit, setCircuit] = useState<Circuit | null>(null);
+  const [circuit, setCircuit] = useState<CircuitView | null>(initialCircuit);
   const [copied, setCopied] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
-  const [favoriteCount, setFavoriteCount] = useState(0);
-  const [copyCount, setCopyCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(
+    initialCircuit?.favorite_count ?? 0,
+  );
+  const [copyCount, setCopyCount] = useState(initialCircuit?.copy_count ?? 0);
   const [snippetData, setSnippetData] = useState<string>(""); // For copy button - always snippet
   const [fullFileData, setFullFileData] = useState<string>(""); // For preview/download - always full file
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!initialCircuit);
   const [error, setError] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<any>(null); // Parsed metadata from S-expression
+  const [metadata, setMetadata] = useState<CircuitPartsSummary | null>(
+    initialParts,
+  ); // Parsed metadata from S-expression
   const [isFlagModalOpen, setIsFlagModalOpen] = useState(false);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
 
-  // Load circuit data from database
+  // Load the circuit (including raw S-expression for copy/download) in the
+  // browser. The server only renders public circuits and never sends the raw
+  // S-expression, so this always runs: it fetches copy/download data, refreshes
+  // the cached counters, and is the only source for an owner's private circuit
+  // (the browser session can see it, the cookie-less server fetch can't).
   useEffect(() => {
     if (!slug) return;
 
     const loadCircuit = async () => {
-      setIsLoading(true);
       setError(null);
 
       try {
@@ -76,12 +99,14 @@ export default function CircuitDetailPage() {
         const circuitData = await getCircuitBySlug(slug);
 
         if (!circuitData) {
+          setCircuit(null);
           setError("Circuit not found");
           setIsLoading(false);
           return;
         }
 
-        setCircuit(circuitData);
+        const { raw_sexpr, ...circuitFields } = circuitData;
+        setCircuit(circuitFields);
         setFavoriteCount(circuitData.favorite_count);
         setCopyCount(circuitData.copy_count);
 
@@ -90,25 +115,44 @@ export default function CircuitDetailPage() {
           console.error("Failed to increment view count:", err),
         );
 
-        // Check if user has favorited this circuit
-        if (user?.id) {
-          const favorited = await checkIfFavorited(circuitData.id, user.id);
-          setIsFavorited(favorited);
-        }
-
         // Prepare circuit data for copy and preview
-        prepareCircuitData(circuitData.raw_sexpr, circuitData.title);
+        prepareCircuitData(raw_sexpr, circuitData.title);
 
         setIsLoading(false);
       } catch (err) {
         console.error("Failed to load circuit:", err);
-        setError(err instanceof Error ? err.message : "Failed to load circuit");
+        // Keep showing server-rendered content if we have it
+        if (!initialCircuit) {
+          setError(
+            err instanceof Error ? err.message : "Failed to load circuit",
+          );
+        }
         setIsLoading(false);
       }
     };
 
     loadCircuit();
-  }, [slug, user?.id]);
+    // initialCircuit/initialParts are fixed for a given slug
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
+  // Check if the signed-in user has favorited this circuit
+  const circuitId = circuit?.id;
+  useEffect(() => {
+    if (!circuitId || !user?.id) {
+      setIsFavorited(false);
+      return;
+    }
+    let cancelled = false;
+    checkIfFavorited(circuitId, user.id)
+      .then((favorited) => {
+        if (!cancelled) setIsFavorited(favorited);
+      })
+      .catch((err) => console.error("Failed to check favorite:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [circuitId, user?.id]);
 
   // Check if current user is admin
   useEffect(() => {
@@ -126,20 +170,21 @@ export default function CircuitDetailPage() {
 
   // Helper function to prepare data from database
   const prepareCircuitData = (rawSexpr: string, title: string) => {
-    // Validate and parse the S-expression to extract metadata
-    const validation = validateSExpression(rawSexpr);
-
-    if (validation.valid && validation.metadata) {
-      setMetadata(validation.metadata);
+    // Use the server-parsed metadata if we have it; otherwise (private
+    // circuits, which the server can't see) parse the S-expression here.
+    let parts = initialParts;
+    if (!parts) {
+      const validation = validateSExpression(rawSexpr);
+      if (validation.valid && validation.metadata) {
+        parts = summarizeMetadata(validation.metadata);
+        setMetadata(parts);
+      }
     }
 
     if (isClipboardSnippet(rawSexpr)) {
       // It's a snippet - use as-is for copy, wrap for preview/download
       // Calculate the appropriate sheet size based on bounding box
-      const paperSize =
-        validation.valid && validation.metadata
-          ? selectSheetSize(validation.metadata.boundingBox).size
-          : "A4";
+      const paperSize = parts ? selectSheetSize(parts.boundingBox).size : "A4";
 
       setSnippetData(rawSexpr);
       setFullFileData(wrapSnippetToFullFile(rawSexpr, { title, paperSize }));
@@ -394,7 +439,10 @@ export default function CircuitDetailPage() {
                   <span>•</span>
                 </>
               ) : null}
-              <span>Uploaded {formatDate(circuit.created_at)}</span>
+              {/* Server and browser time zones can differ by a day */}
+              <span suppressHydrationWarning>
+                Uploaded {formatDate(circuit.created_at)}
+              </span>
               <span>•</span>
               <span>{circuit.view_count} views</span>
             </div>
@@ -469,14 +517,9 @@ export default function CircuitDetailPage() {
             )}
           </div>
 
-          {/* Schematic Viewer */}
-          {isLoading ? (
-            <div className="bg-card border rounded-lg p-8 mb-8">
-              <div className="aspect-video bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground">
-                <p className="text-lg font-medium mb-2">Loading circuit...</p>
-              </div>
-            </div>
-          ) : fullFileData && circuit.schematic_r2_url ? (
+          {/* Schematic Viewer - KiCanvas loads straight from R2, so it can
+              start before the raw S-expression arrives */}
+          {circuit.schematic_r2_url ? (
             <div className="mb-8">
               <SchematicViewer
                 sexpr={fullFileData}
@@ -484,6 +527,7 @@ export default function CircuitDetailPage() {
                 slug={circuit.slug}
                 circuitId={circuit.id}
                 schematicR2Url={circuit.schematic_r2_url}
+                componentCount={metadata?.stats.componentCount}
                 onCopy={handleViewerCopy}
               />
             </div>
@@ -491,7 +535,7 @@ export default function CircuitDetailPage() {
             <div className="bg-card border rounded-lg p-8 mb-8">
               <div className="aspect-video bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground">
                 <p className="text-lg font-medium mb-2">
-                  {!circuit.schematic_r2_url ? "Schematic not available" : "Failed to load circuit"}
+                  Schematic not available
                 </p>
               </div>
             </div>
@@ -506,7 +550,7 @@ export default function CircuitDetailPage() {
                   Components ({metadata.stats.componentCount})
                 </h2>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {metadata.components.map((comp: any, index: number) => (
+                  {metadata.components.map((comp, index) => (
                     <div
                       key={index}
                       className="flex items-start justify-between text-sm"

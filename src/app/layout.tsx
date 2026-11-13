@@ -4,8 +4,10 @@ import "./globals.css";
 import { b612, b612Mono } from "./fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CookieNotice } from "@/components/CookieNotice";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "CircuitSnips - Share KiCad Subcircuits",
   description:
     "Open-source platform for sharing and discovering reusable KiCad schematic subcircuits. Copy-paste circuits for your electronics projects.",

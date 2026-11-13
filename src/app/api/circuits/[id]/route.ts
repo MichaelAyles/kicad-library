@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   deleteCircuitFiles,
@@ -230,6 +231,9 @@ export async function PUT(
       }
     }
 
+    // Refresh the ISR-cached circuit page so the edit shows immediately
+    if (circuitOut?.slug) revalidatePath(`/circuit/${circuitOut.slug}`);
+
     return NextResponse.json({
       success: true,
       circuit: circuitOut,
@@ -271,7 +275,7 @@ export async function DELETE(
     // Get the circuit to verify ownership
     const { data: circuit, error: fetchError } = await supabase
       .from("circuits")
-      .select("user_id")
+      .select("user_id, slug")
       .eq("id", params.id)
       .single();
 
@@ -307,6 +311,9 @@ export async function DELETE(
     } catch (r2Error) {
       console.error("Circuit deleted but R2 cleanup failed:", r2Error);
     }
+
+    // Drop the ISR-cached circuit page so it stops serving the deleted circuit
+    revalidatePath(`/circuit/${circuit.slug}`);
 
     return NextResponse.json({
       success: true,
