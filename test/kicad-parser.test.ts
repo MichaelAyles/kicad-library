@@ -19,8 +19,6 @@ import {
   snippetFixture,
 } from "./fixtures";
 
-const TAB_FIXTURES = FULL_FIXTURES.filter((f) => f.indent === "tab");
-
 const SNIPPETS = [
   {
     file: "handmade-kicad6-spaces.clipboard.snippet",
@@ -225,7 +223,7 @@ describe("extractSnippetFromFullFile", () => {
     );
   });
 
-  it.each(TAB_FIXTURES)(
+  it.each(FULL_FIXTURES)(
     "strips file-level nodes from $file and keeps every symbol and wire",
     (f) => {
       const full = fullFixture(f.file);
@@ -551,7 +549,7 @@ describe("replacePaperSize", () => {
 });
 
 describe("round trip: extract -> wrap -> validate", () => {
-  it.each(TAB_FIXTURES)("keeps all $components components of $file", (f) => {
+  it.each(FULL_FIXTURES)("keeps all $components components of $file", (f) => {
     const snippet = extractSnippetFromFullFile(fullFixture(f.file));
     const result = validateSExpression(wrapSnippetToFullFile(snippet));
     expect(result.valid).toBe(true);

@@ -262,39 +262,19 @@ const SNIPPET_ELEMENTS = [
  * Extract snippet from a full .kicad_sch file
  * Removes the kicad_sch wrapper and metadata, keeping only pasteable schematic content.
  *
- * Uses balanced parentheses matching to extract complete elements while
- * preserving original formatting (avoids lossy tree reconstruction).
+ * Walks the file depth- and string-aware, so it works whatever the
+ * indentation (KiCad 6/7 use spaces, KiCad 8+ tabs, wrapped snippets none)
+ * and slices each element out verbatim to preserve original formatting.
  */
 export function extractSnippetFromFullFile(fullFile: string): string {
-  const snippetParts: string[] = [];
+  // Elements are direct children of (kicad_sch ...) in a full file, and
+  // top-level lists in a snippet
+  const depth = fullFile.includes("(kicad_sch") ? 2 : 1;
 
-  // Determine the base indentation level (elements inside kicad_sch are indented)
-  // We want to extract only top-level schematic elements, not nested ones
-  const hasKicadSchWrapper = fullFile.includes("(kicad_sch");
-
-  // Build regex pattern for all valid snippet elements
-  // For full files, match elements with exactly one tab/indent level (direct children of kicad_sch)
-  // For snippets, match elements at line start
-  const indentPattern = hasKicadSchWrapper ? "\\t" : "";
-  const elementPattern = new RegExp(
-    `^(${indentPattern})(\\((?:${SNIPPET_ELEMENTS.join("|")})(?:\\s|$))`,
-    "gm",
-  );
-
-  // Find each top-level element and extract it with balanced parentheses
-  let match;
-  while ((match = elementPattern.exec(fullFile)) !== null) {
-    const startPos = match.index + match[1].length; // Skip leading whitespace
-    const extracted = extractBalancedSExpr(fullFile, startPos);
-    if (extracted) {
-      snippetParts.push(extracted);
-      // IMPORTANT: Advance regex past the extracted content to avoid
-      // matching nested elements (e.g., symbols inside lib_symbols)
-      elementPattern.lastIndex = match.index + match[1].length + extracted.length;
-    }
-  }
-
-  return snippetParts.join("\n\n");
+  return findNodesAtDepth(fullFile, depth)
+    .filter((node) => SNIPPET_ELEMENTS.includes(node.name))
+    .map((node) => fullFile.slice(node.start, node.end))
+    .join("\n\n");
 }
 
 /**
@@ -390,10 +370,10 @@ interface TopLevelNode {
 }
 
 /**
- * Find the direct children of the root (kicad_sch ...) list.
+ * Find the lists nested exactly `targetDepth` deep (1 = top-level lists).
  * Depth-aware and string-aware, so it never matches nested nodes.
  */
-function findTopLevelNodes(file: string): TopLevelNode[] {
+function findNodesAtDepth(file: string, targetDepth: number): TopLevelNode[] {
   const nodes: TopLevelNode[] = [];
   const nameRe = /\(\s*([^\s()"]+)/y;
   let depth = 0;
@@ -411,9 +391,9 @@ function findTopLevelNodes(file: string): TopLevelNode[] {
       inString = true;
     } else if (ch === "(") {
       depth++;
-      if (depth === 2) nodeStart = i;
+      if (depth === targetDepth) nodeStart = i;
     } else if (ch === ")") {
-      if (depth === 2 && nodeStart >= 0) {
+      if (depth === targetDepth && nodeStart >= 0) {
         nameRe.lastIndex = nodeStart;
         const name = nameRe.exec(file)?.[1] ?? "";
         nodes.push({ name, start: nodeStart, end: i + 1 });
@@ -424,6 +404,13 @@ function findTopLevelNodes(file: string): TopLevelNode[] {
   }
 
   return nodes;
+}
+
+/**
+ * Find the direct children of the root (kicad_sch ...) list.
+ */
+function findTopLevelNodes(file: string): TopLevelNode[] {
+  return findNodesAtDepth(file, 2);
 }
 
 /**

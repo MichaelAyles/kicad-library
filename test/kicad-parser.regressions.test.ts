@@ -8,8 +8,9 @@ import {
   removeHierarchicalSheets,
   replacePaperSize,
   validateSExpression,
+  wrapSnippetToFullFile,
 } from "@/lib/kicad-parser";
-import { fullFixture } from "./fixtures";
+import { fullFixture, snippetFixture } from "./fixtures";
 
 describe("replacePaperSize handles every (paper) form", () => {
   it('rewrites (paper "A4" portrait)', () => {
@@ -97,5 +98,35 @@ describe("escaped backslash before a closing quote", () => {
     const v = validateSExpression(result);
     expect(v.valid).toBe(true);
     expect(v.metadata?.stats.componentCount).toBe(19);
+  });
+});
+
+describe("extractSnippetFromFullFile with space indentation", () => {
+  // KiCad 6 and 7 indent with two spaces, KiCad 8+ with tabs. The old regex
+  // only looked for one tab, so every KiCad 6/7 circuit copied as "".
+  it.each([
+    ["kicad6-voltage-divider.kicad_sch", 41],
+    ["kicad7-ntc-thermistor.kicad_sch", 41],
+  ])("extracts all symbols from %s", (file, components) => {
+    const snippet = extractSnippetFromFullFile(fullFixture(file));
+    expect(snippet.startsWith("(lib_symbols")).toBe(true);
+    const v = validateSExpression(snippet);
+    expect(v.isSnippet).toBe(true);
+    expect(v.metadata?.stats.componentCount).toBe(components);
+  });
+
+  it("extracts from a file made by wrapSnippetToFullFile", () => {
+    // CircuitSnips-generated files put the snippet at column 0
+    const snippet = snippetFixture("handmade-kicad6-spaces.clipboard.snippet");
+    const extracted = extractSnippetFromFullFile(wrapSnippetToFullFile(snippet));
+    expect(extracted).toBe(snippet.trim().replace(/\n(?=\()/g, "\n\n"));
+  });
+
+  it("keeps an empty (lib_symbols)", () => {
+    const snippet = extractSnippetFromFullFile(
+      fullFixture("kicad9-drawings.kicad_sch"),
+    );
+    expect(snippet.startsWith("(lib_symbols)")).toBe(true);
+    expect(snippet).toContain("(circle");
   });
 });
