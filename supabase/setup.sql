@@ -17,11 +17,19 @@
 -- This script is IDEMPOTENT - safe to run multiple times
 -- All statements use IF NOT EXISTS or CREATE OR REPLACE
 --
--- Version: 2025-01-20
+-- Version: 2026-11-13
 --
--- AFTER running this, also run migrations/add_thumbnail_version_and_indexes.sql
--- and migrations/security_hardening.sql (counter protection, function
--- search_path, admin-only RPCs). Admin role lives in auth app_metadata.
+-- Security posture matches the live database as of
+-- migrations/20261113_circuit_write_guards.sql: every function pins
+-- search_path, the counter triggers are SECURITY DEFINER, trigger-only and
+-- admin-only functions aren't callable by clients, and guard_circuit_writes
+-- restricts what clients can write to circuits. Re-running this file must not
+-- undo any of that, so keep those attributes on every CREATE OR REPLACE here.
+--
+-- On an existing database, migrations/add_thumbnail_version_and_indexes.sql
+-- adds the remaining thumbnail_history indexes, and the one-off steps in
+-- migrations/security_hardening.sql (stripping user_metadata.role, counter
+-- backfill) still apply. Admin role lives in auth app_metadata.
 -- ============================================================================
 
 -- Enable necessary extensions
@@ -99,7 +107,7 @@ BEGIN
     END;
   END LOOP;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -140,7 +148,7 @@ CREATE TABLE IF NOT EXISTS public.circuits (
   -- Visibility
   is_public BOOLEAN DEFAULT true,
 
-  -- Thumbnail URLs (stored in Supabase Storage)
+  -- Thumbnail URLs (R2; older rows hold legacy Supabase Storage URLs)
   thumbnail_light_url TEXT,
   thumbnail_dark_url TEXT,
   thumbnail_version INTEGER DEFAULT 1,
@@ -180,6 +188,30 @@ BEGIN
     ALTER TABLE public.circuits ADD COLUMN comment_count INTEGER DEFAULT 0;
   END IF;
 
+  -- GitHub attribution for imported circuits (migrations/add_github_attribution.sql)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='github_owner') THEN
+    ALTER TABLE public.circuits ADD COLUMN github_owner TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='github_repo') THEN
+    ALTER TABLE public.circuits ADD COLUMN github_repo TEXT;
+  END IF;
+
+  -- Paper size override (null = auto-detect)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='sheet_size') THEN
+    ALTER TABLE public.circuits ADD COLUMN sheet_size TEXT
+      CHECK (sheet_size IS NULL OR sheet_size IN ('A4', 'A3', 'A2'));
+  END IF;
+
+  -- Processed full schematic in R2 (see guard_circuit_writes for allowed values)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name='circuits' AND column_name='schematic_r2_url') THEN
+    ALTER TABLE public.circuits ADD COLUMN schematic_r2_url TEXT;
+  END IF;
+
   -- Make file_path nullable if not already
   BEGIN
     ALTER TABLE public.circuits ALTER COLUMN file_path DROP NOT NULL;
@@ -208,7 +240,7 @@ CREATE INDEX IF NOT EXISTS circuits_search_idx ON public.circuits USING GIN(sear
 
 -- Function to update search vector
 -- Weights: Tags (A - highest), Title (B - medium), Description (C - lowest)
-CREATE OR REPLACE FUNCTION update_circuit_search_vector()
+CREATE OR REPLACE FUNCTION public.update_circuit_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.search_vector :=
@@ -217,13 +249,13 @@ BEGIN
     setweight(to_tsvector('english', coalesce(NEW.description, '')), 'C');
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public, pg_temp;
 
 -- Trigger to automatically update search_vector on insert/update
 DROP TRIGGER IF EXISTS update_circuit_search_trigger ON public.circuits;
 CREATE TRIGGER update_circuit_search_trigger
   BEFORE INSERT OR UPDATE ON public.circuits
-  FOR EACH ROW EXECUTE FUNCTION update_circuit_search_vector();
+  FOR EACH ROW EXECUTE FUNCTION public.update_circuit_search_vector();
 
 -- ============================================================================
 -- CIRCUIT COMPONENTS
@@ -263,8 +295,10 @@ CREATE TABLE IF NOT EXISTS public.favorites (
 CREATE INDEX IF NOT EXISTS favorites_user_id_idx ON public.favorites(user_id);
 CREATE INDEX IF NOT EXISTS favorites_circuit_id_idx ON public.favorites(circuit_id);
 
--- Update favorite_count when favorites change
-CREATE OR REPLACE FUNCTION update_circuit_favorite_count()
+-- Update favorite_count when favorites change.
+-- SECURITY DEFINER so the counter moves on circuits the user doesn't own
+-- (RLS would otherwise silently block the UPDATE).
+CREATE OR REPLACE FUNCTION public.update_circuit_favorite_count()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -278,12 +312,12 @@ BEGIN
   END IF;
   RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS update_favorite_count_trigger ON public.favorites;
 CREATE TRIGGER update_favorite_count_trigger
   AFTER INSERT OR DELETE ON public.favorites
-  FOR EACH ROW EXECUTE FUNCTION update_circuit_favorite_count();
+  FOR EACH ROW EXECUTE FUNCTION public.update_circuit_favorite_count();
 
 -- ============================================================================
 -- THUMBNAIL HISTORY
@@ -305,6 +339,34 @@ CREATE TABLE IF NOT EXISTS public.thumbnail_history (
 
 CREATE INDEX IF NOT EXISTS thumbnail_history_circuit_id_idx ON public.thumbnail_history(circuit_id);
 CREATE INDEX IF NOT EXISTS thumbnail_history_current_idx ON public.thumbnail_history(circuit_id, is_current) WHERE is_current = TRUE;
+
+ALTER TABLE public.thumbnail_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view thumbnail history" ON public.thumbnail_history;
+CREATE POLICY "Anyone can view thumbnail history"
+  ON public.thumbnail_history FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Circuit owner or admin can insert history" ON public.thumbnail_history;
+CREATE POLICY "Circuit owner or admin can insert history"
+  ON public.thumbnail_history FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.circuits
+      WHERE circuits.id = thumbnail_history.circuit_id
+      AND circuits.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Only admins can update history" ON public.thumbnail_history;
+CREATE POLICY "Only admins can update history"
+  ON public.thumbnail_history FOR UPDATE
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+DROP POLICY IF EXISTS "Only admins can delete history" ON public.thumbnail_history;
+CREATE POLICY "Only admins can delete history"
+  ON public.thumbnail_history FOR DELETE
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ============================================================================
 -- COPY TRACKING
@@ -363,8 +425,9 @@ CREATE INDEX IF NOT EXISTS comment_likes_user_id_idx ON public.comment_likes(use
 -- TRIGGERS FOR COMMENTS
 -- ============================================================================
 
--- Update likes_count when comment_likes change
-CREATE OR REPLACE FUNCTION update_comment_likes_count()
+-- Update likes_count when comment_likes change (SECURITY DEFINER: see
+-- update_circuit_favorite_count)
+CREATE OR REPLACE FUNCTION public.update_comment_likes_count()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -378,32 +441,33 @@ BEGIN
   END IF;
   RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS update_comment_likes_count_trigger ON public.comment_likes;
 CREATE TRIGGER update_comment_likes_count_trigger
   AFTER INSERT OR DELETE ON public.comment_likes
-  FOR EACH ROW EXECUTE FUNCTION update_comment_likes_count();
+  FOR EACH ROW EXECUTE FUNCTION public.update_comment_likes_count();
 
 -- Trigger to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_comment_updated_at_column()
+CREATE OR REPLACE FUNCTION public.update_comment_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
   NEW.is_edited = true;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS update_comment_updated_at ON public.circuit_comments;
 CREATE TRIGGER update_comment_updated_at
   BEFORE UPDATE ON public.circuit_comments
   FOR EACH ROW
   WHEN (OLD.content IS DISTINCT FROM NEW.content)
-  EXECUTE FUNCTION update_comment_updated_at_column();
+  EXECUTE FUNCTION public.update_comment_updated_at_column();
 
--- Function to update circuit comment count
-CREATE OR REPLACE FUNCTION update_circuit_comment_count()
+-- Function to update circuit comment count (SECURITY DEFINER: see
+-- update_circuit_favorite_count)
+CREATE OR REPLACE FUNCTION public.update_circuit_comment_count()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -417,12 +481,12 @@ BEGIN
   END IF;
   RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS update_circuit_comment_count_trigger ON public.circuit_comments;
 CREATE TRIGGER update_circuit_comment_count_trigger
   AFTER INSERT OR DELETE ON public.circuit_comments
-  FOR EACH ROW EXECUTE FUNCTION update_circuit_comment_count();
+  FOR EACH ROW EXECUTE FUNCTION public.update_circuit_comment_count();
 
 
 -- ============================================================================
@@ -487,6 +551,120 @@ END $$;
 CREATE INDEX IF NOT EXISTS circuits_batch_import_id_idx ON public.circuits(batch_import_id);
 
 -- ============================================================================
+-- CIRCUIT WRITE GUARDS
+-- Restricts what clients (anon / authenticated via PostgREST) can write to
+-- circuits. Same definition as migrations/20261113_circuit_write_guards.sql;
+-- see that file for the rationale. Service role, SECURITY DEFINER functions
+-- and nested trigger writes are not restricted.
+-- ============================================================================
+
+-- Superseded by guard_circuit_writes
+DROP TRIGGER IF EXISTS protect_circuit_counters_trigger ON public.circuits;
+DROP FUNCTION IF EXISTS public.protect_circuit_counters();
+
+CREATE OR REPLACE FUNCTION public.guard_circuit_writes()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+-- Must NOT be SECURITY DEFINER: the check relies on current_user being the
+-- calling role.
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  -- R2_PUBLIC_URL, regex-escaped
+  r2_origin CONSTANT TEXT := 'https://pub-5cfb1ad5b22e451db2e5711b584b49c9\.r2\.dev';
+  -- Legacy Supabase Storage thumbnails bucket, regex-escaped
+  legacy_thumbs CONSTANT TEXT := 'https://trjytrpqmfurirdaxlnr\.supabase\.co/storage/v1/object/public/thumbnails';
+  circuit_key TEXT;
+  old_schematic TEXT;
+  old_light TEXT;
+  old_dark TEXT;
+  schematic_re TEXT;
+  thumbnail_re TEXT;
+BEGIN
+  IF current_user NOT IN ('anon', 'authenticated') OR pg_trigger_depth() > 1 THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    NEW.view_count := 0;
+    NEW.copy_count := 0;
+    NEW.favorite_count := 0;
+    NEW.comment_count := 0;
+    NEW.batch_import_id := NULL;
+    NEW.github_owner := NULL;
+    NEW.github_repo := NULL;
+    NEW.created_at := now();
+  ELSE
+    IF NEW.id IS DISTINCT FROM OLD.id THEN
+      RAISE EXCEPTION 'circuits.id cannot be changed'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    NEW.view_count := OLD.view_count;
+    NEW.copy_count := OLD.copy_count;
+    NEW.favorite_count := OLD.favorite_count;
+    NEW.comment_count := OLD.comment_count;
+    NEW.batch_import_id := OLD.batch_import_id;
+    NEW.github_owner := OLD.github_owner;
+    NEW.github_repo := OLD.github_repo;
+    NEW.created_at := OLD.created_at;
+
+    old_schematic := OLD.schematic_r2_url;
+    old_light := OLD.thumbnail_light_url;
+    old_dark := OLD.thumbnail_dark_url;
+  END IF;
+
+  -- uuid text is [0-9a-f-] only, so it is safe to splice into a regex
+  circuit_key := NEW.id::text;
+  schematic_re := '^' || r2_origin || '/schematics/' || circuit_key
+    || '\.kicad_sch(\?v=[0-9]+)?$';
+  -- Path segments may not start with "." (no "." / ".." segments) and "%" is
+  -- excluded (no encoded dot-segments), so a URL can't climb out of the
+  -- circuit's own thumbnail prefix.
+  -- Second alternative: legacy Supabase Storage layout
+  -- thumbnails/<uploader uuid>/<id>-v<N>-<light|dark>.png, so "Set as Active"
+  -- can restore an old thumbnail_history version. Pinned to the thumbnails
+  -- bucket (no client upload policy) rather than any bucket, because the
+  -- public circuits bucket accepts client uploads.
+  thumbnail_re := '^(' || r2_origin || '/thumbnails/' || circuit_key
+    || '((/[A-Za-z0-9_-][A-Za-z0-9_.-]*)+|-v[0-9]+-[A-Za-z0-9_][A-Za-z0-9_.-]*)'
+    || '(\?v=[0-9]+)?'
+    || '|' || legacy_thumbs
+    || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/'
+    || circuit_key || '-v[0-9]+-(light|dark)\.png)$';
+
+  IF NEW.schematic_r2_url IS NOT NULL
+     AND NEW.schematic_r2_url IS DISTINCT FROM old_schematic
+     AND NEW.schematic_r2_url !~ schematic_re THEN
+    RAISE EXCEPTION 'schematic_r2_url must point to this circuit''s schematic in CircuitSnips storage'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.thumbnail_light_url IS NOT NULL
+     AND NEW.thumbnail_light_url IS DISTINCT FROM old_light
+     AND NEW.thumbnail_light_url !~ thumbnail_re THEN
+    RAISE EXCEPTION 'thumbnail_light_url must point to this circuit''s thumbnail in CircuitSnips storage'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.thumbnail_dark_url IS NOT NULL
+     AND NEW.thumbnail_dark_url IS DISTINCT FROM old_dark
+     AND NEW.thumbnail_dark_url !~ thumbnail_re THEN
+    RAISE EXCEPTION 'thumbnail_dark_url must point to this circuit''s thumbnail in CircuitSnips storage'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS guard_circuit_writes_trigger ON public.circuits;
+CREATE TRIGGER guard_circuit_writes_trigger
+  BEFORE INSERT OR UPDATE ON public.circuits
+  FOR EACH ROW
+  EXECUTE FUNCTION public.guard_circuit_writes();
+
+-- ============================================================================
 -- GLOBAL STATS
 -- Single-row table for efficient homepage statistics
 -- ============================================================================
@@ -508,8 +686,9 @@ ON CONFLICT (id) DO NOTHING;
 -- GLOBAL STATS FUNCTIONS AND TRIGGERS
 -- ============================================================================
 
--- Function to sync global stats from actual data
-CREATE OR REPLACE FUNCTION sync_global_stats()
+-- Function to sync global stats from actual data (service role only, see
+-- FUNCTION PERMISSIONS below)
+CREATE OR REPLACE FUNCTION public.sync_global_stats()
 RETURNS VOID AS $$
 DECLARE
   v_circuit_count INTEGER;
@@ -536,10 +715,10 @@ BEGIN
     updated_at = NOW()
   WHERE id = 1;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Trigger to auto-update circuit count
-CREATE OR REPLACE FUNCTION update_global_circuit_count()
+CREATE OR REPLACE FUNCTION public.update_global_circuit_count()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' AND NEW.is_public = true THEN
@@ -563,15 +742,15 @@ BEGIN
   END IF;
   IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS global_circuit_count_trigger ON public.circuits;
 CREATE TRIGGER global_circuit_count_trigger
   AFTER INSERT OR UPDATE OR DELETE ON public.circuits
-  FOR EACH ROW EXECUTE FUNCTION update_global_circuit_count();
+  FOR EACH ROW EXECUTE FUNCTION public.update_global_circuit_count();
 
 -- Trigger to auto-update user count
-CREATE OR REPLACE FUNCTION update_global_user_count()
+CREATE OR REPLACE FUNCTION public.update_global_user_count()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -585,12 +764,12 @@ BEGIN
   END IF;
   IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS global_user_count_trigger ON public.profiles;
 CREATE TRIGGER global_user_count_trigger
   AFTER INSERT OR DELETE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION update_global_user_count();
+  FOR EACH ROW EXECUTE FUNCTION public.update_global_user_count();
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -722,6 +901,28 @@ CREATE POLICY "Users can view own flags"
   ON public.circuit_flags FOR SELECT
   USING (auth.uid() = flagged_by);
 
+-- Flags are not publicly readable (reporter ids, details, admin notes)
+DROP POLICY IF EXISTS "Anyone can view flags" ON public.circuit_flags;
+
+DROP POLICY IF EXISTS "Admins can view all flags" ON public.circuit_flags;
+CREATE POLICY "Admins can view all flags"
+  ON public.circuit_flags FOR SELECT
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+DROP POLICY IF EXISTS "Admins can update flags" ON public.circuit_flags;
+CREATE POLICY "Admins can update flags"
+  ON public.circuit_flags FOR UPDATE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+DROP POLICY IF EXISTS "Admins can delete flags" ON public.circuit_flags;
+CREATE POLICY "Admins can delete flags"
+  ON public.circuit_flags FOR DELETE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 -- Batch Imports: Only admins (handled via API)
 ALTER TABLE public.import_batches ENABLE ROW LEVEL SECURITY;
 
@@ -790,40 +991,18 @@ CREATE POLICY "Users can delete own circuit files"
   );
 
 -- RLS policies for thumbnails storage
+-- Thumbnails now live in R2 (uploaded server-side by /api/upload-thumbnail).
+-- This legacy bucket is read-only for clients: guard_circuit_writes accepts
+-- legacy thumbnails/<uuid>/<circuit id>-v<N>-<theme>.png URLs for restoring
+-- old versions, so clients must not be able to upload objects here.
 DROP POLICY IF EXISTS "Anyone can view thumbnails" ON storage.objects;
 CREATE POLICY "Anyone can view thumbnails"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'thumbnails');
 
 DROP POLICY IF EXISTS "Authenticated users can upload thumbnails" ON storage.objects;
-CREATE POLICY "Authenticated users can upload thumbnails"
-  ON storage.objects FOR INSERT
-  WITH CHECK (
-    bucket_id = 'thumbnails' AND
-    auth.role() = 'authenticated' AND
-    -- Ensure thumbnails are stored in user's own folder: {user_id}/filename
-    auth.uid()::text = (storage.foldername(name))[1]
-  );
-
 DROP POLICY IF EXISTS "Users can update own thumbnails" ON storage.objects;
-CREATE POLICY "Users can update own thumbnails"
-  ON storage.objects FOR UPDATE
-  USING (
-    bucket_id = 'thumbnails' AND
-    auth.role() = 'authenticated' AND
-    -- Only allow updating own thumbnails
-    auth.uid()::text = (storage.foldername(name))[1]
-  );
-
 DROP POLICY IF EXISTS "Users can delete own thumbnails" ON storage.objects;
-CREATE POLICY "Users can delete own thumbnails"
-  ON storage.objects FOR DELETE
-  USING (
-    bucket_id = 'thumbnails' AND
-    auth.role() = 'authenticated' AND
-    -- Only allow deleting own thumbnails
-    auth.uid()::text = (storage.foldername(name))[1]
-  );
 
 -- RLS policies for previews storage (temporary upload previews)
 DROP POLICY IF EXISTS "Anyone can view previews" ON storage.objects;
@@ -858,18 +1037,18 @@ CREATE POLICY "Users can delete own previews"
 -- ============================================================================
 
 -- Function to increment view count (atomic operation to prevent race conditions)
-CREATE OR REPLACE FUNCTION increment_circuit_views(circuit_id UUID)
+CREATE OR REPLACE FUNCTION public.increment_circuit_views(circuit_id UUID)
 RETURNS VOID AS $$
 BEGIN
   UPDATE public.circuits
   SET view_count = view_count + 1
   WHERE id = circuit_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Function to increment copy count (atomic operation to prevent race conditions)
 -- Also increments global counter for homepage stats
-CREATE OR REPLACE FUNCTION increment_circuit_copies(circuit_id UUID)
+CREATE OR REPLACE FUNCTION public.increment_circuit_copies(circuit_id UUID)
 RETURNS VOID AS $$
 BEGIN
   -- Increment circuit-specific count
@@ -882,10 +1061,10 @@ BEGIN
   SET total_copies = total_copies + 1, updated_at = NOW()
   WHERE id = 1;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Function to search circuits (basic version - kept for backward compatibility)
-CREATE OR REPLACE FUNCTION search_circuits(search_query TEXT)
+CREATE OR REPLACE FUNCTION public.search_circuits(search_query TEXT)
 RETURNS TABLE (
   id UUID,
   slug TEXT,
@@ -906,16 +1085,22 @@ BEGIN
   AND c.is_public = true
   ORDER BY rank DESC;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public, pg_temp;
 
 -- Comprehensive weighted search function with filters
 -- Weights: Tags (A/highest), Title (B/medium), Description (C/lowest)
-CREATE OR REPLACE FUNCTION search_circuits_weighted(
+-- Same signature as migrations/update-search-exclude-imported.sql. Drop the
+-- old 7-argument version so re-running this file can't leave an ambiguous
+-- overload next to the 8-argument one.
+DROP FUNCTION IF EXISTS public.search_circuits_weighted(TEXT, TEXT, TEXT, TEXT, UUID, INT, INT);
+
+CREATE OR REPLACE FUNCTION public.search_circuits_weighted(
   search_query TEXT,
   filter_category TEXT DEFAULT NULL,
   filter_tag TEXT DEFAULT NULL,
   filter_license TEXT DEFAULT NULL,
-  exclude_user_id UUID DEFAULT NULL,
+  exclude_user_id UUID DEFAULT NULL,  -- Deprecated, ignored; kept for API compatibility
+  exclude_imported BOOLEAN DEFAULT FALSE,  -- Hide bulk-imported circuits (batch_import_id set)
   result_limit INT DEFAULT 50,
   result_offset INT DEFAULT 0
 )
@@ -985,8 +1170,8 @@ BEGIN
     AND (filter_tag IS NULL OR filter_tag = ANY(c.tags))
     -- License filter
     AND (filter_license IS NULL OR c.license = filter_license)
-    -- Exclude user filter
-    AND (exclude_user_id IS NULL OR c.user_id != exclude_user_id)
+    -- Exclude bulk-imported circuits (those with batch_import_id set)
+    AND (exclude_imported = false OR c.batch_import_id IS NULL)
   ORDER BY
     -- Custom weighted ranking:
     -- 1. Exact tag match (highest priority)
@@ -1007,7 +1192,24 @@ BEGIN
   LIMIT result_limit
   OFFSET result_offset;
 END;
-$$ LANGUAGE plpgsql STABLE;
+$$ LANGUAGE plpgsql STABLE SET search_path = public, pg_temp;
+
+-- ============================================================================
+-- FUNCTION PERMISSIONS
+-- Trigger-only and admin-only functions must not be callable via /rpc.
+-- (Triggers don't need EXECUTE.) Matches migrations/security_hardening.sql.
+-- ============================================================================
+
+REVOKE EXECUTE ON FUNCTION public.sync_global_stats() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sync_global_stats() TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_circuit_favorite_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_circuit_comment_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_comment_likes_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_global_circuit_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_global_user_count() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.guard_circuit_writes() FROM PUBLIC, anon, authenticated;
 
 -- ============================================================================
 -- INITIAL DATA SYNC

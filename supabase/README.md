@@ -56,6 +56,9 @@ The database now uses a single-row `global_stats` table for super-fast homepage 
 - Users can manage their own content
 - Anonymous flagging supported
 - Admin-only batch imports
+- `guard_circuit_writes` trigger: clients can't set counters, import
+  provenance, or storage URLs that point outside the circuit's own R2 objects
+  (service role is unrestricted)
 
 ## Troubleshooting
 
@@ -84,6 +87,9 @@ Or use the admin panel:
 ## Version History
 
 - **2025-01-20**: Consolidated all migrations into single `setup.sql`
+- **2026-11-13**: `setup.sql` synced with the live security posture
+  (`migrations/security_hardening.sql`, `migrations/20261113_circuit_write_guards.sql`).
+  Run new migrations by hand in the Supabase SQL editor.
 - Previous migrations archived in `migrations/backup/`
 
 ## Need Help?
