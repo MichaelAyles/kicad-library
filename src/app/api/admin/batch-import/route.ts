@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyAdminKey } from "@/lib/admin-auth";
+import { requireAdmin } from "@/lib/api-auth";
 import {
   validateImportBatch,
   ImportRecord,
@@ -30,13 +30,10 @@ interface ImportResult {
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verify admin authentication
-    const authHeader = request.headers.get("Authorization");
-    if (!verifyAdminKey(authHeader)) {
-      return NextResponse.json(
-        { error: "Unauthorized - Invalid admin API key" },
-        { status: 401 },
-      );
+    // 1. Verify admin authentication (ADMIN_API_KEY or an admin session)
+    const auth = await requireAdmin(request, { allowApiKey: true });
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
     // 2. Parse request body

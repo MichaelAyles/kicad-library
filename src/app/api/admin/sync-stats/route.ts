@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { isAdmin } from "@/lib/admin";
+import { requireAdmin } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -12,30 +11,16 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // Get current user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireAdmin(request);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    // Check if user is admin
-    const adminStatus = await isAdmin(user);
-    if (!adminStatus) {
-      return NextResponse.json(
-        { error: "Forbidden - Admin access required" },
-        { status: 403 },
-      );
-    }
+    const supabase = createAdminClient();
 
     // Call the sync function
     // sync_global_stats is only executable by the service role
-    const { error: syncError } = await createAdminClient().rpc(
+    const { error: syncError } = await supabase.rpc(
       "sync_global_stats",
     );
 

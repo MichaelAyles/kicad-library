@@ -9,6 +9,7 @@
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyAdminKey } from "@/lib/admin-auth";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,4 +66,64 @@ export async function requireCircuitOwnerOrAdmin(
   }
 
   return { ok: true, user, isAdmin };
+}
+
+type AdminDenied = { ok: false; status: 401 | 403; error: string };
+type AdminSession = { ok: true; user: User; via: "session" };
+type AdminApiKey = { ok: true; user: null; via: "apiKey" };
+export type AdminAccess = AdminSession | AdminApiKey | AdminDenied;
+
+/**
+ * Verify the request comes from an admin.
+ *
+ * Accepts, in order:
+ * 1. The `ADMIN_API_KEY` as a Bearer token (timing-safe compare), only when
+ *    `allowApiKey` is set. Used by scripts such as the batch importer; there
+ *    is no user, so `user` is null.
+ * 2. A Supabase access token as a Bearer token (what the admin page sends).
+ * 3. The Supabase session cookies.
+ *
+ * The user must have `app_metadata.role === "admin"`.
+ */
+export async function requireAdmin(
+  request: Request,
+): Promise<AdminSession | AdminDenied>;
+export async function requireAdmin(
+  request: Request,
+  options: { allowApiKey: boolean },
+): Promise<AdminAccess>;
+export async function requireAdmin(
+  request: Request,
+  { allowApiKey = false }: { allowApiKey?: boolean } = {},
+): Promise<AdminAccess> {
+  const authHeader = request.headers.get("Authorization");
+
+  if (allowApiKey && verifyAdminKey(authHeader)) {
+    return { ok: true, user: null, via: "apiKey" };
+  }
+
+  const token = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  let user: User | null;
+  if (token) {
+    const { data, error } = await createAdminClient().auth.getUser(token);
+    if (error || !data.user) {
+      return { ok: false, status: 401, error: "Unauthorized - Invalid token" };
+    }
+    user = data.user;
+  } else {
+    user = await getRequestUser();
+    if (!user) {
+      return { ok: false, status: 401, error: "Unauthorized" };
+    }
+  }
+
+  if (!userIsAdmin(user)) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Forbidden - Admin access required",
+    };
+  }
+
+  return { ok: true, user, via: "session" };
 }
