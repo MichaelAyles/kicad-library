@@ -84,65 +84,79 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
 
     const { searchQuery, limit = 50 } = await request.json();
+    const pageLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
 
-    // Simple query without expensive aggregations
     let query = supabase
       .from("profiles")
       .select("id, username, avatar_url, created_at")
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .limit(pageLimit);
 
     // If search query provided, filter by username
-    if (searchQuery && searchQuery.trim()) {
+    if (typeof searchQuery === "string" && searchQuery.trim()) {
       query = query.ilike("username", `%${searchQuery.trim()}%`);
     }
 
-    const { data, error } = await query;
+    const { data: profiles, error } = await query;
 
     if (error) throw error;
+    if (!profiles || profiles.length === 0) {
+      return NextResponse.json({ users: [] });
+    }
 
-    // Fetch statistics for each user
-    const usersWithStats = await Promise.all(
-      (data || []).map(async (user: any) => {
-        // Get circuit count
-        const { count: circuitCount } = await supabase
-          .from("circuits")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id);
+    // Batch the per-user stats into one paged query per table (instead of
+    // four queries per user). The admin client sees private circuits too.
+    const userIds = profiles.map((profile) => profile.id);
+    const [circuits, comments, favorites] = await Promise.all([
+      fetchRowsForUsers<{ user_id: string; copy_count: number | null }>(
+        supabase,
+        "circuits",
+        "user_id, copy_count",
+        userIds,
+      ),
+      fetchRowsForUsers<{ user_id: string }>(
+        supabase,
+        "circuit_comments",
+        "user_id",
+        userIds,
+      ),
+      fetchRowsForUsers<{ user_id: string }>(
+        supabase,
+        "favorites",
+        "user_id",
+        userIds,
+      ),
+    ]);
 
-        // Get total copy count across all their circuits
-        const { data: circuitCopies } = await supabase
-          .from("circuits")
-          .select("copy_count")
-          .eq("user_id", user.id);
-
-        const totalCopies =
-          circuitCopies?.reduce((sum, c) => sum + (c.copy_count || 0), 0) || 0;
-
-        // Get comment count
-        const { count: commentCount } = await supabase
-          .from("circuit_comments")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id);
-
-        // Get favorite count (how many favorites they've given)
-        const { count: favoriteCount } = await supabase
-          .from("favorites")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id);
-
-        return {
-          id: user.id,
-          username: user.username,
-          avatar_url: user.avatar_url,
-          created_at: user.created_at,
-          circuitCount: circuitCount || 0,
-          totalCopies: totalCopies,
-          commentCount: commentCount || 0,
-          favoriteCount: favoriteCount || 0,
-        };
-      }),
+    const stats = new Map(
+      userIds.map((id) => [
+        id,
+        { circuitCount: 0, totalCopies: 0, commentCount: 0, favoriteCount: 0 },
+      ]),
     );
+    for (const circuit of circuits) {
+      const userStats = stats.get(circuit.user_id);
+      if (!userStats) continue;
+      userStats.circuitCount++;
+      userStats.totalCopies += circuit.copy_count || 0;
+    }
+    for (const comment of comments) {
+      const userStats = stats.get(comment.user_id);
+      if (userStats) userStats.commentCount++;
+    }
+    // Favorites the user has given
+    for (const favorite of favorites) {
+      const userStats = stats.get(favorite.user_id);
+      if (userStats) userStats.favoriteCount++;
+    }
+
+    const usersWithStats = profiles.map((profile) => ({
+      id: profile.id,
+      username: profile.username,
+      avatar_url: profile.avatar_url,
+      created_at: profile.created_at,
+      ...stats.get(profile.id)!,
+    }));
 
     return NextResponse.json({ users: usersWithStats });
   } catch (error: any) {
@@ -152,4 +166,33 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+// PostgREST caps a single response at 1000 rows
+const PAGE_SIZE = 1000;
+
+/**
+ * Fetch `columns` from every row of `table` owned by any of `userIds`,
+ * paging past the response row cap (one user can own thousands of circuits).
+ */
+async function fetchRowsForUsers<T>(
+  supabase: ReturnType<typeof createAdminClient>,
+  table: string,
+  columns: string,
+  userIds: string[],
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .in("user_id", userIds)
+      .order("id")
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    rows.push(...((data ?? []) as T[]));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return rows;
 }
