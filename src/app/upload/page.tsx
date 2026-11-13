@@ -29,8 +29,29 @@ import {
 } from "@/lib/kicad-parser";
 import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
+import { MAX_RAW_SEXPR_BYTES } from "@/lib/circuit-limits";
 
 const KICANVAS_HEIGHT = "350px";
+
+/** Turn a POST /api/circuits error response into a readable message. */
+function formatApiError(data: unknown, status: number): string {
+  const { error, details } = (data ?? {}) as {
+    error?: string;
+    details?: unknown;
+  };
+  const lines = [error || `Request failed (${status})`];
+  if (Array.isArray(details)) {
+    for (const d of details) {
+      if (typeof d === "string") {
+        lines.push(d);
+      } else if (d && typeof d === "object") {
+        const { path, message } = d as { path?: string; message?: string };
+        lines.push(path ? `${path}: ${message}` : String(message));
+      }
+    }
+  }
+  return lines.join("\n");
+}
 
 type UploadStep =
   | "paste"
@@ -90,6 +111,7 @@ export default function UploadPage() {
   const [isParsing, setIsParsing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [thumbnailWarning, setThumbnailWarning] = useState("");
 
   // Refs
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -166,6 +188,19 @@ export default function UploadPage() {
       return;
     }
 
+    if (new Blob([sexpr]).size > MAX_RAW_SEXPR_BYTES) {
+      setValidation({
+        valid: false,
+        errors: [
+          `Schematic is too large (max ${MAX_RAW_SEXPR_BYTES / 1024 / 1024}MB)`,
+        ],
+        warnings: [],
+        isSnippet: false,
+        originalFormat: "full",
+      });
+      return;
+    }
+
     setIsParsing(true);
 
     setTimeout(() => {
@@ -208,6 +243,10 @@ export default function UploadPage() {
       alert("Please enter a title");
       return;
     }
+    if (tags.length === 0) {
+      alert("Please add at least one tag");
+      return;
+    }
     setCurrentStep("thumbnails");
   };
 
@@ -241,36 +280,7 @@ export default function UploadPage() {
     }
   };
 
-  // Helper function to ensure slug is unique
-  const ensureUniqueSlug = async (baseSlug: string): Promise<string> => {
-    let uniqueSlug = baseSlug;
-    let counter = 2;
-
-    while (true) {
-      // Check if slug exists
-      const { data, error } = await supabase
-        .from("circuits")
-        .select("id")
-        .eq("slug", uniqueSlug)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Error checking slug:", error);
-        throw error;
-      }
-
-      // If no circuit found with this slug, it's unique!
-      if (!data) {
-        return uniqueSlug;
-      }
-
-      // Slug exists, try with a number suffix
-      uniqueSlug = `${baseSlug}-${counter}`;
-      counter++;
-    }
-  };
-
-  // Step 5: Upload everything
+  // Step 5: Create the circuit on the server, then upload thumbnails
   const handleUpload = async (lightThumb: string, darkThumb: string) => {
     if (!user) {
       alert("You must be logged in");
@@ -279,66 +289,54 @@ export default function UploadPage() {
 
     setCurrentStep("uploading");
     setIsUploading(true);
+    setThumbnailWarning("");
 
+    // 1. Create the circuit. The server validates the schematic, picks a
+    // unique slug and stores the schematic in R2. It either fully succeeds or
+    // creates nothing.
+    let circuit: { id: string; slug: string };
     try {
-      // 1. Ensure slug is unique
-      setUploadProgress("Checking slug availability...");
-      const uniqueSlug = await ensureUniqueSlug(slug);
+      setUploadProgress("Creating circuit...");
+      const response = await fetch("/api/circuits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description,
+          category,
+          tags,
+          license,
+          is_public: isPublic,
+          sheet_size: sheetSizeOverride, // null = auto-detect
+          raw_sexpr: sexpr, // Original format (snippet or full file as entered)
+          slug,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
 
-      if (uniqueSlug !== slug) {
-        console.log(`Slug "${slug}" was taken, using "${uniqueSlug}" instead`);
+      if (!response.ok) {
+        throw new Error(formatApiError(data, response.status));
       }
+      circuit = data;
+    } catch (err) {
+      console.error("Upload failed:", err);
+      alert(
+        `Upload failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+      // Nothing was created. Reset so the live previews render again and
+      // "Capture & Publish" can be retried.
+      setLightThumbnail("");
+      setDarkThumbnail("");
+      setIsCapturing(false);
+      setIsUploading(false);
+      setCurrentStep("thumbnails");
+      return;
+    }
 
-      // 2. Create circuit record
-      setUploadProgress("Creating circuit record...");
-
-      const circuitData = {
-        user_id: user.id,
-        slug: uniqueSlug,
-        title,
-        description,
-        category,
-        tags,
-        license,
-        raw_sexpr: sexpr, // Store original format (snippet or full file as entered)
-        is_public: isPublic,
-        sheet_size: sheetSizeOverride, // Store user's sheet size override (null = auto-detect)
-        // view_count, copy_count, favorite_count default to 0 in schema
-      };
-
-      const { data: circuit, error: circuitError } = await supabase
-        .from("circuits")
-        .insert([circuitData])
-        .select()
-        .single();
-
-      if (circuitError) throw circuitError;
-
-      // 2. Upload schematic to R2
-      setUploadProgress("Uploading schematic to R2...");
-      try {
-        const schematicResponse = await fetch("/api/upload-schematic", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            circuitId: circuit.id,
-            rawSexpr: sexpr,
-            title,
-            sheetSize: sheetSizeOverride,
-          }),
-        });
-
-        if (!schematicResponse.ok) {
-          const errorData = await schematicResponse.json();
-          console.error("Failed to upload schematic to R2:", errorData);
-          // Don't fail the upload - we still have raw_sexpr in DB as fallback
-        }
-      } catch (schematicError) {
-        console.error("Error uploading schematic to R2:", schematicError);
-        // Don't fail the upload - we still have raw_sexpr in DB as fallback
-      }
-
-      // 3. Upload thumbnails to storage (v1)
+    // 2. Upload thumbnails to storage (v1). The circuit already exists, so a
+    // failure here isn't fatal: thumbnails can be regenerated later.
+    let thumbnailsFailed = false;
+    try {
       const version = 1;
       setUploadProgress("Uploading light theme thumbnail...");
       const lightUrl = await uploadThumbnail(
@@ -360,20 +358,10 @@ export default function UploadPage() {
         version,
       );
 
-      // 4. Update circuit with thumbnail URLs and version
+      // /api/upload-thumbnail stores the URLs on the circuit (and
+      // thumbnail_version defaults to 1), so only the history record remains.
+      // 3. Create initial thumbnail history record
       setUploadProgress("Finalizing...");
-      const { error: updateError } = await supabase
-        .from("circuits")
-        .update({
-          thumbnail_light_url: lightUrl,
-          thumbnail_dark_url: darkUrl,
-          thumbnail_version: version,
-        })
-        .eq("id", circuit.id);
-
-      if (updateError) throw updateError;
-
-      // 5. Create initial thumbnail history record
       const { error: historyError } = await supabase
         .from("thumbnail_history")
         .insert({
@@ -390,23 +378,25 @@ export default function UploadPage() {
         console.error("Error creating thumbnail history:", historyError);
         // Don't fail the upload if history creation fails
       }
-
-      // Success!
-      setCurrentStep("success");
-      setIsUploading(false);
-
-      // Redirect to circuit page after 2 seconds
-      setTimeout(() => {
-        router.push(`/circuit/${uniqueSlug}`);
-      }, 2000);
-    } catch (err) {
-      console.error("Upload failed:", err);
-      alert(
-        `Upload failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+    } catch (thumbError) {
+      console.error("Thumbnail upload failed:", thumbError);
+      thumbnailsFailed = true;
+      setThumbnailWarning(
+        "Your circuit was published, but its thumbnails failed to upload. You can regenerate them from the circuit's edit page.",
       );
-      setIsUploading(false);
-      setCurrentStep("thumbnails");
     }
+
+    // Success!
+    setCurrentStep("success");
+    setIsUploading(false);
+
+    // Redirect to circuit page (give time to read the warning if there is one)
+    setTimeout(
+      () => {
+        router.push(`/circuit/${circuit.slug}`);
+      },
+      thumbnailsFailed ? 6000 : 2000,
+    );
   };
 
   // Tag management
@@ -855,7 +845,9 @@ export default function UploadPage() {
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">Tags</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Tags <span className="text-red-500">*</span>
+                  </label>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {tags.map((tag, index) => (
                       <span
@@ -885,6 +877,7 @@ export default function UploadPage() {
                         }
                       }}
                       placeholder="Add a tag (press Enter)"
+                      maxLength={30}
                       className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
                     />
                     <button
@@ -896,7 +889,7 @@ export default function UploadPage() {
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Maximum 10 tags
+                    At least 1, maximum 10 tags (30 characters each)
                   </p>
                 </div>
 
@@ -1135,6 +1128,15 @@ export default function UploadPage() {
             </div>
           )}
 
+          {/* Publishing in progress */}
+          {currentStep === "uploading" && (
+            <div className="bg-card border rounded-lg p-6 text-center">
+              <Loader className="w-12 h-12 mx-auto mb-4 animate-spin text-primary" />
+              <h2 className="text-2xl font-semibold mb-2">Publishing...</h2>
+              <p className="text-muted-foreground">{uploadProgress}</p>
+            </div>
+          )}
+
           {/* Step 5: Success */}
           {currentStep === "success" && (
             <div className="bg-card border rounded-lg p-6 text-center">
@@ -1142,9 +1144,16 @@ export default function UploadPage() {
               <h2 className="text-2xl font-semibold mb-2">
                 Circuit Published!
               </h2>
-              <p className="text-muted-foreground mb-4">
-                Your circuit has been successfully uploaded and is now live.
-              </p>
+              {thumbnailWarning ? (
+                <div className="flex items-start gap-2 text-left text-sm text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 mb-4">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  <span>{thumbnailWarning}</span>
+                </div>
+              ) : (
+                <p className="text-muted-foreground mb-4">
+                  Your circuit has been successfully uploaded and is now live.
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">
                 Redirecting to your circuit page...
               </p>
