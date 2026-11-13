@@ -1,6 +1,6 @@
 /**
- * Server-side reads of public circuits for cacheable pages (circuit detail
- * pages, sitemap).
+ * Server-side reads of public circuits for cacheable routes: the circuit
+ * detail page and the sitemap.
  *
  * Uses the cookie-less anon client, so RLS only returns public circuits and the
  * result is the same for every visitor, which is what makes it safe to cache.
@@ -79,3 +79,36 @@ export const getPublicCircuitPage = cache(
     return { circuit, parts };
   },
 );
+
+// PostgREST returns at most 1000 rows per request
+const SITEMAP_PAGE_SIZE = 1000;
+
+/**
+ * List every public circuit's slug and last update, paging past PostgREST's
+ * row cap. Throws on any query error so an ISR revalidation keeps the last
+ * good result instead of caching a partial list.
+ */
+export async function listPublicCircuitSlugs(): Promise<
+  Array<{ slug: string; updated_at: string | null }>
+> {
+  const supabase = createPublicClient();
+  const rows: Array<{ slug: string; updated_at: string | null }> = [];
+
+  for (let from = 0; ; from += SITEMAP_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("circuits")
+      .select("slug, updated_at")
+      .eq("is_public", true)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + SITEMAP_PAGE_SIZE - 1);
+
+    if (error) {
+      throw new Error(`Failed to list public circuits: ${error.message}`);
+    }
+    rows.push(...(data ?? []));
+    if (!data || data.length < SITEMAP_PAGE_SIZE) break;
+  }
+
+  return rows;
+}
