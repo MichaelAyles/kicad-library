@@ -20,7 +20,7 @@ import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
-import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
+import { captureThumbnails, uploadThumbnailsToR2 } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 import {
   wrapSnippetToFullFile,
@@ -71,6 +71,7 @@ export default function EditCircuitPage() {
   const [isRegeneratingThumbnails, setIsRegeneratingThumbnails] =
     useState(false);
   const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
+  const [thumbnailNotice, setThumbnailNotice] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const lightContainerRef = useRef<HTMLDivElement>(null);
   const darkContainerRef = useRef<HTMLDivElement>(null);
@@ -323,6 +324,7 @@ export default function EditCircuitPage() {
 
     setIsRegeneratingThumbnails(true);
     setError(null);
+    setThumbnailNotice(null);
 
     try {
       // Wait for viewers to be ready
@@ -336,69 +338,54 @@ export default function EditCircuitPage() {
 
       const supabase = createClient();
 
-      // Fetch current thumbnail version from database
-      const { data: circuitData, error: fetchError } = await supabase
-        .from("circuits")
-        .select("thumbnail_version")
-        .eq("id", circuit.id)
-        .single();
-
-      if (fetchError) {
-        throw new Error(
-          `Failed to fetch circuit version: ${fetchError.message}`,
-        );
-      }
-
-      const currentVersion = circuitData?.thumbnail_version || 0;
-      const newVersion = currentVersion + 1;
-
-      console.log(
-        `Version detection: DB version=${currentVersion}, Next=${newVersion}`,
-      );
-
-      // Upload new thumbnails with incremented version
-      const lightUrl = await uploadThumbnail(
-        supabase,
-        user.id,
+      // Upload both themes in one request. The server reserves the next
+      // unused version (new immutable keys), points the circuit at it and
+      // records it in thumbnail_history so it can be restored later.
+      const uploaded = await uploadThumbnailsToR2(
         circuit.id,
-        "light",
         thumbnails.light,
-        newVersion,
-      );
-      const darkUrl = await uploadThumbnail(
-        supabase,
-        user.id,
-        circuit.id,
-        "dark",
         thumbnails.dark,
-        newVersion,
+        { historyNote: "Regenerated from edit page" },
       );
 
-      // Update circuit with new thumbnail URLs and version
-      const response = await fetch(`/api/circuits/${circuit.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          thumbnail_light_url: lightUrl,
-          thumbnail_dark_url: darkUrl,
-          thumbnail_version: newVersion,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update thumbnails");
+      // The thumbnails are saved at this point. Also save through the
+      // circuits API so updated_at is bumped and the circuit's pages are
+      // revalidated; if that fails the regeneration still succeeded.
+      let revalidated = false;
+      try {
+        const response = await fetch(`/api/circuits/${circuit.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            thumbnail_light_url: uploaded.light,
+            thumbnail_dark_url: uploaded.dark,
+          }),
+        });
+        revalidated = response.ok;
+      } catch (putError) {
+        console.warn("Thumbnail follow-up update failed:", putError);
       }
 
-      // Clean up preview
+      // Clean up preview (best effort)
       const previewId = previewUrl.split("id=")[1];
       await supabase.storage
         .from("previews")
-        .remove([`${previewId}.kicad_sch`]);
+        .remove([`${previewId}.kicad_sch`])
+        .catch(() => undefined);
 
       setShowThumbnailPreview(false);
       setPreviewUrl(null);
+
+      if (!revalidated) {
+        setThumbnailNotice(
+          `Thumbnails regenerated (v${uploaded.version}). The circuit page may take a few minutes to show them.`,
+        );
+        const updatedCircuit = await getCircuitBySlug(slug);
+        if (updatedCircuit) setCircuit(updatedCircuit);
+        return;
+      }
 
       // Redirect back to circuit detail page to show new thumbnails
       // This ensures fresh data is loaded from the database
@@ -794,6 +781,12 @@ export default function EditCircuitPage() {
               looks correct, then capture new screenshots in both light and dark
               modes.
             </p>
+
+            {thumbnailNotice && (
+              <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-sm text-amber-700 dark:text-amber-400">
+                {thumbnailNotice}
+              </div>
+            )}
 
             {showThumbnailPreview && previewUrl ? (
               <div className="mb-4">

@@ -372,45 +372,18 @@ export function dataURLtoBlob(dataURL: string): Blob {
 }
 
 /**
- * Upload thumbnail to R2 storage
- * @deprecated Use uploadThumbnailsToR2 for new uploads - this is kept for backwards compatibility
- */
-export async function uploadThumbnail(
-  supabase: any,
-  userId: string,
-  circuitId: string,
-  theme: "light" | "dark",
-  dataURL: string,
-  version: number = 1,
-): Promise<string> {
-  // Upload to R2 via API
-  const response = await fetch("/api/upload-thumbnail", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      circuitId,
-      lightDataUrl: theme === "light" ? dataURL : undefined,
-      darkDataUrl: theme === "dark" ? dataURL : undefined,
-    }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(`Failed to upload ${theme} thumbnail: ${data.error}`);
-  }
-
-  return theme === "light" ? data.urls.light : data.urls.dark;
-}
-
-/**
- * Upload both thumbnails to R2 storage in a single request
+ * Upload both thumbnails to R2 storage in a single request.
+ *
+ * The server reserves the next unused version, writes both images under it,
+ * points the circuit at them and records the version in thumbnail_history
+ * as current (labelled with `historyNote`).
  */
 export async function uploadThumbnailsToR2(
   circuitId: string,
   lightDataUrl: string,
   darkDataUrl: string,
-): Promise<{ light: string; dark: string }> {
+  options: { historyNote?: string } = {},
+): Promise<{ light: string; dark: string; version: number }> {
   const response = await fetch("/api/upload-thumbnail", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -418,6 +391,7 @@ export async function uploadThumbnailsToR2(
       circuitId,
       lightDataUrl,
       darkDataUrl,
+      historyNote: options.historyNote,
     }),
   });
 
@@ -427,5 +401,5 @@ export async function uploadThumbnailsToR2(
     throw new Error(`Failed to upload thumbnails: ${data.error}`);
   }
 
-  return data.urls;
+  return { light: data.urls.light, dark: data.urls.dark, version: data.version };
 }

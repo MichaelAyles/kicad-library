@@ -32,7 +32,13 @@ export async function getRequestUser(): Promise<User | null> {
 }
 
 export type CircuitAccess =
-  | { ok: true; user: User; isAdmin: boolean }
+  | {
+      ok: true;
+      user: User;
+      isAdmin: boolean;
+      /** The row read for the ownership check, so callers needn't refetch. */
+      circuit: { user_id: string; thumbnail_version: number | null };
+    }
   | { ok: false; status: 400 | 401 | 403 | 404; error: string };
 
 /**
@@ -52,7 +58,7 @@ export async function requireCircuitOwnerOrAdmin(
 
   const { data: circuit, error } = await createAdminClient()
     .from("circuits")
-    .select("user_id")
+    .select("user_id, thumbnail_version")
     .eq("id", circuitId)
     .single();
 
@@ -65,7 +71,7 @@ export async function requireCircuitOwnerOrAdmin(
     return { ok: false, status: 403, error: "Forbidden" };
   }
 
-  return { ok: true, user, isAdmin };
+  return { ok: true, user, isAdmin, circuit };
 }
 
 type AdminDenied = { ok: false; status: 401 | 403; error: string };

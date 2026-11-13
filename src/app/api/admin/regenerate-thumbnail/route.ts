@@ -9,26 +9,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  S3Client,
-  PutObjectCommand,
-  ListObjectsV2Command,
-} from "@aws-sdk/client-s3";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient as createAnonClient } from "@supabase/supabase-js";
-import { isAdmin } from "@/lib/admin";
-
-// R2 client singleton
-function getR2Client() {
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-  });
-}
+import { requireAdmin } from "@/lib/api-auth";
+import { uploadThumbnailObject } from "@/lib/r2-schematic";
+import {
+  recordThumbnailHistory,
+  reserveThumbnailVersion,
+} from "@/lib/thumbnail-versions";
 
 // Force Node.js runtime for Buffer support
 export const runtime = "nodejs";
@@ -81,62 +68,23 @@ const RegenerateThumbnailSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the Authorization header with bearer token
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token) {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) {
       return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "No authentication token provided",
-        "The Authorization header is missing or invalid",
-        "Please include a valid Bearer token in the Authorization header",
-        401,
+        auth.status === 401
+          ? ErrorCategory.AUTHENTICATION
+          : ErrorCategory.AUTHORIZATION,
+        auth.error,
+        undefined,
+        auth.status === 401
+          ? "Please log in again to get a fresh authentication token"
+          : "Contact an administrator if you believe you should have access",
+        auth.status,
       );
     }
+    const { user } = auth;
 
-    // Create a client with the anon key to verify the token
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-    const supabase = createAnonClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
-    // Verify the token by getting the user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "Invalid authentication token",
-        authError?.message,
-        "Please log in again to get a fresh authentication token",
-        401,
-      );
-    }
-
-    // Check if user has admin role using centralized helper
-    // This checks app_metadata (server-controlled), user_metadata (fallback), and database
-    const adminStatus = await isAdmin(user);
-    if (!adminStatus) {
-      return createErrorResponse(
-        ErrorCategory.AUTHORIZATION,
-        "Admin access required",
-        "This endpoint is restricted to administrators only",
-        "Contact an administrator if you believe you should have access",
-        403,
-      );
-    }
-
-    // Use admin client for storage operations (bypasses RLS)
+    // Use admin client for database operations (bypasses RLS)
     const adminSupabase = createAdminClient();
 
     // Get request data and validate with Zod
@@ -160,8 +108,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { circuitId, userId, lightThumbBase64, darkThumbBase64 } =
-      validationResult.data;
+    const { lightThumbBase64, darkThumbBase64 } = validationResult.data;
+    // Normalise ids: R2 keys are case-sensitive, Postgres uuids are not
+    const circuitId = validationResult.data.circuitId.toLowerCase();
+    const userId = validationResult.data.userId.toLowerCase();
 
     // Verify circuit exists and belongs to the specified user (security check)
     const { data: circuit, error: circuitError } = await adminSupabase
@@ -191,85 +141,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check R2 storage for actual highest version number
-    let storageVersion = 0;
+    // Reserve a new version with an optimistic lock on the actual DB value
+    // (NULL included). It is max(db, R2, history) + 1, so it never reuses a
+    // number even after a rollback via "Set as Active".
+    let reservation;
     try {
-      const r2 = getR2Client();
-      const listCommand = new ListObjectsV2Command({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Prefix: `thumbnails/${circuitId}-v`,
-      });
-      const listResult = await r2.send(listCommand);
-
-      if (listResult.Contents && listResult.Contents.length > 0) {
-        const versions = listResult.Contents.map((obj) => {
-          const match = obj.Key?.match(new RegExp(`${circuitId}-v(\\d+)-`));
-          return match ? parseInt(match[1], 10) : 0;
-        }).filter((v) => v > 0);
-
-        if (versions.length > 0) {
-          storageVersion = Math.max(...versions);
-        }
-      }
-    } catch (storageError) {
-      console.warn("Could not check R2 storage versions:", storageError);
-      // Continue with database version if storage check fails
-    }
-
-    const dbVersion = circuit.thumbnail_version || 0;
-    console.log(
-      `[Thumbnail Regen] Circuit ${circuitId}: DB version=${dbVersion}, Storage version=${storageVersion}`,
-    );
-
-    // Atomically increment version using optimistic locking with retry
-    // Use the highest version from either database or storage as the starting point
-    let newVersion: number | null = null;
-    let retries = 0;
-    const MAX_RETRIES = 3;
-
-    while (newVersion === null && retries < MAX_RETRIES) {
-      const currentVersion = Math.max(
-        circuit.thumbnail_version || 0,
-        storageVersion,
+      reservation = await reserveThumbnailVersion(
+        circuitId,
+        circuit.thumbnail_version,
       );
-      const nextVersion = currentVersion + 1;
-
-      // Atomic update: only succeed if version hasn't changed (optimistic lock)
-      const { data: updated, error: updateError } = await adminSupabase
-        .from("circuits")
-        .update({ thumbnail_version: nextVersion })
-        .eq("id", circuitId)
-        .eq("thumbnail_version", currentVersion) // Optimistic lock
-        .select("thumbnail_version")
-        .single();
-
-      if (!updateError && updated) {
-        newVersion = updated.thumbnail_version;
-      } else {
-        // Version changed, retry
-        retries++;
-        if (retries >= MAX_RETRIES) {
-          return createErrorResponse(
-            ErrorCategory.CONFLICT,
-            "Version allocation failed",
-            `Unable to allocate thumbnail version after ${MAX_RETRIES} attempts due to concurrent updates`,
-            "Please try again in a moment",
-            409,
-          );
-        }
-        // Re-fetch current version for next retry
-        const { data: refreshed } = await adminSupabase
-          .from("circuits")
-          .select("thumbnail_version")
-          .eq("id", circuitId)
-          .single();
-        if (refreshed) {
-          circuit.thumbnail_version = refreshed.thumbnail_version;
-        }
-      }
+    } catch (error: any) {
+      throw new Error(
+        `[STORAGE] Could not allocate a thumbnail version: ${error.message}`,
+      );
     }
+    if (!reservation.ok) {
+      if (reservation.reason === "not_found") {
+        return createErrorResponse(
+          ErrorCategory.NOT_FOUND,
+          "Circuit not found",
+          `Circuit ${circuitId} was deleted during regeneration`,
+          undefined,
+          404,
+        );
+      }
+      return createErrorResponse(
+        ErrorCategory.CONFLICT,
+        "Version allocation failed",
+        reservation.reason === "exhausted"
+          ? "Thumbnail version limit reached"
+          : "Unable to allocate thumbnail version due to concurrent updates",
+        "Please try again in a moment",
+        409,
+      );
+    }
+    const version = reservation.version;
 
-    // Convert base64 to buffer for upload to R2 (with versioning)
+    // Upload to R2 under the shared versioned layout:
+    // thumbnails/<id>/v<N>-<theme>.png (immutable, long-cached)
     const uploadThumbnail = async (
       base64Data: string,
       theme: "light" | "dark",
@@ -278,78 +187,20 @@ export async function POST(request: NextRequest) {
       const base64String = base64Data.replace(/^data:image\/\w+;base64,/, "");
       const buffer = Buffer.from(base64String, "base64");
 
-      const key = `thumbnails/${circuitId}-v${newVersion}-${theme}.png`;
-
-      // Upload to R2
-      const r2 = getR2Client();
-      const putCommand = new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-        Body: buffer,
-        ContentType: "image/png",
-      });
-
       try {
-        await r2.send(putCommand);
+        return await uploadThumbnailObject(circuitId, version, theme, buffer);
       } catch (error: any) {
         throw new Error(
           `[STORAGE] Failed to upload ${theme} thumbnail to R2: ${error.message}`,
         );
       }
-
-      // Return public URL
-      const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
-      return publicUrl;
     };
 
     // Upload both thumbnails
     const lightUrl = await uploadThumbnail(lightThumbBase64, "light");
     const darkUrl = await uploadThumbnail(darkThumbBase64, "dark");
 
-    // Try to save to thumbnail_history table (optional - table may not exist)
-    try {
-      // Mark previous versions as not current
-      const { error: historyUpdateError } = await adminSupabase
-        .from("thumbnail_history")
-        .update({ is_current: false })
-        .eq("circuit_id", circuitId)
-        .eq("is_current", true);
-
-      if (historyUpdateError) {
-        console.warn(
-          "Error updating thumbnail history (non-critical):",
-          historyUpdateError,
-        );
-      }
-
-      // Insert new version into history
-      const { error: historyInsertError } = await adminSupabase
-        .from("thumbnail_history")
-        .insert({
-          circuit_id: circuitId,
-          version: newVersion,
-          thumbnail_light_url: lightUrl,
-          thumbnail_dark_url: darkUrl,
-          regenerated_by: user.id,
-          is_current: true,
-          notes: "Admin regeneration",
-        });
-
-      if (historyInsertError) {
-        console.warn(
-          "Error inserting thumbnail history (non-critical):",
-          historyInsertError,
-        );
-      }
-    } catch (historyError: any) {
-      // Thumbnail history is optional - log but don't fail the request
-      console.warn(
-        "Thumbnail history operations skipped (table may not exist):",
-        historyError.message,
-      );
-    }
-
-    // Update circuit record with new thumbnail URLs (version already set atomically)
+    // Update circuit record with new thumbnail URLs (version already reserved)
     const { error: updateError } = await adminSupabase
       .from("circuits")
       .update({
@@ -369,12 +220,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // History is an audit trail; failures here don't fail the request
+    const historyError = await recordThumbnailHistory({
+      circuitId,
+      version,
+      lightUrl,
+      darkUrl,
+      regeneratedBy: user.id,
+      notes: "Admin regeneration",
+    });
+    if (historyError) {
+      console.warn(
+        "Thumbnail history update failed (non-critical):",
+        historyError,
+      );
+    }
+
     return NextResponse.json({
       success: true,
       lightUrl,
       darkUrl,
-      version: newVersion,
-      message: `Thumbnails uploaded successfully (v${newVersion})`,
+      version,
+      message: `Thumbnails uploaded successfully (v${version})`,
     });
   } catch (error: any) {
     console.error("Error in regenerate thumbnail endpoint:", error);

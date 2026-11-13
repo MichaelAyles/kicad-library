@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  S3Client,
-  ListObjectsV2Command,
-  DeleteObjectsCommand,
-} from "@aws-sdk/client-s3";
-import { createClient as createAnonClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isAdmin } from "@/lib/admin";
-
-// R2 client singleton
-function getR2Client() {
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-  });
-}
+import { requireAdmin } from "@/lib/api-auth";
+import {
+  deleteKeys,
+  listKeys,
+  parseThumbnailKey,
+} from "@/lib/r2-schematic";
 
 // Increase timeout for large operations
 export const maxDuration = 60; // 60 seconds max (requires Vercel Pro)
@@ -65,57 +52,18 @@ function createErrorResponse(
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // Get the Authorization header with bearer token
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token) {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) {
       return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "No authentication token provided",
-        "The Authorization header is missing or invalid",
-        "Please include a valid Bearer token in the Authorization header",
-        401,
-      );
-    }
-
-    // Create a client with the anon key to verify the token
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-    const supabase = createAnonClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
-    // Verify the token by getting the user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return createErrorResponse(
-        ErrorCategory.AUTHENTICATION,
-        "Invalid authentication token",
-        authError?.message,
-        "Please log in again to get a fresh authentication token",
-        401,
-      );
-    }
-
-    // Check if user has admin role using centralized helper
-    const adminStatus = await isAdmin(user);
-    if (!adminStatus) {
-      return createErrorResponse(
-        ErrorCategory.AUTHORIZATION,
-        "Admin access required",
-        "This endpoint is restricted to administrators only",
-        "Contact an administrator if you believe you should have access",
-        403,
+        auth.status === 401
+          ? ErrorCategory.AUTHENTICATION
+          : ErrorCategory.AUTHORIZATION,
+        auth.error,
+        undefined,
+        auth.status === 401
+          ? "Please log in again to get a fresh authentication token"
+          : "Contact an administrator if you believe you should have access",
+        auth.status,
       );
     }
 
@@ -191,112 +139,62 @@ export async function DELETE(request: NextRequest) {
     let failedFiles = 0;
 
     try {
-      const r2 = getR2Client();
-      const bucketName = process.env.R2_BUCKET_NAME!;
-
       // Build set of circuit IDs for quick lookup
-      const circuitIdSet = new Set(circuits.map((c) => c.id));
+      const circuitIdSet = new Set(
+        circuits.map((c) => String(c.id).toLowerCase()),
+      );
 
-      // List all thumbnail files in R2
+      // List all thumbnail files in R2. parseThumbnailKey matches every
+      // layout (thumbnails/<id>/v<N>-<theme>.png, thumbnails/<id>/<theme>.png,
+      // thumbnails/<id>-v<N>-<theme>.png) and returns lowercase ids.
       console.log("Listing all thumbnail files in R2...");
-      let continuationToken: string | undefined;
-      const keysToDelete: string[] = [];
-
-      do {
-        const listCommand = new ListObjectsV2Command({
-          Bucket: bucketName,
-          Prefix: "thumbnails/",
-          ContinuationToken: continuationToken,
-          MaxKeys: 1000,
-        });
-
-        const listResult = await r2.send(listCommand);
-
-        if (listResult.Contents) {
-          for (const obj of listResult.Contents) {
-            if (!obj.Key) continue;
-            // Extract circuit ID from filename (format: thumbnails/circuitId-v#-theme.png)
-            const match = obj.Key.match(/^thumbnails\/([a-f0-9-]+)-v\d+-/);
-            if (match && circuitIdSet.has(match[1])) {
-              keysToDelete.push(obj.Key);
-            }
-          }
-        }
-
-        continuationToken = listResult.IsTruncated
-          ? listResult.NextContinuationToken
-          : undefined;
-      } while (continuationToken);
+      const keysToDelete = (await listKeys("thumbnails/")).filter((key) => {
+        const parsed = parseThumbnailKey(key);
+        return parsed !== null && circuitIdSet.has(parsed.circuitId);
+      });
 
       console.log(
         `Found ${keysToDelete.length} thumbnail files to delete in R2`,
       );
 
-      if (keysToDelete.length > 0) {
-        // Delete in batches of 1000 (R2/S3 limit)
-        const batchSize = 1000;
-        for (let i = 0; i < keysToDelete.length; i += batchSize) {
-          const batch = keysToDelete.slice(i, i + batchSize);
-
-          const deleteCommand = new DeleteObjectsCommand({
-            Bucket: bucketName,
-            Delete: {
-              Objects: batch.map((key) => ({ Key: key })),
-              Quiet: true,
-            },
-          });
-
-          try {
-            const deleteResult = await r2.send(deleteCommand);
-            const errorsInBatch = deleteResult.Errors?.length || 0;
-            deletedFiles += batch.length - errorsInBatch;
-            failedFiles += errorsInBatch;
-
-            if (errorsInBatch > 0) {
-              console.error(
-                `Errors in batch ${i / batchSize + 1}:`,
-                deleteResult.Errors,
-              );
-            }
-          } catch (error) {
-            console.error(`Error deleting batch ${i / batchSize + 1}:`, error);
-            failedFiles += batch.length;
-          }
-        }
-      }
+      // Delete in batches of 1000 (R2/S3 limit)
+      const deleteResult = await deleteKeys(keysToDelete);
+      deletedFiles = deleteResult.deleted;
+      failedFiles = deleteResult.failed;
     } catch (error) {
       console.error("Error processing R2 files:", error);
       // Continue to database update even if file deletion fails
     }
 
-    // Delete all thumbnail history records for these circuits
+    // Delete all thumbnail history records for these circuits. The ids go in
+    // the request URL, so chunk them: ~4,300 ids in one `.in()` overflows
+    // the URL length limit and the whole delete fails.
     const circuitIds = circuits.map((c) => c.id);
-
-    try {
+    const HISTORY_CHUNK_SIZE = 100;
+    let historyChunksFailed = 0;
+    for (let i = 0; i < circuitIds.length; i += HISTORY_CHUNK_SIZE) {
       const { error: historyDeleteError } = await adminClient
         .from("thumbnail_history")
         .delete()
-        .in("circuit_id", circuitIds);
-
+        .in("circuit_id", circuitIds.slice(i, i + HISTORY_CHUNK_SIZE));
       if (historyDeleteError) {
+        historyChunksFailed++;
         console.warn(
-          "Error deleting thumbnail history (non-critical):",
+          "Error deleting thumbnail history chunk (non-critical):",
           historyDeleteError,
         );
-      } else {
-        console.log("Deleted thumbnail history for all circuits");
       }
-    } catch (error) {
-      console.warn("Thumbnail history deletion skipped (table may not exist)");
     }
 
-    // Update database to set thumbnail URLs to null and reset version to 0
+    // Clear the thumbnail URLs. thumbnail_version is deliberately kept:
+    // versioned keys are cached as immutable, so the next regeneration must
+    // continue from this number instead of reusing v1, v2, ... whose old
+    // images may still be in CDN and browser caches.
     const { error: updateError } = await adminClient
       .from("circuits")
       .update({
         thumbnail_light_url: null,
         thumbnail_dark_url: null,
-        thumbnail_version: 0,
       })
       .eq("user_id", importerUser.id);
 
@@ -317,6 +215,7 @@ export async function DELETE(request: NextRequest) {
       circuitsUpdated: circuits.length,
       filesDeleted: deletedFiles,
       filesFailed: failedFiles,
+      historyChunksFailed,
     });
   } catch (error: any) {
     console.error("Error in delete-all-thumbnails:", error);
