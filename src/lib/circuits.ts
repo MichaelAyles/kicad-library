@@ -227,6 +227,31 @@ export async function searchCircuits(
  * Atomically increment view count to prevent race conditions
  * Uses database RPC function for atomic increment
  */
+export interface CircuitSource {
+  raw_sexpr: string;
+  view_count: number;
+  copy_count: number;
+  favorite_count: number;
+}
+
+/**
+ * Fetch just the raw S-expression and live counters for a circuit the page
+ * already has (server-rendered) metadata for. Returns null if the circuit is
+ * gone or no longer visible to this user (RLS).
+ */
+export async function getCircuitSource(
+  circuitId: string,
+): Promise<CircuitSource | null> {
+  const { data, error } = await supabase
+    .from("circuits")
+    .select("raw_sexpr, view_count, copy_count, favorite_count")
+    .eq("id", circuitId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as CircuitSource | null;
+}
+
 export async function incrementViewCount(circuitId: string): Promise<void> {
   try {
     const { error } = await supabase.rpc("increment_circuit_views", {

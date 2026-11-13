@@ -11,6 +11,10 @@ interface SchematicViewerProps {
   schematicR2Url: string; // Direct R2 URL for KiCanvas (required)
   /** Symbol count from the AST parser (validateSExpression metadata) */
   componentCount?: number;
+  /** Whether sexpr is still loading, loaded, or failed to load */
+  sexprStatus?: "loading" | "ready" | "error";
+  /** Retry loading sexpr after an error */
+  onRetry?: () => void;
   onCopy?: () => void;
 }
 
@@ -27,6 +31,8 @@ export function SchematicViewer({
   circuitId,
   schematicR2Url,
   componentCount,
+  sexprStatus = "ready",
+  onRetry,
   onCopy,
 }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -76,15 +82,37 @@ export function SchematicViewer({
                 onClick={() => {
                   navigator.clipboard.writeText(sexpr);
                 }}
-                disabled={!sexpr}
+                disabled={sexprStatus !== "ready" || !sexpr}
                 className="text-xs px-2 py-1 border rounded hover:bg-background transition-colors disabled:opacity-50"
               >
                 Copy
               </button>
             </div>
-            <pre className="text-xs font-mono bg-background border rounded p-4 overflow-x-auto max-h-96 overflow-y-auto">
-              {sexpr || "Loading..."}
-            </pre>
+            {sexprStatus === "error" ? (
+              <div
+                role="alert"
+                className="text-sm bg-background border rounded p-4 flex flex-wrap items-center gap-3"
+              >
+                <span className="text-muted-foreground">
+                  Couldn&apos;t load the S-expression.
+                </span>
+                {onRetry && (
+                  <button
+                    onClick={onRetry}
+                    className="text-xs px-2 py-1 border rounded hover:bg-muted/50 transition-colors"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            ) : (
+              <pre
+                aria-busy={sexprStatus === "loading"}
+                className="text-xs font-mono bg-background border rounded p-4 overflow-x-auto max-h-96 overflow-y-auto"
+              >
+                {sexprStatus === "loading" ? "Loading..." : sexpr}
+              </pre>
+            )}
           </div>
         </div>
       )}

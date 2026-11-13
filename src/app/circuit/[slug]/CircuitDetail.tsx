@@ -13,6 +13,8 @@ import {
   Edit,
   Lock,
   Flag,
+  AlertCircle,
+  RotateCw,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -33,8 +35,10 @@ import { CommentList } from "@/components/CommentList";
 import { FlagCircuitModal } from "@/components/FlagCircuitModal";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { formatDate } from "@/lib/utils";
+import { circuitUrl } from "@/lib/site";
 import {
   getCircuitBySlug,
+  getCircuitSource,
   incrementViewCount,
   incrementCopyCount,
   checkIfFavorited,
@@ -47,6 +51,8 @@ import {
 } from "@/lib/circuit-summary";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
+
+type SourceStatus = "loading" | "ready" | "error";
 
 interface CircuitDetailProps {
   slug: string;
@@ -82,59 +88,82 @@ export function CircuitDetail({
   ); // Parsed metadata from S-expression
   const [isFlagModalOpen, setIsFlagModalOpen] = useState(false);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
+  // State of the raw S-expression that copy, download and the S-expression
+  // panel need. The server never sends it, so it always loads in the browser.
+  const [sourceStatus, setSourceStatus] = useState<SourceStatus>("loading");
 
-  // Load the circuit (including raw S-expression for copy/download) in the
-  // browser. The server only renders public circuits and never sends the raw
-  // S-expression, so this always runs: it fetches copy/download data, refreshes
-  // the cached counters, and is the only source for an owner's private circuit
-  // (the browser session can see it, the cookie-less server fetch can't).
+  const countView = (circuitId: string) => {
+    incrementViewCount(circuitId).catch((err) =>
+      console.error("Failed to increment view count:", err),
+    );
+  };
+
+  // Server-rendered circuit: fetch only the raw S-expression and live
+  // counters (the cached page's counters may be up to an hour old).
+  const loadSource = async (circuitId: string, title: string) => {
+    setSourceStatus("loading");
+    try {
+      const source = await getCircuitSource(circuitId);
+      if (!source) {
+        // Deleted or made private since the page was cached
+        setCircuit(null);
+        setError("Circuit not found");
+        return;
+      }
+      setCircuit((prev) =>
+        prev ? { ...prev, view_count: source.view_count } : prev,
+      );
+      setFavoriteCount(source.favorite_count);
+      setCopyCount(source.copy_count);
+      prepareCircuitData(source.raw_sexpr, title);
+      setSourceStatus("ready");
+    } catch (err) {
+      console.error("Failed to load circuit data:", err);
+      setSourceStatus("error");
+    }
+  };
+
+  // No server data (an owner's private circuit, which the cookie-less server
+  // fetch can't see, or an unknown slug): load everything in the browser,
+  // where the user's session applies.
+  const loadFullCircuit = async () => {
+    try {
+      const circuitData = await getCircuitBySlug(slug);
+      if (!circuitData) {
+        setError("Circuit not found");
+        return;
+      }
+      const { raw_sexpr, ...circuitFields } = circuitData;
+      setCircuit(circuitFields);
+      setFavoriteCount(circuitData.favorite_count);
+      setCopyCount(circuitData.copy_count);
+      prepareCircuitData(raw_sexpr, circuitData.title);
+      setSourceStatus("ready");
+      countView(circuitData.id);
+    } catch (err) {
+      console.error("Failed to load circuit:", err);
+      setError(err instanceof Error ? err.message : "Failed to load circuit");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!slug) return;
-
-    const loadCircuit = async () => {
-      setError(null);
-
-      try {
-        // Fetch circuit from database
-        const circuitData = await getCircuitBySlug(slug);
-
-        if (!circuitData) {
-          setCircuit(null);
-          setError("Circuit not found");
-          setIsLoading(false);
-          return;
-        }
-
-        const { raw_sexpr, ...circuitFields } = circuitData;
-        setCircuit(circuitFields);
-        setFavoriteCount(circuitData.favorite_count);
-        setCopyCount(circuitData.copy_count);
-
-        // Increment view count (fire and forget)
-        incrementViewCount(circuitData.id).catch((err) =>
-          console.error("Failed to increment view count:", err),
-        );
-
-        // Prepare circuit data for copy and preview
-        prepareCircuitData(raw_sexpr, circuitData.title);
-
-        setIsLoading(false);
-      } catch (err) {
-        console.error("Failed to load circuit:", err);
-        // Keep showing server-rendered content if we have it
-        if (!initialCircuit) {
-          setError(
-            err instanceof Error ? err.message : "Failed to load circuit",
-          );
-        }
-        setIsLoading(false);
-      }
-    };
-
-    loadCircuit();
+    if (initialCircuit) {
+      loadSource(initialCircuit.id, initialCircuit.title).finally(() =>
+        countView(initialCircuit.id),
+      );
+    } else {
+      loadFullCircuit();
+    }
     // initialCircuit/initialParts are fixed for a given slug
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  const retryLoadSource = () => {
+    if (circuit) loadSource(circuit.id, circuit.title);
+  };
 
   // Check if the signed-in user has favorited this circuit
   const circuitId = circuit?.id;
@@ -196,14 +225,8 @@ export function CircuitDetail({
   };
 
   const handleCopy = async () => {
-    if (!snippetData) {
-      alert("Circuit data is still loading");
-      return;
-    }
-
-    if (!circuit) {
-      return;
-    }
+    // The button is disabled until the data is ready
+    if (!snippetData || !circuit) return;
 
     // Validate clipboard data before copying
     const validation = validateClipboardData(snippetData);
@@ -260,15 +283,13 @@ export function CircuitDetail({
   };
 
   const handleDownload = () => {
-    if (!fullFileData || !circuit) {
-      alert("Schematic file is still loading");
-      return;
-    }
+    // The button is disabled until the data is ready
+    if (!fullFileData || !circuit) return;
 
     // Add attribution to the complete schematic file
     const attributed = addAttribution(fullFileData, {
       author: circuit.user?.username ? `@${circuit.user.username}` : "Unknown",
-      url: `https://circuitsnips.com/circuit/${circuit.slug}`,
+      url: circuitUrl(circuit.slug),
       license: circuit.license,
     });
 
@@ -456,7 +477,9 @@ export function CircuitDetail({
           <div className="flex flex-wrap gap-3 mb-8">
             <button
               onClick={handleCopy}
-              className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+              disabled={sourceStatus !== "ready"}
+              aria-busy={sourceStatus === "loading"}
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-primary"
             >
               {copied ? (
                 <>
@@ -465,7 +488,11 @@ export function CircuitDetail({
                 </>
               ) : (
                 <>
-                  <Copy className="w-5 h-5" />
+                  {sourceStatus === "loading" ? (
+                    <Loader className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Copy className="w-5 h-5" />
+                  )}
                   Copy to Clipboard
                 </>
               )}
@@ -487,9 +514,15 @@ export function CircuitDetail({
 
             <button
               onClick={handleDownload}
-              className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2"
+              disabled={sourceStatus !== "ready"}
+              aria-busy={sourceStatus === "loading"}
+              className="px-6 py-3 border rounded-md font-medium hover:bg-muted/50 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
-              <FileDown className="w-5 h-5" />
+              {sourceStatus === "loading" ? (
+                <Loader className="w-5 h-5 animate-spin" />
+              ) : (
+                <FileDown className="w-5 h-5" />
+              )}
               Download .kicad_sch
             </button>
 
@@ -517,6 +550,25 @@ export function CircuitDetail({
             )}
           </div>
 
+          {sourceStatus === "error" && (
+            <div
+              role="alert"
+              className="mb-8 -mt-4 flex flex-wrap items-center gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm"
+            >
+              <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+              <span>
+                Couldn&apos;t load the schematic data for copy and download.
+              </span>
+              <button
+                onClick={retryLoadSource}
+                className="inline-flex items-center gap-1 rounded-md border px-3 py-1 font-medium hover:bg-muted/50 transition-colors"
+              >
+                <RotateCw className="w-4 h-4" />
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Schematic Viewer - KiCanvas loads straight from R2, so it can
               start before the raw S-expression arrives */}
           {circuit.schematic_r2_url ? (
@@ -528,6 +580,8 @@ export function CircuitDetail({
                 circuitId={circuit.id}
                 schematicR2Url={circuit.schematic_r2_url}
                 componentCount={metadata?.stats.componentCount}
+                sexprStatus={sourceStatus}
+                onRetry={retryLoadSource}
                 onCopy={handleViewerCopy}
               />
             </div>
@@ -657,7 +711,7 @@ export function CircuitDetail({
             <div className="bg-card border rounded-md p-4 font-mono text-sm break-words">
               <div>&quot;{circuit.title}&quot;</div>
               {circuit.user && <div>by @{circuit.user.username}</div>}
-              <div>https://circuitsnips.com/circuit/{circuit.slug}</div>
+              <div>{circuitUrl(circuit.slug)}</div>
               <div>Licensed under {circuit.license}</div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
