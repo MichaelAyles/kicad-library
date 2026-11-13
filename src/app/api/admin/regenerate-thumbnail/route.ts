@@ -9,26 +9,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  S3Client,
-  PutObjectCommand,
-  ListObjectsV2Command,
-} from "@aws-sdk/client-s3";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin";
-
-// R2 client singleton
-function getR2Client() {
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-  });
-}
+import {
+  listCircuitThumbnails,
+  uploadThumbnailObject,
+} from "@/lib/r2-schematic";
 
 // Force Node.js runtime for Buffer support
 export const runtime = "nodejs";
@@ -191,57 +178,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check R2 storage for actual highest version number
+    // Highest version already used, in R2 (any key layout) or in
+    // thumbnail_history. The DB value can be lower than this after a rollback
+    // via "Set as Active", and versioned keys must never be reused, so
+    // allocation starts above all of them.
+    // Failing to list is fatal: guessing could overwrite an immutable key.
     let storageVersion = 0;
     try {
-      const r2 = getR2Client();
-      const listCommand = new ListObjectsV2Command({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Prefix: `thumbnails/${circuitId}-v`,
-      });
-      const listResult = await r2.send(listCommand);
-
-      if (listResult.Contents && listResult.Contents.length > 0) {
-        const versions = listResult.Contents.map((obj) => {
-          const match = obj.Key?.match(new RegExp(`${circuitId}-v(\\d+)-`));
-          return match ? parseInt(match[1], 10) : 0;
-        }).filter((v) => v > 0);
-
-        if (versions.length > 0) {
-          storageVersion = Math.max(...versions);
-        }
-      }
-    } catch (storageError) {
-      console.warn("Could not check R2 storage versions:", storageError);
-      // Continue with database version if storage check fails
+      const stored = await listCircuitThumbnails(circuitId);
+      storageVersion = Math.max(0, ...stored.map((t) => t.version));
+    } catch (storageError: any) {
+      throw new Error(
+        `[STORAGE] Could not list existing thumbnail versions: ${storageError.message}`,
+      );
     }
+    const { data: latestHistory } = await adminSupabase
+      .from("thumbnail_history")
+      .select("version")
+      .eq("circuit_id", circuitId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    storageVersion = Math.max(storageVersion, latestHistory?.version ?? 0);
 
-    const dbVersion = circuit.thumbnail_version || 0;
     console.log(
-      `[Thumbnail Regen] Circuit ${circuitId}: DB version=${dbVersion}, Storage version=${storageVersion}`,
+      `[Thumbnail Regen] Circuit ${circuitId}: DB version=${circuit.thumbnail_version}, Storage version=${storageVersion}`,
     );
 
-    // Atomically increment version using optimistic locking with retry
-    // Use the highest version from either database or storage as the starting point
+    // Atomically increment version using optimistic locking with retry.
+    // The lock compares against the value actually in the DB (which may be
+    // NULL); the new version is max(db, storage) + 1.
     let newVersion: number | null = null;
     let retries = 0;
     const MAX_RETRIES = 3;
 
     while (newVersion === null && retries < MAX_RETRIES) {
-      const currentVersion = Math.max(
-        circuit.thumbnail_version || 0,
-        storageVersion,
-      );
-      const nextVersion = currentVersion + 1;
+      const dbVersion: number | null = circuit.thumbnail_version ?? null;
+      const nextVersion = Math.max(dbVersion ?? 0, storageVersion) + 1;
 
-      // Atomic update: only succeed if version hasn't changed (optimistic lock)
-      const { data: updated, error: updateError } = await adminSupabase
+      const lockQuery = adminSupabase
         .from("circuits")
         .update({ thumbnail_version: nextVersion })
-        .eq("id", circuitId)
-        .eq("thumbnail_version", currentVersion) // Optimistic lock
+        .eq("id", circuitId);
+      const { data: updated, error: updateError } = await (
+        dbVersion === null
+          ? lockQuery.is("thumbnail_version", null)
+          : lockQuery.eq("thumbnail_version", dbVersion)
+      )
         .select("thumbnail_version")
-        .single();
+        .maybeSingle();
 
       if (!updateError && updated) {
         newVersion = updated.thumbnail_version;
@@ -269,7 +254,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Convert base64 to buffer for upload to R2 (with versioning)
+    if (newVersion === null) {
+      // Unreachable (the loop returns 409 when retries run out); narrows type
+      throw new Error("Version allocation failed");
+    }
+    const version: number = newVersion;
+
+    // Upload to R2 under the shared versioned layout:
+    // thumbnails/<id>/v<N>-<theme>.png (immutable, long-cached)
     const uploadThumbnail = async (
       base64Data: string,
       theme: "light" | "dark",
@@ -278,28 +270,13 @@ export async function POST(request: NextRequest) {
       const base64String = base64Data.replace(/^data:image\/\w+;base64,/, "");
       const buffer = Buffer.from(base64String, "base64");
 
-      const key = `thumbnails/${circuitId}-v${newVersion}-${theme}.png`;
-
-      // Upload to R2
-      const r2 = getR2Client();
-      const putCommand = new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-        Body: buffer,
-        ContentType: "image/png",
-      });
-
       try {
-        await r2.send(putCommand);
+        return await uploadThumbnailObject(circuitId, version, theme, buffer);
       } catch (error: any) {
         throw new Error(
           `[STORAGE] Failed to upload ${theme} thumbnail to R2: ${error.message}`,
         );
       }
-
-      // Return public URL
-      const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
-      return publicUrl;
     };
 
     // Upload both thumbnails

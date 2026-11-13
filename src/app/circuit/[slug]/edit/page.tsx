@@ -20,7 +20,7 @@ import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { getCircuitBySlug, type Circuit } from "@/lib/circuits";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin } from "@/lib/admin";
-import { captureThumbnails, uploadThumbnail } from "@/lib/thumbnail";
+import { captureThumbnails, uploadThumbnailsToR2 } from "@/lib/thumbnail";
 import { createClient } from "@/lib/supabase/client";
 import {
   wrapSnippetToFullFile,
@@ -336,54 +336,27 @@ export default function EditCircuitPage() {
 
       const supabase = createClient();
 
-      // Fetch current thumbnail version from database
-      const { data: circuitData, error: fetchError } = await supabase
-        .from("circuits")
-        .select("thumbnail_version")
-        .eq("id", circuit.id)
-        .single();
-
-      if (fetchError) {
-        throw new Error(
-          `Failed to fetch circuit version: ${fetchError.message}`,
-        );
-      }
-
-      const currentVersion = circuitData?.thumbnail_version || 0;
-      const newVersion = currentVersion + 1;
-
-      console.log(
-        `Version detection: DB version=${currentVersion}, Next=${newVersion}`,
-      );
-
-      // Upload new thumbnails with incremented version
-      const lightUrl = await uploadThumbnail(
-        supabase,
-        user.id,
+      // Upload both themes in one request. The server allocates the next
+      // unused version (new immutable keys), points the circuit at it and
+      // records it in thumbnail_history so it can be restored later.
+      const uploaded = await uploadThumbnailsToR2(
         circuit.id,
-        "light",
         thumbnails.light,
-        newVersion,
-      );
-      const darkUrl = await uploadThumbnail(
-        supabase,
-        user.id,
-        circuit.id,
-        "dark",
         thumbnails.dark,
-        newVersion,
+        { historyNote: "Regenerated from edit page" },
       );
 
-      // Update circuit with new thumbnail URLs and version
+      // Save through the circuits API as well so the circuit's pages are
+      // revalidated and updated_at is bumped
       const response = await fetch(`/api/circuits/${circuit.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          thumbnail_light_url: lightUrl,
-          thumbnail_dark_url: darkUrl,
-          thumbnail_version: newVersion,
+          thumbnail_light_url: uploaded.light,
+          thumbnail_dark_url: uploaded.dark,
+          thumbnail_version: uploaded.version,
         }),
       });
 

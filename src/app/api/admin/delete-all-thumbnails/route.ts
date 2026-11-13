@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  S3Client,
-  ListObjectsV2Command,
-  DeleteObjectsCommand,
-} from "@aws-sdk/client-s3";
+import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdmin } from "@/lib/admin";
+import { deleteKeys, parseThumbnailKey } from "@/lib/r2-schematic";
 
 // R2 client singleton
 function getR2Client() {
@@ -215,9 +212,10 @@ export async function DELETE(request: NextRequest) {
         if (listResult.Contents) {
           for (const obj of listResult.Contents) {
             if (!obj.Key) continue;
-            // Extract circuit ID from filename (format: thumbnails/circuitId-v#-theme.png)
-            const match = obj.Key.match(/^thumbnails\/([a-f0-9-]+)-v\d+-/);
-            if (match && circuitIdSet.has(match[1])) {
+            // Matches every layout: thumbnails/<id>/v<N>-<theme>.png,
+            // thumbnails/<id>/<theme>.png and thumbnails/<id>-v<N>-<theme>.png
+            const parsed = parseThumbnailKey(obj.Key);
+            if (parsed && circuitIdSet.has(parsed.circuitId)) {
               keysToDelete.push(obj.Key);
             }
           }
@@ -232,71 +230,44 @@ export async function DELETE(request: NextRequest) {
         `Found ${keysToDelete.length} thumbnail files to delete in R2`,
       );
 
-      if (keysToDelete.length > 0) {
-        // Delete in batches of 1000 (R2/S3 limit)
-        const batchSize = 1000;
-        for (let i = 0; i < keysToDelete.length; i += batchSize) {
-          const batch = keysToDelete.slice(i, i + batchSize);
-
-          const deleteCommand = new DeleteObjectsCommand({
-            Bucket: bucketName,
-            Delete: {
-              Objects: batch.map((key) => ({ Key: key })),
-              Quiet: true,
-            },
-          });
-
-          try {
-            const deleteResult = await r2.send(deleteCommand);
-            const errorsInBatch = deleteResult.Errors?.length || 0;
-            deletedFiles += batch.length - errorsInBatch;
-            failedFiles += errorsInBatch;
-
-            if (errorsInBatch > 0) {
-              console.error(
-                `Errors in batch ${i / batchSize + 1}:`,
-                deleteResult.Errors,
-              );
-            }
-          } catch (error) {
-            console.error(`Error deleting batch ${i / batchSize + 1}:`, error);
-            failedFiles += batch.length;
-          }
-        }
-      }
+      // Delete in batches of 1000 (R2/S3 limit)
+      const deleteResult = await deleteKeys(keysToDelete);
+      deletedFiles = deleteResult.deleted;
+      failedFiles = deleteResult.failed;
     } catch (error) {
       console.error("Error processing R2 files:", error);
       // Continue to database update even if file deletion fails
     }
 
-    // Delete all thumbnail history records for these circuits
+    // Delete all thumbnail history records for these circuits. The ids go in
+    // the request URL, so chunk them: ~4,300 ids in one `.in()` overflows
+    // the URL length limit and the whole delete fails.
     const circuitIds = circuits.map((c) => c.id);
-
-    try {
+    const HISTORY_CHUNK_SIZE = 100;
+    let historyChunksFailed = 0;
+    for (let i = 0; i < circuitIds.length; i += HISTORY_CHUNK_SIZE) {
       const { error: historyDeleteError } = await adminClient
         .from("thumbnail_history")
         .delete()
-        .in("circuit_id", circuitIds);
-
+        .in("circuit_id", circuitIds.slice(i, i + HISTORY_CHUNK_SIZE));
       if (historyDeleteError) {
+        historyChunksFailed++;
         console.warn(
-          "Error deleting thumbnail history (non-critical):",
+          "Error deleting thumbnail history chunk (non-critical):",
           historyDeleteError,
         );
-      } else {
-        console.log("Deleted thumbnail history for all circuits");
       }
-    } catch (error) {
-      console.warn("Thumbnail history deletion skipped (table may not exist)");
     }
 
-    // Update database to set thumbnail URLs to null and reset version to 0
+    // Clear the thumbnail URLs. thumbnail_version is deliberately kept:
+    // versioned keys are cached as immutable, so the next regeneration must
+    // continue from this number instead of reusing v1, v2, ... whose old
+    // images may still be in CDN and browser caches.
     const { error: updateError } = await adminClient
       .from("circuits")
       .update({
         thumbnail_light_url: null,
         thumbnail_dark_url: null,
-        thumbnail_version: 0,
       })
       .eq("user_id", importerUser.id);
 
@@ -317,6 +288,7 @@ export async function DELETE(request: NextRequest) {
       circuitsUpdated: circuits.length,
       filesDeleted: deletedFiles,
       filesFailed: failedFiles,
+      historyChunksFailed,
     });
   } catch (error: any) {
     console.error("Error in delete-all-thumbnails:", error);

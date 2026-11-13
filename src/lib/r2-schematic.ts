@@ -166,21 +166,75 @@ export async function deleteSchematic(circuitId: string): Promise<void> {
   await client.send(command);
 }
 
-/**
- * Delete every R2 object belonging to a circuit: its schematic and all
- * thumbnails (including versioned ones) under `thumbnails/<id>/`.
- */
-export async function deleteCircuitFiles(circuitId: string): Promise<void> {
-  const client = getR2Client();
-  const bucket = getBucketName();
+// ---------------------------------------------------------------------------
+// Thumbnails
+//
+// Current layout (all new writes): thumbnails/<id>/v<N>-<theme>.png
+//   Every version gets its own immutable key, so CDN/browser caches never
+//   serve a stale image and thumbnail_history entries stay restorable.
+// Legacy layouts still present in the bucket:
+//   thumbnails/<id>/<theme>.png       (user uploads before versioning)
+//   thumbnails/<id>-v<N>-<theme>.png  (old admin regeneration)
+// ---------------------------------------------------------------------------
 
-  const keys = [getSchematicKey(circuitId)];
+export type ThumbnailTheme = "light" | "dark";
+
+const UUID_PATTERN =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const THUMBNAIL_KEY_RE = new RegExp(
+  `^thumbnails/(${UUID_PATTERN})(?:/(?:v(\\d+)-)?|-v(\\d+)-)(light|dark)\\.png$`,
+);
+
+export interface ParsedThumbnailKey {
+  circuitId: string;
+  theme: ThumbnailTheme;
+  /** Version number, or 0 for the unversioned `thumbnails/<id>/<theme>.png`. */
+  version: number;
+  layout: "current" | "legacy-fixed" | "legacy-flat";
+}
+
+/**
+ * Parse a thumbnail object key in any of the known layouts.
+ * Returns null for keys that are not circuit thumbnails.
+ */
+export function parseThumbnailKey(key: string): ParsedThumbnailKey | null {
+  const match = THUMBNAIL_KEY_RE.exec(key);
+  if (!match) return null;
+  const [, circuitId, dirVersion, flatVersion, theme] = match;
+  if (flatVersion !== undefined) {
+    return {
+      circuitId,
+      theme: theme as ThumbnailTheme,
+      version: parseInt(flatVersion, 10),
+      layout: "legacy-flat",
+    };
+  }
+  return {
+    circuitId,
+    theme: theme as ThumbnailTheme,
+    version: dirVersion !== undefined ? parseInt(dirVersion, 10) : 0,
+    layout: dirVersion !== undefined ? "current" : "legacy-fixed",
+  };
+}
+
+/** R2 key for a versioned thumbnail (the only layout used for new writes). */
+export function getThumbnailKey(
+  circuitId: string,
+  version: number,
+  theme: ThumbnailTheme,
+): string {
+  return `thumbnails/${circuitId}/v${version}-${theme}.png`;
+}
+
+async function listKeys(prefix: string): Promise<string[]> {
+  const client = getR2Client();
+  const keys: string[] = [];
   let continuationToken: string | undefined;
   do {
     const listed = await client.send(
       new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: `thumbnails/${circuitId}/`,
+        Bucket: getBucketName(),
+        Prefix: prefix,
         ContinuationToken: continuationToken,
       }),
     );
@@ -191,13 +245,99 @@ export async function deleteCircuitFiles(circuitId: string): Promise<void> {
       ? listed.NextContinuationToken
       : undefined;
   } while (continuationToken);
+  return keys;
+}
 
-  await client.send(
-    new DeleteObjectsCommand({
-      Bucket: bucket,
-      Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+/**
+ * List every thumbnail object for one circuit, in all layouts.
+ *
+ * The legacy flat layout shares the `thumbnails/<id>-` prefix with nothing
+ * else in practice, but keys are still matched exactly against this id so a
+ * different circuit's objects can never be returned.
+ */
+export async function listCircuitThumbnails(
+  circuitId: string,
+): Promise<(ParsedThumbnailKey & { key: string })[]> {
+  const [dirKeys, flatKeys] = await Promise.all([
+    listKeys(`thumbnails/${circuitId}/`),
+    listKeys(`thumbnails/${circuitId}-`),
+  ]);
+  const results: (ParsedThumbnailKey & { key: string })[] = [];
+  for (const key of [...dirKeys, ...flatKeys]) {
+    const parsed = parseThumbnailKey(key);
+    if (parsed && parsed.circuitId === circuitId) {
+      results.push({ ...parsed, key });
+    }
+  }
+  return results;
+}
+
+/**
+ * Upload one thumbnail image under its versioned key.
+ * Versioned keys are never overwritten, so they are cached as immutable.
+ *
+ * @returns The public URL of the uploaded thumbnail
+ */
+export async function uploadThumbnailObject(
+  circuitId: string,
+  version: number,
+  theme: ThumbnailTheme,
+  body: Buffer,
+): Promise<string> {
+  const key = getThumbnailKey(circuitId, version, theme);
+  await getR2Client().send(
+    new PutObjectCommand({
+      Bucket: getBucketName(),
+      Key: key,
+      Body: body,
+      ContentType: "image/png",
+      CacheControl: "public, max-age=31536000, immutable",
     }),
   );
+  return `${getPublicUrl()}/${key}`;
+}
+
+/** Delete keys in batches of 1000 (the S3 DeleteObjects limit). */
+export async function deleteKeys(
+  keys: string[],
+): Promise<{ deleted: number; failed: number }> {
+  const client = getR2Client();
+  let deleted = 0;
+  let failed = 0;
+  for (let i = 0; i < keys.length; i += 1000) {
+    const batch = keys.slice(i, i + 1000);
+    try {
+      const result = await client.send(
+        new DeleteObjectsCommand({
+          Bucket: getBucketName(),
+          Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+        }),
+      );
+      const errors = result.Errors?.length ?? 0;
+      if (errors > 0) console.error("R2 delete errors:", result.Errors);
+      deleted += batch.length - errors;
+      failed += errors;
+    } catch (error) {
+      console.error("R2 delete batch failed:", error);
+      failed += batch.length;
+    }
+  }
+  return { deleted, failed };
+}
+
+/**
+ * Delete every R2 object belonging to a circuit: its schematic and all of
+ * its thumbnails, in both the current and legacy key layouts.
+ */
+export async function deleteCircuitFiles(circuitId: string): Promise<void> {
+  const thumbnails = await listCircuitThumbnails(circuitId);
+  const keys = [getSchematicKey(circuitId), ...thumbnails.map((t) => t.key)];
+  const { failed } = await deleteKeys(keys);
+  if (failed > 0) {
+    throw new Error(
+      `Failed to delete ${failed} R2 object(s) for circuit ${circuitId}`,
+    );
+  }
 }
 
 /**

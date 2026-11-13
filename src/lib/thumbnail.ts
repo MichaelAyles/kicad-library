@@ -372,7 +372,13 @@ export function dataURLtoBlob(dataURL: string): Blob {
 }
 
 /**
- * Upload thumbnail to R2 storage
+ * Upload one theme's thumbnail to R2 storage.
+ *
+ * `version` is a hint: the server writes `thumbnails/<id>/v<N>-<theme>.png`
+ * with N = `version`, raised if that key already exists, so a light and a
+ * dark call with the same `version` end up on the same N. The returned URL
+ * contains the version actually used.
+ *
  * @deprecated Use uploadThumbnailsToR2 for new uploads - this is kept for backwards compatibility
  */
 export async function uploadThumbnail(
@@ -391,6 +397,7 @@ export async function uploadThumbnail(
       circuitId,
       lightDataUrl: theme === "light" ? dataURL : undefined,
       darkDataUrl: theme === "dark" ? dataURL : undefined,
+      version,
     }),
   });
 
@@ -404,13 +411,18 @@ export async function uploadThumbnail(
 }
 
 /**
- * Upload both thumbnails to R2 storage in a single request
+ * Upload both thumbnails to R2 storage in a single request.
+ *
+ * The server allocates the next free version, writes both images under it,
+ * and sets the circuit's thumbnail URLs and thumbnail_version. Pass
+ * `historyNote` to also record the version in thumbnail_history as current.
  */
 export async function uploadThumbnailsToR2(
   circuitId: string,
   lightDataUrl: string,
   darkDataUrl: string,
-): Promise<{ light: string; dark: string }> {
+  options: { historyNote?: string } = {},
+): Promise<{ light: string; dark: string; version: number }> {
   const response = await fetch("/api/upload-thumbnail", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -418,6 +430,7 @@ export async function uploadThumbnailsToR2(
       circuitId,
       lightDataUrl,
       darkDataUrl,
+      historyNote: options.historyNote,
     }),
   });
 
@@ -427,5 +440,5 @@ export async function uploadThumbnailsToR2(
     throw new Error(`Failed to upload thumbnails: ${data.error}`);
   }
 
-  return data.urls;
+  return { light: data.urls.light, dark: data.urls.dark, version: data.version };
 }
