@@ -17,3 +17,5 @@ User-agent: Bytespider
 User-agent: Amazonbot
 User-agent: meta-externalagent
 Disallow: /
+
+Sitemap: https://www.circuitsnips.com/sitemap.xml

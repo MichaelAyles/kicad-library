@@ -4,8 +4,10 @@ import "./globals.css";
 import { b612, b612Mono } from "./fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CookieNotice } from "@/components/CookieNotice";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "CircuitSnips - Share KiCad Subcircuits",
   description:
     "Open-source platform for sharing and discovering reusable KiCad schematic subcircuits. Copy-paste circuits for your electronics projects.",
@@ -18,12 +20,12 @@ export const metadata: Metadata = {
     "PCB",
     "electronic design",
   ],
-  authors: [{ name: "CircuitSnips", url: "https://circuitsnips.com" }],
+  authors: [{ name: "CircuitSnips", url: SITE_URL }],
   openGraph: {
     title: "CircuitSnips - Share KiCad Subcircuits",
     description:
       "Open-source platform for sharing reusable KiCad schematic subcircuits",
-    url: "https://circuitsnips.com",
+    url: SITE_URL,
     siteName: "CircuitSnips",
     type: "website",
   },

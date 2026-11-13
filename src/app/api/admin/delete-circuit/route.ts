@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUuid, requireAdmin } from "@/lib/api-auth";
 import { deleteCircuitFiles } from "@/lib/r2-schematic";
@@ -31,11 +32,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete the circuit (cascades will handle related data)
-    const { error } = await adminSupabase
+    // Delete the circuit (cascades will handle related data). Return the
+    // slug so the cached circuit page can be revalidated.
+    const { data: deleted, error } = await adminSupabase
       .from("circuits")
       .delete()
-      .eq("id", circuitId);
+      .eq("id", circuitId)
+      .select("slug");
 
     if (error) {
       console.error("Error deleting circuit:", error);
@@ -50,6 +53,11 @@ export async function DELETE(request: NextRequest) {
       await deleteCircuitFiles(circuitId);
     } catch (r2Error) {
       console.error("Circuit deleted but R2 cleanup failed:", r2Error);
+    }
+
+    // Drop the ISR-cached circuit page so it stops serving the deleted circuit
+    for (const row of deleted ?? []) {
+      revalidatePath(`/circuit/${row.slug}`);
     }
 
     return NextResponse.json({
