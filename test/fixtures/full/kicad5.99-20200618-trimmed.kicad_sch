@@ -1,0 +1,37 @@
+(kicad_sch (version 20200618) (host eeschema "(5.99.0-2101-geb1ff80d5)")
+  (comment 1 "GitHub: https://github.com/rraider/Seminarkurs2021")
+  (comment 2 "Source: rraider/Seminarkurs2021 | Hardware/CLUSTERFCK/MARMEM/MARMEM/MARMEM.kicad_sch")
+  (comment 3 "License: MIT License | Quality: 7/10")
+  (comment 4 "Imported: 2025-10-29 | CircuitSnips.com")
+
+
+  (page 1 1)
+
+  (paper "A4")
+
+  (title_block
+    (title "MARMEM")
+    (date "2020-10-03")
+    (rev "1.2")
+    (company "Wilhelm-Maybach-Schule Heilbronn")
+    (comment 1 "Kevin da Silva Fernandes")
+  )
+
+  (lib_symbols
+  )
+
+  (symbol (lib_id "power:+5V") (at 46.8376 219.2528 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid "00000000-0000-0000-0000-00005f8b3403")
+    (property "Reference" "#PWR0105" (id 0) (at 46.8376 223.0628 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Value" "+5V" (id 1) (at 47.2186 214.8586 0))
+    (property "Footprint" "" (id 2) (at 46.8376 219.2528 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "" (id 3) (at 46.8376 219.2528 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+  )
+)
