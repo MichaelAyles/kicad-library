@@ -169,18 +169,29 @@ async function migrate() {
     process.exit(0);
   }
 
-  let offset = 0;
+  // Keyset paging by id. Offset paging over `schematic_r2_url IS NULL` skips
+  // rows, because each migrated row leaves the filtered set and shifts the
+  // remaining rows back by a batch. Keyset paging is unaffected by that, works
+  // the same in dry-run (where nothing leaves the set), and always moves
+  // forward, so a row that keeps failing is attempted once and never loops.
+  let lastId: string | null = null;
   let processed = 0;
+  const failedIds: string[] = [];
   let succeeded = 0;
   let failed = 0;
 
   while (true) {
     // Fetch batch of circuits
-    const { data: circuits, error: fetchError } = await supabase
+    let query = supabase
       .from("circuits")
       .select("id, title, raw_sexpr, sheet_size")
       .is("schematic_r2_url", null)
-      .range(offset, offset + BATCH_SIZE - 1);
+      .order("id")
+      .limit(BATCH_SIZE);
+    if (lastId) {
+      query = query.gt("id", lastId);
+    }
+    const { data: circuits, error: fetchError } = await query;
 
     if (fetchError) {
       console.error("Failed to fetch circuits:", fetchError);
@@ -191,7 +202,10 @@ async function migrate() {
       break;
     }
 
-    console.log(`\nProcessing batch: ${offset + 1} to ${offset + circuits.length}`);
+    console.log(
+      `\nProcessing batch: ${processed + 1} to ${processed + circuits.length}`,
+    );
+    lastId = circuits[circuits.length - 1].id;
 
     for (const circuit of circuits) {
       processed++;
@@ -230,10 +244,9 @@ async function migrate() {
       } catch (error) {
         console.error(`${progress} ❌ ${circuit.id}: ${error}`);
         failed++;
+        failedIds.push(circuit.id);
       }
     }
-
-    offset += BATCH_SIZE;
 
     // Small delay to avoid overwhelming the APIs
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -247,6 +260,7 @@ async function migrate() {
   console.log(`Failed: ${failed}`);
 
   if (failed > 0) {
+    console.log(`\nFailed circuit ids:\n${failedIds.join("\n")}`);
     console.log("\n⚠️  Some circuits failed to migrate. Run again to retry.");
     process.exit(1);
   }
