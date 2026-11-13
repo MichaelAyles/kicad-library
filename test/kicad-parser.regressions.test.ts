@@ -221,3 +221,67 @@ describe("isClipboardSnippet recognises every pasteable element", () => {
     expect(validateSExpression(input).valid).toBe(false);
   });
 });
+
+describe("snippets keep newer KiCad element types", () => {
+  // KiCad 7+ text boxes and net class flags, KiCad 8 tables, bitmaps
+  const extras = `\t(text_box "Input: 5-24V"
+\t\t(exclude_from_sim no)
+\t\t(at 30.48 30.48 0)
+\t\t(size 25.4 7.62)
+\t\t(uuid "5b0f3c1e-8f0e-4d7a-9a51-0c6f2b8e7d10")
+\t)
+\t(netclass_flag ""
+\t\t(length 2.54)
+\t\t(shape round)
+\t\t(at 40.64 40.64 0)
+\t\t(uuid "5b0f3c1e-8f0e-4d7a-9a51-0c6f2b8e7d11")
+\t\t(property "Netclass" "Power"
+\t\t\t(at 41.3385 38.1 0)
+\t\t)
+\t)
+\t(table
+\t\t(column_count 1)
+\t\t(column_widths 10)
+\t\t(row_heights 5)
+\t\t(cells
+\t\t\t(table_cell "A"
+\t\t\t\t(at 50 50 0)
+\t\t\t\t(size 10 5)
+\t\t\t\t(uuid "5b0f3c1e-8f0e-4d7a-9a51-0c6f2b8e7d12")
+\t\t\t)
+\t\t)
+\t)
+\t(image
+\t\t(at 60.96 60.96)
+\t\t(uuid "5b0f3c1e-8f0e-4d7a-9a51-0c6f2b8e7d13")
+\t\t(data "iVBORw0KGgo=")
+\t)
+`;
+
+  it.each(["text_box", "netclass_flag", "table", "image"])(
+    "copies (%s)",
+    (name) => {
+      const file = insertBeforeRootClose(
+        fullFixture("kicad8-input-protection.kicad_sch"),
+        extras,
+      );
+      const snippet = extractSnippetFromFullFile(file);
+      expect(snippet).toMatch(new RegExp(`(^|\\n)\\(${name}[\\s)]`));
+    },
+  );
+});
+
+describe("removeHierarchicalSheets ignores text that mentions sheets", () => {
+  it("leaves '(sheet 2)' inside a text string alone", () => {
+    const text = `\t(text "Power input comes from (sheet 2) and (sheet_instances note)"
+\t\t(at 20.32 20.32 0)
+\t\t(uuid "5b0f3c1e-8f0e-4d7a-9a51-0c6f2b8e7d03")
+\t)
+`;
+    const file = insertBeforeRootClose(
+      fullFixture("kicad8-input-protection.kicad_sch"),
+      text,
+    );
+    expect(removeHierarchicalSheets(file)).toBe(file);
+  });
+});

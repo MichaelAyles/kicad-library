@@ -246,6 +246,11 @@ const SNIPPET_ELEMENTS = [
   "global_label", // Global labels
   "hierarchical_label", // Hierarchical sheet labels
   "text", // Text annotations
+  "text_box", // Text boxes (KiCad 7+)
+  "netclass_flag", // Net class directive labels (KiCad 7+)
+  "table", // Tables (KiCad 8+)
+  "image", // Embedded bitmaps
+  "rule_area", // Rule areas (KiCad 9+)
   "polyline", // Graphic polylines
   "rectangle", // Graphic rectangles
   "circle", // Graphic circles
@@ -269,46 +274,6 @@ export function extractSnippetFromFullFile(fullFile: string): string {
     .filter((node) => SNIPPET_ELEMENTS.includes(node.name))
     .map((node) => fullFile.slice(node.start, node.end))
     .join("\n\n");
-}
-
-/**
- * Extract a balanced S-expression starting at the given position.
- * Returns the complete S-expression including all nested content.
- */
-function extractBalancedSExpr(text: string, startPos: number): string | null {
-  if (text[startPos] !== "(") {
-    return null;
-  }
-
-  let depth = 0;
-  let inString = false;
-  let i = startPos;
-
-  while (i < text.length) {
-    const char = text[i];
-
-    if (inString) {
-      // Skip whatever a backslash escapes, so "C:\\" ends at its last quote
-      if (char === "\\") i++;
-      else if (char === '"') inString = false;
-    } else if (char === '"') {
-      inString = true;
-    } else {
-      if (char === "(") {
-        depth++;
-      } else if (char === ")") {
-        depth--;
-        if (depth === 0) {
-          // Found the matching closing paren
-          return text.slice(startPos, i + 1);
-        }
-      }
-    }
-    i++;
-  }
-
-  // Unbalanced - didn't find matching close paren
-  return null;
 }
 
 /**
@@ -1156,42 +1121,18 @@ export function suggestCategory(metadata: ParsedMetadata): string {
  * - Individual (sheet ...) elements (hierarchical sheet symbols on schematic)
  */
 export function removeHierarchicalSheets(sexpr: string): string {
+  // Both are direct children of (kicad_sch ...), or top-level in a snippet.
+  // Walking by depth skips any "(sheet" that appears inside a string.
+  const depth = sexpr.includes("(kicad_sch") ? 2 : 1;
+  const sheets = findNodesAtDepth(sexpr, depth).filter(
+    (node) => node.name === "sheet" || node.name === "sheet_instances",
+  );
+
+  // Remove from the end so earlier indices stay valid
   let result = sexpr;
-
-  // Remove (sheet_instances ...) blocks using balanced extraction
-  // Find all occurrences and remove them from end to start to preserve positions
-  const sheetInstancesPositions: number[] = [];
-  const sheetInstancesRegex = /\(sheet_instances\s/g;
-  let match;
-  while ((match = sheetInstancesRegex.exec(result)) !== null) {
-    sheetInstancesPositions.push(match.index);
+  for (const node of sheets.reverse()) {
+    result = result.slice(0, node.start) + result.slice(node.end);
   }
-
-  // Process from end to start so positions stay valid
-  for (let i = sheetInstancesPositions.length - 1; i >= 0; i--) {
-    const pos = sheetInstancesPositions[i];
-    const extracted = extractBalancedSExpr(result, pos);
-    if (extracted) {
-      result = result.slice(0, pos) + result.slice(pos + extracted.length);
-    }
-  }
-
-  // Remove individual (sheet ...) elements (hierarchical sheet symbols)
-  const sheetPositions: number[] = [];
-  // Match (sheet followed by whitespace but not (sheet_instances
-  const sheetRegex = /\(sheet\s+(?!instances)/g;
-  while ((match = sheetRegex.exec(result)) !== null) {
-    sheetPositions.push(match.index);
-  }
-
-  for (let i = sheetPositions.length - 1; i >= 0; i--) {
-    const pos = sheetPositions[i];
-    const extracted = extractBalancedSExpr(result, pos);
-    if (extracted) {
-      result = result.slice(0, pos) + result.slice(pos + extracted.length);
-    }
-  }
-
   return result;
 }
 
