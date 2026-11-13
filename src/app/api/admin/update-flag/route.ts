@@ -8,56 +8,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient as createAnonClient } from "@supabase/supabase-js";
-import { userIsAdmin } from "@/lib/api-auth";
+import { requireAdmin } from "@/lib/api-auth";
 
 // Force dynamic rendering
 export const dynamic = "force-dynamic";
 
 export async function PUT(request: NextRequest) {
   try {
-    // Get the Authorization header with bearer token
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized - No token provided" },
-        { status: 401 },
-      );
-    }
-
-    // Create a client with the anon key to verify the token
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-    const supabase = createAnonClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
-    // Verify the token by getting the user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized - Invalid token", details: authError?.message },
-        { status: 401 },
-      );
-    }
-
-    // Check if user has admin role (app_metadata is only writable by service role)
-    if (!userIsAdmin(user)) {
-      return NextResponse.json(
-        { error: "Unauthorized - Admin access required" },
-        { status: 403 },
-      );
+    const auth = await requireAdmin(request);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
     // Use admin client for database operations
@@ -89,7 +49,7 @@ export async function PUT(request: NextRequest) {
       .from("circuit_flags")
       .update({
         status,
-        reviewed_by: user.id,
+        reviewed_by: auth.user.id,
         reviewed_at: new Date().toISOString(),
         admin_notes: adminNotes || null,
       })

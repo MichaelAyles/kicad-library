@@ -32,13 +32,17 @@ export async function getCircuitComments(
     if (error) throw error;
     if (!comments) return [];
 
-    // If user is logged in, fetch their likes
+    // If user is logged in, fetch their likes on this circuit's comments only
     let userLikes: Set<string> = new Set();
-    if (userId) {
+    if (userId && comments.length > 0) {
       const { data: likes } = await supabase
         .from("comment_likes")
         .select("comment_id")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .in(
+          "comment_id",
+          comments.map((comment) => comment.id),
+        );
 
       if (likes) {
         userLikes = new Set(likes.map((like) => like.comment_id));

@@ -31,17 +31,19 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const ip =
       request.ip ?? request.headers.get("x-forwarded-for") ?? "127.0.0.1";
-    const identifier = `api:${ip}`;
 
-    // Use different limits for different endpoints
+    // Use different limits for different endpoints. Each bucket gets its own
+    // counter so one preset's window and count never leak into another's.
+    let bucket = "default";
     let config: RateLimitConfig = RateLimitPresets.MODERATE; // Default: 30 req/min
 
     // Stricter limits for resource-intensive endpoints
     if (request.nextUrl.pathname.startsWith("/api/preview")) {
+      bucket = "preview";
       config = RateLimitPresets.STRICT; // 10 req/10s for preview generation
     }
 
-    rateLimitResult = checkRateLimit(identifier, config);
+    rateLimitResult = checkRateLimit(`api:${bucket}:${ip}`, config);
 
     if (!rateLimitResult.success) {
       return new NextResponse(
