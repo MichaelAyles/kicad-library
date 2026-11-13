@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { KiCanvasCard } from "@/components/KiCanvas";
 
 interface SchematicViewerProps {
@@ -9,6 +9,8 @@ interface SchematicViewerProps {
   slug: string;
   circuitId?: string;
   schematicR2Url: string; // Direct R2 URL for KiCanvas (required)
+  /** Symbol count from the AST parser (validateSExpression metadata) */
+  componentCount?: number;
   onCopy?: () => void;
 }
 
@@ -24,23 +26,11 @@ export function SchematicViewer({
   slug,
   circuitId,
   schematicR2Url,
+  componentCount,
   onCopy,
 }: SchematicViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [componentCount, setComponentCount] = useState(0);
-
-  // Strip any existing .kicad_sch extension to avoid double extensions
-  const cleanSlug = slug.replace(/\.kicad_sch$/i, "");
   const viewerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Count symbol instances in the S-expression
-    const symbolMatches = sexpr.match(/\(symbol \(lib_id/g);
-    setComponentCount(symbolMatches ? symbolMatches.length : 0);
-
-    console.log("Loading KiCanvas with slug:", cleanSlug);
-    console.log("S-expression preview:", sexpr.substring(0, 100));
-  }, [sexpr, cleanSlug]);
 
   return (
     <div className="bg-card border rounded-lg overflow-hidden">
@@ -48,9 +38,12 @@ export function SchematicViewer({
       <div className="bg-muted/30 px-4 py-3 border-b flex items-center justify-between">
         <div>
           <h3 className="font-semibold">Schematic Preview</h3>
-          <p className="text-sm text-muted-foreground">
-            {componentCount} component{componentCount !== 1 ? "s" : ""} detected
-          </p>
+          {componentCount !== undefined && (
+            <p className="text-sm text-muted-foreground">
+              {componentCount} component{componentCount !== 1 ? "s" : ""}{" "}
+              detected
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -83,13 +76,14 @@ export function SchematicViewer({
                 onClick={() => {
                   navigator.clipboard.writeText(sexpr);
                 }}
-                className="text-xs px-2 py-1 border rounded hover:bg-background transition-colors"
+                disabled={!sexpr}
+                className="text-xs px-2 py-1 border rounded hover:bg-background transition-colors disabled:opacity-50"
               >
                 Copy
               </button>
             </div>
             <pre className="text-xs font-mono bg-background border rounded p-4 overflow-x-auto max-h-96 overflow-y-auto">
-              {sexpr}
+              {sexpr || "Loading..."}
             </pre>
           </div>
         </div>
@@ -98,10 +92,10 @@ export function SchematicViewer({
       {/* Info Footer */}
       <div className="bg-muted/50 px-4 py-3 border-t text-sm text-muted-foreground">
         <p>
-          <strong>Tip:</strong> Use the interactive viewer above to explore
-          the circuit. Click &quot;Copy to Clipboard&quot; button on the main
-          page to get this circuit with attribution, then paste directly into
-          your KiCad project (Ctrl+V).
+          <strong>Tip:</strong> Use the interactive viewer above to explore the
+          circuit. Click &quot;Copy to Clipboard&quot; button on the main page
+          to get this circuit with attribution, then paste directly into your
+          KiCad project (Ctrl+V).
         </p>
       </div>
     </div>
