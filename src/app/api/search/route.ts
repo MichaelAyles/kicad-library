@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, publicCacheHeaders } from "@/lib/supabase/public";
+import { withEdgeCache } from "@/lib/edge-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ const SORT_COLUMNS: Record<string, string> = {
   favorites: "favorite_count",
 };
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   try {
     const supabase = createPublicClient();
     const searchParams = request.nextUrl.searchParams;
@@ -176,3 +177,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// Served from Cloudflare's edge cache for as long as Cache-Control allows.
+export const GET = withEdgeCache(handleGet);

@@ -29,5 +29,12 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"] }
   ],
+  // Serve the site's domains. DNS for circuitsnips.com is on Cloudflare
+  // (proxied records); the bare domain redirects to www in next.config.js.
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "www.circuitsnips.com/*", "zone_name": "circuitsnips.com" },
+    { "pattern": "circuitsnips.com/*", "zone_name": "circuitsnips.com" }
+  ],
   "observability": { "enabled": true }
 }
