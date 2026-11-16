@@ -15,7 +15,7 @@ const VALID_SHEET_SIZES = new Set(["A4", "A3", "A2"]);
  */
 export async function POST(request: NextRequest) {
   try {
-    const { circuitId } = await request.json();
+    const { circuitId } = (await request.json().catch(() => null)) ?? {};
 
     const access = await requireCircuitOwnerOrAdmin(circuitId);
     if (!access.ok) {
