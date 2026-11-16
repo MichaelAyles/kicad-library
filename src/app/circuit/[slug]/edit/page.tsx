@@ -72,7 +72,10 @@ export default function EditCircuitPage() {
     useState(false);
   const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
   const [thumbnailNotice, setThumbnailNotice] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Full schematic text for the thumbnail viewers; previewKey remounts them
+  // on each load because the KiCanvas element only reads its content once.
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState(0);
   const lightContainerRef = useRef<HTMLDivElement>(null);
   const darkContainerRef = useRef<HTMLDivElement>(null);
 
@@ -288,23 +291,8 @@ export default function EditCircuitPage() {
         });
       }
 
-      // Store preview in Supabase
-      const supabase = createClient();
-      const previewId = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("previews")
-        .upload(`${previewId}.kicad_sch`, fullFile, {
-          contentType: "text/plain",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        throw new Error("Failed to create preview");
-      }
-
-      const newPreviewUrl = `/api/preview/preview.kicad_sch?id=${previewId}`;
-      setPreviewUrl(newPreviewUrl);
+      setPreviewContent(fullFile);
+      setPreviewKey((key) => key + 1);
       setShowThumbnailPreview(true);
     } catch (err) {
       console.error("Failed to load preview:", err);
@@ -315,7 +303,7 @@ export default function EditCircuitPage() {
   };
 
   const handleCaptureThumbnails = async () => {
-    if (!circuit || !user || !previewUrl) return;
+    if (!circuit || !user || !previewContent) return;
 
     if (!lightContainerRef.current || !darkContainerRef.current) {
       setError("Viewers not ready. Please wait for both previews to load.");
@@ -335,8 +323,6 @@ export default function EditCircuitPage() {
         lightContainerRef.current,
         darkContainerRef.current,
       );
-
-      const supabase = createClient();
 
       // Upload both themes in one request. The server reserves the next
       // unused version (new immutable keys), points the circuit at it and
@@ -368,15 +354,8 @@ export default function EditCircuitPage() {
         console.warn("Thumbnail follow-up update failed:", putError);
       }
 
-      // Clean up preview (best effort)
-      const previewId = previewUrl.split("id=")[1];
-      await supabase.storage
-        .from("previews")
-        .remove([`${previewId}.kicad_sch`])
-        .catch(() => undefined);
-
       setShowThumbnailPreview(false);
-      setPreviewUrl(null);
+      setPreviewContent(null);
 
       if (!revalidated) {
         setThumbnailNotice(
@@ -788,7 +767,7 @@ export default function EditCircuitPage() {
               </div>
             )}
 
-            {showThumbnailPreview && previewUrl ? (
+            {showThumbnailPreview && previewContent ? (
               <div className="mb-4">
                 <p className="text-sm font-medium mb-3">
                   Live Previews (thumbnails will be captured from these):
@@ -805,8 +784,8 @@ export default function EditCircuitPage() {
                       style={{ height: "300px" }}
                     >
                       <KiCanvas
-                        key={`light-${previewUrl}`}
-                        src={previewUrl}
+                        key={`light-${previewKey}`}
+                        content={previewContent}
                         theme="kicad"
                         controls="none"
                         height="100%"
@@ -826,8 +805,8 @@ export default function EditCircuitPage() {
                       style={{ height: "300px" }}
                     >
                       <KiCanvas
-                        key={`dark-${previewUrl}`}
-                        src={previewUrl}
+                        key={`dark-${previewKey}`}
+                        content={previewContent}
                         theme="witchhazel"
                         controls="none"
                         height="100%"
@@ -880,7 +859,7 @@ export default function EditCircuitPage() {
                   <button
                     onClick={() => {
                       setShowThumbnailPreview(false);
-                      setPreviewUrl(null);
+                      setPreviewContent(null);
                     }}
                     disabled={isRegeneratingThumbnails}
                     className="px-4 py-2 border rounded-md font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

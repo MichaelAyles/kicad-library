@@ -30,6 +30,7 @@ declare module "react" {
       "kicanvas-embed": React.DetailedHTMLProps<
         React.HTMLAttributes<HTMLElement> & {
           src?: string;
+          content?: string;
           controls?: "none" | "basic" | "full";
           theme?: string;
         },
@@ -48,8 +49,10 @@ interface KiCanvasElement extends HTMLElement {
 interface KiCanvasProps {
   /** Circuit slug to load from API endpoint (e.g., "my-circuit") */
   slug?: string;
-  /** Direct URL to schematic file (e.g., "/api/preview/abc123.kicad_sch") */
+  /** Direct URL to a schematic file */
   src?: string;
+  /** Raw schematic text (full file or clipboard snippet), rendered without a request */
+  content?: string;
   /** Controls level */
   controls?: "none" | "basic" | "full";
   /** Explicit theme - 'kicad' for light, 'witchhazel' for dark. If not set, syncs with page theme */
@@ -81,13 +84,14 @@ interface KiCanvasProps {
  * // With circuit slug (recommended - handles hierarchical sheets)
  * <KiCanvas slug="my-circuit" controls="full" circuitId="abc-123" onCopy={handleCopy} />
  *
- * // With direct URL
- * <KiCanvas src="/api/preview/abc123.kicad_sch" controls="basic" />
+ * // With raw schematic text (e.g. an upload preview)
+ * <KiCanvas content={fullFileSexpr} controls="basic" />
  * ```
  */
 export function KiCanvas({
   slug,
   src,
+  content,
   controls = "basic",
   theme: explicitTheme,
   className = "",
@@ -180,8 +184,8 @@ export function KiCanvas({
   // Determine the source URL
   const schematicUrl = slug ? `/api/schematic/${slug}.kicad_sch` : src;
 
-  if (!schematicUrl) {
-    console.error("KiCanvas: Either slug or src must be provided");
+  if (!schematicUrl && !content) {
+    console.error("KiCanvas: One of slug, src or content must be provided");
     return (
       <div
         className={`bg-muted/20 flex items-center justify-center ${className}`}
@@ -206,7 +210,8 @@ export function KiCanvas({
   return (
     <kicanvas-embed
       ref={viewerRef as any}
-      src={schematicUrl}
+      // Raw content takes precedence over src inside the element
+      {...(content ? { content } : { src: schematicUrl })}
       controls={controls}
       theme={kicanvasTheme}
       className={className}
@@ -225,6 +230,7 @@ export function KiCanvas({
 export function KiCanvasCard({
   slug,
   src,
+  content,
   controls = "full",
   theme,
   height = "500px",
@@ -239,6 +245,7 @@ export function KiCanvasCard({
       <KiCanvas
         slug={slug}
         src={src}
+        content={content}
         controls={controls}
         theme={theme}
         height="100%"
