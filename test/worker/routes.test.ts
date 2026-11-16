@@ -357,9 +357,33 @@ describe("public routes", () => {
 });
 
 describe("unmatched requests", () => {
-  it("fall through to serveAssetFallback (the ASSETS binding)", async () => {
-    const res = await app.request("/circuit/some-slug", {}, env);
-    expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
-    expect(await res.text()).toBe("asset fallback");
+  function assets(pages: Record<string, string>) {
+    env.ASSETS.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
+      return path in pages
+        ? new Response(pages[path], { status: 200, headers: { "Content-Type": "text/html" } })
+        : new Response("missing", { status: 404 });
+    }) as unknown as Fetcher["fetch"];
+  }
+
+  it("serve the circuit shell for circuits without a built page", async () => {
+    assets({ "/circuit/_": "shell", "/circuit/_.txt": "rsc", "/circuit/_/edit": "edit shell" });
+    const page = await app.request("/circuit/new-circuit?x=1", {}, env);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toBe("shell");
+    expect(page.headers.get("X-Robots-Tag")).toBe("noindex");
+    expect((await app.request("/circuit/new-circuit.txt", {}, env)).status).toBe(200);
+    const edit = await app.request("/circuit/new-circuit/edit", {}, env);
+    expect(await edit.text()).toBe("edit shell");
+  });
+
+  it("return the 404 page with a 404 status for anything else", async () => {
+    assets({ "/404": "not found page" });
+    const res = await app.request("/no/such/page", {}, env);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("not found page");
+    const api = await app.request("/api/nope", { headers: { "cf-connecting-ip": freshIp() } }, env);
+    expect(api.status).toBe(404);
+    expect(await api.json()).toEqual({ error: "Not found" });
   });
 });

@@ -17,7 +17,12 @@
  */
 
 import type { Context } from "hono";
-import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
+import {
+  createRemoteJWKSet,
+  decodeJwt,
+  jwtVerify,
+  type JWTPayload,
+} from "jose";
 import { verifyAdminKey } from "../src/lib/admin-auth";
 import type { AppEnv, Env, RequestUser } from "./env";
 import { createAdminClient, createPublicClient } from "./supabase";
@@ -72,8 +77,15 @@ function workosJwks(clientId: string) {
   return jwks;
 }
 
-/** WorkOS AuthKit access token: verify signature, expiry and claims. */
-export const verifyWorkosToken: TokenVerifier = async (token, env) => {
+/**
+ * Verify a WorkOS AuthKit access token's signature, expiry and issuer and
+ * return its claims, or null. Doesn't require `uid`: /api/me uses this for
+ * first sign-ins, before the user is linked to a profile.
+ */
+export async function verifyWorkosClaims(
+  token: string,
+  env: Env,
+): Promise<JWTPayload | null> {
   if (!env.WORKOS_CLIENT_ID) return null;
   try {
     const { payload } = await jwtVerify(
@@ -84,11 +96,20 @@ export const verifyWorkosToken: TokenVerifier = async (token, env) => {
         ...(env.WORKOS_ISSUER ? { issuer: env.WORKOS_ISSUER } : {}),
       },
     );
-    if (!isUuid(payload.uid)) return null;
-    return { id: payload.uid.toLowerCase(), isAdmin: payload.app_role === "admin" };
+    return payload;
   } catch {
     return null;
   }
+}
+
+/** WorkOS AuthKit access token linked to a profile (`uid` claim). */
+export const verifyWorkosToken: TokenVerifier = async (token, env) => {
+  const payload = await verifyWorkosClaims(token, env);
+  if (!payload || !isUuid(payload.uid)) return null;
+  return {
+    id: payload.uid.toLowerCase(),
+    isAdmin: payload.app_role === "admin",
+  };
 };
 
 /**

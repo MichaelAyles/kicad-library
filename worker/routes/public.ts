@@ -72,7 +72,6 @@ publicRoutes.get("/api/search", edgeCache(), async (c) => {
     const sortColumn = SORT_COLUMNS[sort] ?? "copy_count";
     const excludeImported = c.req.query("excludeImported") === "true";
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let circuits: any[] = [];
 
     if (query) {

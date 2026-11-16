@@ -20,6 +20,7 @@ import {
   reserveThumbnailVersionWith,
 } from "../../src/lib/thumbnail-versions-core";
 import { deleteUserAccountWith } from "../../src/lib/account-deletion-core";
+import { accountDeletionDeps } from "../account";
 import type { AppEnv } from "../env";
 import { isUuid, requireAdmin } from "../auth";
 import { createCircuitStorage } from "../r2";
@@ -28,8 +29,6 @@ import { createAdminClient } from "../supabase";
 type Ctx = Context<AppEnv>;
 
 const adminRoutes = new Hono<AppEnv>();
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Error categories used by the thumbnail admin routes
 enum ErrorCategory {
@@ -564,14 +563,10 @@ adminRoutes.delete("/api/admin/delete-user", async (c) => {
       return c.json({ error: "User not found" }, 404);
     }
 
-    // Deleting the auth user cascades to the profile and all related data;
-    // R2 files are cleaned up afterwards
-    const storage = createCircuitStorage(c.env);
+    // Deletes the login(s) and the profile, which cascades to all related
+    // data; R2 files and the WorkOS user are cleaned up afterwards
     const { circuitCount } = await deleteUserAccountWith(
-      {
-        admin: supabase,
-        deleteCircuitFiles: (id) => storage.deleteCircuitFiles(id),
-      },
+      accountDeletionDeps(c.env),
       userId,
     );
 

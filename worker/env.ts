@@ -34,6 +34,11 @@ export interface Env {
    * domain). When set, WorkOS tokens with any other issuer are rejected.
    */
   WORKOS_ISSUER?: string;
+  /**
+   * Secret. WorkOS API key: links first-time WorkOS users to a profile
+   * (/api/me) and deletes WorkOS users with their account.
+   */
+  WORKOS_API_KEY?: string;
 }
 
 /** The authenticated caller, whichever identity provider issued the token. */
