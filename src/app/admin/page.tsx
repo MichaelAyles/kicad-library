@@ -171,22 +171,10 @@ export default function AdminDashboard() {
     }
 
     try {
-      // Get the access token from Supabase
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Not authenticated");
-      }
-
       const response = await apiFetch("/api/admin/delete-circuit", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ circuitId }),
       });
@@ -215,22 +203,10 @@ export default function AdminDashboard() {
     }
 
     try {
-      // Get the access token from Supabase
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Not authenticated");
-      }
-
       const response = await apiFetch("/api/admin/update-flag", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           flagId,
@@ -272,23 +248,12 @@ export default function AdminDashboard() {
     let errorCount = 0;
 
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Not authenticated");
-      }
-
       for (const flagId of Array.from(selectedFlags)) {
         try {
           const response = await apiFetch("/api/admin/update-flag", {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               flagId,
@@ -339,16 +304,6 @@ export default function AdminDashboard() {
     let errorCount = 0;
 
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Not authenticated");
-      }
-
       for (const flagId of Array.from(selectedFlags)) {
         const flag = flags.find((f) => f.id === flagId);
         if (!flag?.circuit) continue;
@@ -358,7 +313,6 @@ export default function AdminDashboard() {
             method: "DELETE",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({ circuitId: flag.circuit.id }),
           });
@@ -448,21 +402,8 @@ export default function AdminDashboard() {
     setIsSyncingStats(true);
 
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Not authenticated");
-      }
-
       const response = await apiFetch("/api/admin/sync-stats", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
       });
 
       if (!response.ok) {
@@ -488,21 +429,10 @@ export default function AdminDashboard() {
     const loadUsers = async () => {
       setIsLoadingUsers(true);
       try {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.access_token) {
-          throw new Error("Not authenticated");
-        }
-
         const response = await apiFetch("/api/admin/delete-user", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             searchQuery: userSearchQuery,
@@ -538,21 +468,10 @@ export default function AdminDashboard() {
     }
 
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Not authenticated");
-      }
-
       const response = await apiFetch("/api/admin/delete-user", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ userId }),
       });

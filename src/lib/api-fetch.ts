@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { getAccessToken } from "@/lib/auth/session";
 
 /**
  * fetch() for the CircuitSnips API that sends the signed-in user's access
@@ -6,8 +6,8 @@ import { createClient } from "@/lib/supabase/client";
  *
  * The API runs in a separate Cloudflare Worker and the site is static, so
  * there are no server-side session cookies: the token is the only way the API
- * knows who is calling. This is the one place the token is read, so switching
- * identity providers only changes getAccessToken().
+ * knows who is calling. The token comes from whichever identity provider the
+ * site was built for (src/lib/auth).
  */
 export async function apiFetch(
   input: string,
@@ -19,11 +19,4 @@ export async function apiFetch(
     headers.set("Authorization", `Bearer ${token}`);
   }
   return fetch(input, { ...init, headers });
-}
-
-/** The current session's access token, refreshed if it has expired. */
-export async function getAccessToken(): Promise<string | null> {
-  const supabase = createClient();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
 }

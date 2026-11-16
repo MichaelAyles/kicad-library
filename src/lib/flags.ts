@@ -5,6 +5,7 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
+import { getCurrentUser } from "@/lib/auth";
 import type { CreateFlagInput, CircuitFlag } from "@/types/flags";
 
 /**
@@ -15,8 +16,7 @@ export async function createCircuitFlag(input: CreateFlagInput): Promise<void> {
   const supabase = createClient();
 
   // Get current user if logged in (optional)
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData?.user?.id || null;
+  const userId = (await getCurrentUser())?.id ?? null;
 
   const { error } = await supabase.from("circuit_flags").insert({
     circuit_id: input.circuit_id,
@@ -41,8 +41,8 @@ export async function hasUserFlaggedCircuit(
 ): Promise<boolean> {
   const supabase = createClient();
 
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) {
+  const user = await getCurrentUser();
+  if (!user) {
     // Anonymous users - can't check, always allow flagging
     return false;
   }
@@ -52,7 +52,7 @@ export async function hasUserFlaggedCircuit(
     .from("circuit_flags")
     .select("id")
     .eq("circuit_id", circuitId)
-    .eq("flagged_by", user.user.id)
+    .eq("flagged_by", user.id)
     .maybeSingle();
 
   if (error) {

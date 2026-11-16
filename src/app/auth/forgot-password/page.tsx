@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader, Mail } from "lucide-react";
 import { Header } from "@/components/Header";
-import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useAuth";
+import { AUTH_PROVIDER } from "@/lib/auth/config";
+import { HostedAuthRedirect } from "@/lib/auth/HostedAuthRedirect";
 
-export default function ForgotPasswordPage() {
-  const { resetPassword, error } = useAuth();
+function SupabaseForgotPasswordPage() {
+  const { resetPassword, error } = useSupabaseAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -120,5 +122,14 @@ export default function ForgotPasswordPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  // The WorkOS build uses the hosted AuthKit pages instead of these forms
+  return AUTH_PROVIDER === "workos" ? (
+    <HostedAuthRedirect mode="sign-in" />
+  ) : (
+    <SupabaseForgotPasswordPage />
   );
 }

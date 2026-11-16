@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { b612, b612Mono } from "./fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { CookieNotice } from "@/components/CookieNotice";
 import { SITE_URL } from "@/lib/site";
 
@@ -49,8 +50,10 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>
-          <div className="min-h-screen flex flex-col">{children}</div>
-          <CookieNotice />
+          <AuthProvider>
+            <div className="min-h-screen flex flex-col">{children}</div>
+            <CookieNotice />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

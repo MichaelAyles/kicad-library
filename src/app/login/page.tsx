@@ -5,9 +5,11 @@ import Link from "next/link";
 import { Github, Loader, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/Header";
-import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useAuth";
+import { AUTH_PROVIDER } from "@/lib/auth/config";
+import { HostedAuthRedirect } from "@/lib/auth/HostedAuthRedirect";
 
-export default function LoginPage() {
+function SupabaseLoginPage() {
   const router = useRouter();
   const {
     user,
@@ -15,7 +17,7 @@ export default function LoginPage() {
     signInWithGitHub,
     signInWithEmail,
     error,
-  } = useAuth();
+  } = useSupabaseAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -191,5 +193,14 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  // The WorkOS build uses the hosted AuthKit pages instead of these forms
+  return AUTH_PROVIDER === "workos" ? (
+    <HostedAuthRedirect mode="sign-in" />
+  ) : (
+    <SupabaseLoginPage />
   );
 }

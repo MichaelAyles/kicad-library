@@ -296,23 +296,11 @@ export function ThumbnailRegenerator() {
         throw new Error("Failed to capture thumbnails");
       }
 
-      // Get access token for admin API call
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Not authenticated");
-      }
-
       // Upload thumbnails via admin API
       const response = await apiFetch("/api/admin/regenerate-thumbnail", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           circuitId: circuit.id,
@@ -607,18 +595,10 @@ export function ThumbnailRegenerator() {
           }
 
           // Upload thumbnails
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          if (!session?.access_token) {
-            throw new Error("Not authenticated");
-          }
-
           const response = await apiFetch("/api/admin/regenerate-thumbnail", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               circuitId: circuit.id,
@@ -724,22 +704,8 @@ export function ThumbnailRegenerator() {
     setIsDeletingAll(true);
 
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        alert("Not authenticated");
-        return;
-      }
-
       const response = await apiFetch("/api/admin/delete-all-thumbnails", {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
       });
 
       if (!response.ok) {
