@@ -32,5 +32,11 @@
   "routes": [
     { "pattern": "www.circuitsnips.com/*", "zone_name": "circuitsnips.com" }
   ],
+  // The OpenNext deployment this replaced had two Durable Object classes
+  // (its ISR queue and tag cache). Deleting them is required to deploy over it.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"] },
+    { "tag": "v2", "deleted_classes": ["DOQueueHandler", "DOShardedTagCache"] }
+  ],
   "observability": { "enabled": true }
 }

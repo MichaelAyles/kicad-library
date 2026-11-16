@@ -1,0 +1,67 @@
+name: Deploy
+
+# Rebuilds the static site from main and deploys it to Cloudflare, once a
+# day (so new and edited circuits get their own pages, titles and sitemap
+# entries) and on demand. Between builds, new circuits are served by the
+# shell page.
+#
+# Needs repository secrets CLOUDFLARE_API_TOKEN (Workers Scripts: Edit) and
+# CLOUDFLARE_ACCOUNT_ID, plus NEXT_PUBLIC_SUPABASE_URL and
+# NEXT_PUBLIC_SUPABASE_ANON_KEY. Optional repository variables:
+# NEXT_PUBLIC_AUTH_PROVIDER, NEXT_PUBLIC_WORKOS_CLIENT_ID,
+# NEXT_PUBLIC_WORKOS_API_HOSTNAME. Skips itself until the token is set.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - name: Check configuration
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::CLOUDFLARE_API_TOKEN is not set; skipping deploy."
+
+      - uses: actions/checkout@v5
+        if: env.HAS_TOKEN == 'true'
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v5
+        if: env.HAS_TOKEN == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: env.HAS_TOKEN == 'true'
+        run: npm ci
+
+      - name: Build
+        if: env.HAS_TOKEN == 'true'
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_AUTH_PROVIDER: ${{ vars.NEXT_PUBLIC_AUTH_PROVIDER }}
+          NEXT_PUBLIC_WORKOS_CLIENT_ID: ${{ vars.NEXT_PUBLIC_WORKOS_CLIENT_ID }}
+          NEXT_PUBLIC_WORKOS_API_HOSTNAME: ${{ vars.NEXT_PUBLIC_WORKOS_API_HOSTNAME }}
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Deploy
+        if: env.HAS_TOKEN == 'true'
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -143,6 +143,7 @@ npm run cf:deploy       # Build and deploy to Cloudflare
 npm run cf:deploy:apex  # Deploy the worker that redirects circuitsnips.com to www
 ```
 
+- `.github/workflows/deploy.yml` rebuilds and deploys `main` daily (and on demand) once the `CLOUDFLARE_API_TOKEN` secret is set, so merged changes reach production within a day.
 - `wrangler.jsonc` defines the worker, its R2 binding and its vars. Secrets are set with `npx wrangler secret put <NAME>` (the list is in the file).
 - Every public circuit gets its own page at build time. Circuits added since the last build are served by a shell page (`/circuit/_`) that loads them in the browser, with `noindex`, until the next build. `CIRCUITSNIPS_MAX_CIRCUIT_PAGES` and `CIRCUITSNIPS_SKIP_CIRCUIT_PAGES=1` limit the build for testing.
 - `NEXT_PUBLIC_*` values are inlined at build time from `.env.local`. `NEXT_PUBLIC_AUTH_PROVIDER` chooses Supabase Auth (default) or WorkOS AuthKit; see `docs/workos-migration.md`.

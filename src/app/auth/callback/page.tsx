@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -74,7 +75,7 @@ function SupabaseCallback() {
 function WorkOSCallback() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const [message, setMessage] = useState("Signing you in...");
+  const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -83,22 +84,38 @@ function WorkOSCallback() {
         "Sign-in failed:",
         params.get("error_description") || params.get("error"),
       );
-      setMessage("Sign-in failed. Redirecting...");
-      router.replace("/");
+      setFailure("Sign-in didn't complete.");
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     // Signed-in success is left to onRedirectCallback, which knows returnTo
-    if (!isLoading && !user) router.replace("/");
-  }, [isLoading, user, router]);
+    if (!failure && !isLoading && !user) router.replace("/");
+  }, [failure, isLoading, user, router]);
 
   useEffect(() => {
+    if (failure) return;
     const timer = setTimeout(() => router.replace("/"), WORKOS_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [router]);
+  }, [failure, router]);
 
-  return <Spinner message={message} />;
+  if (failure) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="text-center text-muted-foreground max-w-sm">
+          <p className="mb-4 text-destructive">{failure}</p>
+          <Link
+            href="/login"
+            className="inline-block px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors"
+          >
+            Try again
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return <Spinner message="Signing you in..." />;
 }
 
 /** OAuth / email-confirmation landing page (/auth/callback). */
