@@ -17,7 +17,15 @@
 -- This script is IDEMPOTENT - safe to run multiple times
 -- All statements use IF NOT EXISTS or CREATE OR REPLACE
 --
--- Version: 2026-11-13
+-- Version: 2026-11-16
+--
+-- Identity: public.profiles(id) is the root identity, not auth.users. RLS
+-- reads the caller through public.current_user_id() / public.is_admin(),
+-- which accept both Supabase Auth tokens and WorkOS AuthKit tokens (Supabase
+-- third-party auth). Don't use auth.uid() or auth.jwt() in new policies or
+-- functions. An existing database gets this from
+-- migrations/20261116_identity_for_workos.sql (re-running this file does not
+-- repoint existing foreign keys). See docs/workos-migration.md.
 --
 -- Security posture matches the live database as of
 -- migrations/20261113_circuit_write_guards.sql: every function pins
@@ -36,11 +44,106 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================================
+-- IDENTITY HELPERS
+-- Who is calling, for RLS. Same definitions as
+-- migrations/20261116_identity_for_workos.sql. Both read the caller's own
+-- verified JWT claims, are SECURITY INVOKER, and return NULL / false instead
+-- of raising when claims are missing or malformed. Use them wrapped in
+-- (SELECT ...) in policies so they run once per statement.
+-- ============================================================================
+
+-- The caller's profile id:
+--   WorkOS token:        the `uid` claim (must be a uuid, else NULL)
+--   Supabase Auth token: `sub` (a uuid), as auth.uid() returned
+--   anon / service key:  NULL
+CREATE OR REPLACE FUNCTION public.current_user_id()
+RETURNS UUID
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  uuid_re CONSTANT TEXT :=
+    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+  claims JSONB;
+  candidate TEXT;
+BEGIN
+  BEGIN
+    claims := NULLIF(current_setting('request.jwt.claims', true), '')::JSONB;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN NULL;
+  END;
+
+  IF claims IS NOT NULL AND jsonb_typeof(claims) = 'object' THEN
+    IF claims ? 'uid' AND jsonb_typeof(claims -> 'uid') <> 'null' THEN
+      -- A token that carries `uid` is identified by it alone
+      candidate := claims ->> 'uid';
+    ELSE
+      candidate := claims ->> 'sub';
+    END IF;
+  ELSIF claims IS NULL THEN
+    -- Older PostgREST / Storage versions set one setting per claim
+    candidate := COALESCE(
+      NULLIF(current_setting('request.jwt.claim.uid', true), ''),
+      NULLIF(current_setting('request.jwt.claim.sub', true), ''));
+  END IF;
+
+  IF candidate IS NOT NULL AND candidate ~ uuid_re THEN
+    RETURN candidate::UUID;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+COMMENT ON FUNCTION public.current_user_id() IS
+  'Profile id of the caller: uid claim (WorkOS) or uuid sub (Supabase Auth); NULL otherwise. Use instead of auth.uid().';
+
+-- Whether the caller is a site admin: `app_role` claim = 'admin' (WorkOS,
+-- from server-written user metadata) or app_metadata.role = 'admin'
+-- (Supabase Auth, service-role only). Never reads user_metadata.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  claims JSONB;
+BEGIN
+  BEGIN
+    claims := NULLIF(current_setting('request.jwt.claims', true), '')::JSONB;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN false;
+  END;
+
+  IF claims IS NULL OR jsonb_typeof(claims) <> 'object' THEN
+    RETURN false;
+  END IF;
+
+  RETURN COALESCE(claims ->> 'app_role' = 'admin', false)
+      OR COALESCE(claims -> 'app_metadata' ->> 'role' = 'admin', false);
+END;
+$$;
+
+COMMENT ON FUNCTION public.is_admin() IS
+  'True when the caller''s token marks them admin (app_role claim or app_metadata.role). Never reads user_metadata.';
+
+REVOKE ALL ON FUNCTION public.current_user_id() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.current_user_id() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated, service_role;
+
+-- ============================================================================
 -- PROFILES TABLE
--- Extends auth.users with public profile information
+-- Public profile and root identity. id is the Supabase Auth user id for
+-- users who signed up there, and the WorkOS user's external_id for WorkOS
+-- users (who have no auth.users row), so there is no foreign key to
+-- auth.users. Everything a user owns references profiles(id).
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   avatar_url TEXT,
   bio TEXT,
@@ -53,66 +156,138 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   CONSTRAINT username_format CHECK (username ~ '^[a-zA-Z0-9_-]+$')
 );
 
--- Auto-create profile on user signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+-- Create the profile for a user id, or return the existing one unchanged.
+-- Called by handle_new_user for Supabase Auth sign-ups, and by the API with
+-- the service role for WorkOS users (who never reach auth.users).
+-- Username: p_username with characters outside [A-Za-z0-9_-] removed and cut
+-- to 30, or user_<first 8 hex of id> when fewer than 3 characters remain.
+-- If taken: <base>_1 .. <base>_9, then <base>_<8 random hex>, each trimmed to
+-- stay within 30 characters. Concurrent sign-ups that pick the same name are
+-- retried, not failed.
+CREATE OR REPLACE FUNCTION public.ensure_profile(
+  p_id UUID,
+  p_username TEXT DEFAULT NULL,
+  p_avatar_url TEXT DEFAULT NULL,
+  p_github_url TEXT DEFAULT NULL
+)
+RETURNS public.profiles
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
-  base_username TEXT;
-  final_username TEXT;
-  counter INTEGER := 0;
+  max_len CONSTANT INTEGER := 30;  -- profiles.username_length
+  v_profile public.profiles;
+  v_base TEXT;
+  v_suffix TEXT;
+  v_candidate TEXT;
 BEGIN
-  -- Try to extract username from GitHub OAuth metadata
-  -- GitHub provides: user_name, preferred_username, or login
-  base_username := COALESCE(
-    NEW.raw_user_meta_data->>'user_name',
-    NEW.raw_user_meta_data->>'preferred_username',
-    NEW.raw_user_meta_data->>'login',
-    'user_' || substring(NEW.id::text from 1 for 8)
-  );
-
-  -- Sanitize username to match our constraints (alphanumeric, dash, underscore)
-  base_username := regexp_replace(base_username, '[^a-zA-Z0-9_-]', '', 'g');
-
-  -- Ensure minimum length
-  IF char_length(base_username) < 3 THEN
-    base_username := 'user_' || substring(NEW.id::text from 1 for 8);
+  IF p_id IS NULL THEN
+    RAISE EXCEPTION 'ensure_profile: id is required'
+      USING ERRCODE = 'null_value_not_allowed';
   END IF;
 
-  final_username := base_username;
+  SELECT * INTO v_profile FROM public.profiles WHERE id = p_id;
+  IF FOUND THEN
+    RETURN v_profile;
+  END IF;
 
-  -- Handle duplicate usernames with atomic retry logic
-  -- This prevents race conditions by using exception handling
-  LOOP
+  v_base := left(regexp_replace(COALESCE(p_username, ''), '[^a-zA-Z0-9_-]', '', 'g'), max_len);
+  IF char_length(v_base) < 3 THEN
+    v_base := 'user_' || left(replace(p_id::TEXT, '-', ''), 8);
+  END IF;
+
+  FOR attempt IN 0..29 LOOP
+    v_suffix := CASE
+      WHEN attempt = 0 THEN ''
+      WHEN attempt <= 9 THEN '_' || attempt
+      ELSE '_' || left(replace(gen_random_uuid()::TEXT, '-', ''), 8)
+    END;
+    v_candidate := left(v_base, max_len - char_length(v_suffix)) || v_suffix;
+
+    CONTINUE WHEN EXISTS (SELECT 1 FROM public.profiles WHERE username = v_candidate);
+
     BEGIN
       INSERT INTO public.profiles (id, username, avatar_url, github_url)
-      VALUES (
-        NEW.id,
-        final_username,
-        NEW.raw_user_meta_data->>'avatar_url',
-        CASE
-          WHEN NEW.raw_user_meta_data->>'user_name' IS NOT NULL
-          THEN 'https://github.com/' || (NEW.raw_user_meta_data->>'user_name')
-          ELSE NULL
-        END
-      );
-      -- Success - exit loop
-      RETURN NEW;
-    EXCEPTION WHEN unique_violation THEN
-      -- Username already taken, try with a counter
-      counter := counter + 1;
-      IF counter > 100 THEN
-        RAISE EXCEPTION 'Could not generate unique username after 100 attempts for user %', NEW.id;
+      VALUES (p_id, v_candidate, p_avatar_url, p_github_url)
+      ON CONFLICT (id) DO NOTHING
+      RETURNING * INTO v_profile;
+
+      IF NOT FOUND THEN
+        -- Created concurrently for the same id
+        SELECT * INTO v_profile FROM public.profiles WHERE id = p_id;
       END IF;
-      final_username := base_username || '_' || counter;
+      RETURN v_profile;
+    EXCEPTION WHEN unique_violation THEN
+      -- Username taken concurrently; try the next candidate
+      NULL;
     END;
   END LOOP;
+
+  RAISE EXCEPTION 'ensure_profile: no free username for %', p_id
+    USING ERRCODE = 'unique_violation';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+$$;
+
+COMMENT ON FUNCTION public.ensure_profile(UUID, TEXT, TEXT, TEXT) IS
+  'Create the profile for a user id (collision-safe username) or return the existing one. Service role only.';
+
+-- Auto-create profile on Supabase Auth sign-up. WorkOS-era profiles are
+-- created by the API via ensure_profile, not by this trigger.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  meta JSONB := COALESCE(NEW.raw_user_meta_data, '{}'::JSONB);
+  github_login TEXT := NULLIF(btrim(meta ->> 'user_name'), '');
+BEGIN
+  -- Only link a GitHub profile for a well-formed GitHub login
+  IF github_login IS NOT NULL
+     AND github_login !~ '^[A-Za-z0-9][A-Za-z0-9-]{0,38}$' THEN
+    github_login := NULL;
+  END IF;
+
+  PERFORM public.ensure_profile(
+    NEW.id,
+    -- GitHub OAuth provides user_name / preferred_username / login
+    COALESCE(
+      NULLIF(btrim(meta ->> 'user_name'), ''),
+      NULLIF(btrim(meta ->> 'preferred_username'), ''),
+      NULLIF(btrim(meta ->> 'login'), '')),
+    meta ->> 'avatar_url',
+    CASE WHEN github_login IS NOT NULL THEN 'https://github.com/' || github_login END
+  );
+  RETURN NEW;
+END;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Deleting a Supabase Auth user deletes their profile (and, through the
+-- cascades, everything they own). Drop this trigger before bulk-removing
+-- auth.users rows after the WorkOS cutover (see docs/workos-migration.md).
+CREATE OR REPLACE FUNCTION public.handle_deleted_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  DELETE FROM public.profiles WHERE id = OLD.id;
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_deleted ON auth.users;
+CREATE TRIGGER on_auth_user_deleted
+  AFTER DELETE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_deleted_user();
 
 -- ============================================================================
 -- CIRCUITS TABLE
@@ -329,7 +504,7 @@ CREATE TABLE IF NOT EXISTS public.thumbnail_history (
   version INTEGER NOT NULL,
   thumbnail_light_url TEXT NOT NULL,
   thumbnail_dark_url TEXT NOT NULL,
-  regenerated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  regenerated_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   regenerated_at TIMESTAMPTZ DEFAULT NOW(),
   is_current BOOLEAN DEFAULT FALSE,
   notes TEXT,
@@ -339,6 +514,7 @@ CREATE TABLE IF NOT EXISTS public.thumbnail_history (
 
 CREATE INDEX IF NOT EXISTS thumbnail_history_circuit_id_idx ON public.thumbnail_history(circuit_id);
 CREATE INDEX IF NOT EXISTS thumbnail_history_current_idx ON public.thumbnail_history(circuit_id, is_current) WHERE is_current = TRUE;
+CREATE INDEX IF NOT EXISTS thumbnail_history_regenerated_by_idx ON public.thumbnail_history(regenerated_by);
 
 ALTER TABLE public.thumbnail_history ENABLE ROW LEVEL SECURITY;
 
@@ -354,19 +530,19 @@ CREATE POLICY "Circuit owner or admin can insert history"
     EXISTS (
       SELECT 1 FROM public.circuits
       WHERE circuits.id = thumbnail_history.circuit_id
-      AND circuits.user_id = auth.uid()
+      AND circuits.user_id = (SELECT public.current_user_id())
     )
   );
 
 DROP POLICY IF EXISTS "Only admins can update history" ON public.thumbnail_history;
 CREATE POLICY "Only admins can update history"
   ON public.thumbnail_history FOR UPDATE
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING ((SELECT public.is_admin()));
 
 DROP POLICY IF EXISTS "Only admins can delete history" ON public.thumbnail_history;
 CREATE POLICY "Only admins can delete history"
   ON public.thumbnail_history FOR DELETE
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING ((SELECT public.is_admin()));
 
 -- ============================================================================
 -- COPY TRACKING
@@ -496,7 +672,7 @@ CREATE TRIGGER update_circuit_comment_count_trigger
 CREATE TABLE IF NOT EXISTS public.circuit_flags (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   circuit_id UUID NOT NULL REFERENCES public.circuits(id) ON DELETE CASCADE,
-  flagged_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  flagged_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   reason TEXT NOT NULL CHECK (reason IN (
     'inappropriate_content',
     'copyright_violation',
@@ -514,6 +690,7 @@ CREATE TABLE IF NOT EXISTS public.circuit_flags (
 CREATE INDEX IF NOT EXISTS circuit_flags_circuit_id_idx ON public.circuit_flags(circuit_id);
 CREATE INDEX IF NOT EXISTS circuit_flags_status_idx ON public.circuit_flags(status);
 CREATE INDEX IF NOT EXISTS circuit_flags_created_at_idx ON public.circuit_flags(created_at DESC);
+CREATE INDEX IF NOT EXISTS circuit_flags_flagged_by_idx ON public.circuit_flags(flagged_by) WHERE flagged_by IS NOT NULL;
 
 -- ============================================================================
 -- BATCH IMPORT TRACKING
@@ -523,8 +700,8 @@ CREATE TABLE IF NOT EXISTS public.import_batches (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   batch_id TEXT UNIQUE NOT NULL,
   source_type TEXT NOT NULL DEFAULT 'github_scraper',
-  imported_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  bot_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  imported_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  bot_user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   total_records INTEGER DEFAULT 0,
   successful_imports INTEGER DEFAULT 0,
   failed_imports INTEGER DEFAULT 0,
@@ -793,29 +970,29 @@ CREATE POLICY "Profiles are viewable by everyone"
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
   ON public.profiles FOR UPDATE
-  USING (auth.uid() = id);
+  USING ((SELECT public.current_user_id()) = id);
 
 -- Circuits: Public circuits viewable by everyone, users can see own private circuits
 DROP POLICY IF EXISTS "Circuits are viewable by everyone" ON public.circuits;
 DROP POLICY IF EXISTS "Public circuits and own circuits are viewable" ON public.circuits;
 CREATE POLICY "Public circuits and own circuits are viewable"
   ON public.circuits FOR SELECT
-  USING (is_public = true OR auth.uid() = user_id);
+  USING (is_public = true OR (SELECT public.current_user_id()) = user_id);
 
 DROP POLICY IF EXISTS "Authenticated users can create circuits" ON public.circuits;
 CREATE POLICY "Authenticated users can create circuits"
   ON public.circuits FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((SELECT public.current_user_id()) = user_id);
 
 DROP POLICY IF EXISTS "Users can update own circuits" ON public.circuits;
 CREATE POLICY "Users can update own circuits"
   ON public.circuits FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING ((SELECT public.current_user_id()) = user_id);
 
 DROP POLICY IF EXISTS "Users can delete own circuits" ON public.circuits;
 CREATE POLICY "Users can delete own circuits"
   ON public.circuits FOR DELETE
-  USING (auth.uid() = user_id);
+  USING ((SELECT public.current_user_id()) = user_id);
 
 -- Circuit Components: Same as circuits
 DROP POLICY IF EXISTS "Components are viewable by everyone" ON public.circuit_components;
@@ -830,7 +1007,7 @@ CREATE POLICY "Circuit owners can manage components"
     EXISTS (
       SELECT 1 FROM public.circuits
       WHERE circuits.id = circuit_components.circuit_id
-      AND circuits.user_id = auth.uid()
+      AND circuits.user_id = (SELECT public.current_user_id())
     )
   );
 
@@ -843,7 +1020,7 @@ CREATE POLICY "Users can view all favorites"
 DROP POLICY IF EXISTS "Users can manage own favorites" ON public.favorites;
 CREATE POLICY "Users can manage own favorites"
   ON public.favorites FOR ALL
-  USING (auth.uid() = user_id);
+  USING ((SELECT public.current_user_id()) = user_id);
 
 -- Circuit Copies: Anyone can insert, users can view own
 DROP POLICY IF EXISTS "Anyone can record a copy" ON public.circuit_copies;
@@ -854,7 +1031,7 @@ CREATE POLICY "Anyone can record a copy"
 DROP POLICY IF EXISTS "Users can view own copies" ON public.circuit_copies;
 CREATE POLICY "Users can view own copies"
   ON public.circuit_copies FOR SELECT
-  USING (auth.uid() = user_id OR user_id IS NULL);
+  USING ((SELECT public.current_user_id()) = user_id OR user_id IS NULL);
 
 -- Comments: Everyone can read, authenticated users can create, owners can update/delete
 DROP POLICY IF EXISTS "Comments are viewable by everyone" ON public.circuit_comments;
@@ -865,17 +1042,17 @@ CREATE POLICY "Comments are viewable by everyone"
 DROP POLICY IF EXISTS "Authenticated users can create comments" ON public.circuit_comments;
 CREATE POLICY "Authenticated users can create comments"
   ON public.circuit_comments FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((SELECT public.current_user_id()) = user_id);
 
 DROP POLICY IF EXISTS "Users can update own comments" ON public.circuit_comments;
 CREATE POLICY "Users can update own comments"
   ON public.circuit_comments FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING ((SELECT public.current_user_id()) = user_id);
 
 DROP POLICY IF EXISTS "Users can delete own comments" ON public.circuit_comments;
 CREATE POLICY "Users can delete own comments"
   ON public.circuit_comments FOR DELETE
-  USING (auth.uid() = user_id);
+  USING ((SELECT public.current_user_id()) = user_id);
 
 -- Comment Likes: Users can manage their own likes
 DROP POLICY IF EXISTS "Users can view all comment likes" ON public.comment_likes;
@@ -886,7 +1063,7 @@ CREATE POLICY "Users can view all comment likes"
 DROP POLICY IF EXISTS "Users can manage own comment likes" ON public.comment_likes;
 CREATE POLICY "Users can manage own comment likes"
   ON public.comment_likes FOR ALL
-  USING (auth.uid() = user_id);
+  USING ((SELECT public.current_user_id()) = user_id);
 
 -- Circuit Flags: Anyone can flag, admins can view all
 ALTER TABLE public.circuit_flags ENABLE ROW LEVEL SECURITY;
@@ -894,12 +1071,12 @@ ALTER TABLE public.circuit_flags ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can flag circuits" ON public.circuit_flags;
 CREATE POLICY "Anyone can flag circuits"
   ON public.circuit_flags FOR INSERT
-  WITH CHECK (flagged_by IS NULL OR flagged_by = auth.uid());
+  WITH CHECK (flagged_by IS NULL OR flagged_by = (SELECT public.current_user_id()));
 
 DROP POLICY IF EXISTS "Users can view own flags" ON public.circuit_flags;
 CREATE POLICY "Users can view own flags"
   ON public.circuit_flags FOR SELECT
-  USING (auth.uid() = flagged_by);
+  USING ((SELECT public.current_user_id()) = flagged_by);
 
 -- Flags are not publicly readable (reporter ids, details, admin notes)
 DROP POLICY IF EXISTS "Anyone can view flags" ON public.circuit_flags;
@@ -908,20 +1085,20 @@ DROP POLICY IF EXISTS "Admins can view all flags" ON public.circuit_flags;
 CREATE POLICY "Admins can view all flags"
   ON public.circuit_flags FOR SELECT
   TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING ((SELECT public.is_admin()));
 
 DROP POLICY IF EXISTS "Admins can update flags" ON public.circuit_flags;
 CREATE POLICY "Admins can update flags"
   ON public.circuit_flags FOR UPDATE
   TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING ((SELECT public.is_admin()))
+  WITH CHECK ((SELECT public.is_admin()));
 
 DROP POLICY IF EXISTS "Admins can delete flags" ON public.circuit_flags;
 CREATE POLICY "Admins can delete flags"
   ON public.circuit_flags FOR DELETE
   TO authenticated
-  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  USING ((SELECT public.is_admin()));
 
 -- Batch Imports: Only admins (handled via API)
 ALTER TABLE public.import_batches ENABLE ROW LEVEL SECURITY;
@@ -971,7 +1148,7 @@ CREATE POLICY "Authenticated users can upload circuit files"
     bucket_id = 'circuits' AND
     auth.role() = 'authenticated' AND
     -- Ensure files are stored in user's own folder: {user_id}/filename
-    auth.uid()::text = (storage.foldername(name))[1]
+    (SELECT public.current_user_id())::text = (storage.foldername(name))[1]
   );
 
 DROP POLICY IF EXISTS "Users can update own circuit files" ON storage.objects;
@@ -979,7 +1156,7 @@ CREATE POLICY "Users can update own circuit files"
   ON storage.objects FOR UPDATE
   USING (
     bucket_id = 'circuits' AND
-    auth.uid()::text = (storage.foldername(name))[1]
+    (SELECT public.current_user_id())::text = (storage.foldername(name))[1]
   );
 
 DROP POLICY IF EXISTS "Users can delete own circuit files" ON storage.objects;
@@ -987,7 +1164,7 @@ CREATE POLICY "Users can delete own circuit files"
   ON storage.objects FOR DELETE
   USING (
     bucket_id = 'circuits' AND
-    auth.uid()::text = (storage.foldername(name))[1]
+    (SELECT public.current_user_id())::text = (storage.foldername(name))[1]
   );
 
 -- RLS policies for thumbnails storage
@@ -1030,7 +1207,7 @@ DROP POLICY IF EXISTS "Anyone can delete old previews" ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete own previews" ON storage.objects;
 CREATE POLICY "Users can delete own previews"
   ON storage.objects FOR DELETE
-  USING (bucket_id = 'previews' AND owner = auth.uid());
+  USING (bucket_id = 'previews' AND owner = (SELECT public.current_user_id()));
 
 -- ============================================================================
 -- HELPER FUNCTIONS
@@ -1204,12 +1381,17 @@ REVOKE EXECUTE ON FUNCTION public.sync_global_stats() FROM PUBLIC, anon, authent
 GRANT EXECUTE ON FUNCTION public.sync_global_stats() TO service_role;
 
 REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.handle_deleted_user() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_circuit_favorite_count() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_circuit_comment_count() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_comment_likes_count() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_global_circuit_count() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.update_global_user_count() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.guard_circuit_writes() FROM PUBLIC, anon, authenticated;
+
+-- Creates profiles for arbitrary ids: server (service role) only
+REVOKE EXECUTE ON FUNCTION public.ensure_profile(UUID, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ensure_profile(UUID, TEXT, TEXT, TEXT) TO service_role;
 
 -- ============================================================================
 -- INITIAL DATA SYNC
