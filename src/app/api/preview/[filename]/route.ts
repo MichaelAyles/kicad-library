@@ -35,10 +35,8 @@ async function getStorageClient() {
  * This route exists so KiCanvas can see the .kicad_sch extension in the URL path
  * Example: /api/preview/preview.kicad_sch?id=preview-123
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { filename: string } },
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ filename: string }> }) {
+  const params = await props.params;
   try {
     const { searchParams } = new URL(request.url);
     const previewId = searchParams.get("id");

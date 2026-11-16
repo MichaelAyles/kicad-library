@@ -12,10 +12,8 @@ import type { SheetSize } from "@/lib/kicad-parser";
  * Update circuit metadata (title, description, tags, category, license, is_public)
  * Only the circuit owner can update their circuits
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const supabase = await createClient();
 
@@ -248,10 +246,8 @@ export async function PUT(
  * Delete a circuit (for future implementation)
  * Only the circuit owner can delete their circuits
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const supabase = await createClient();
 

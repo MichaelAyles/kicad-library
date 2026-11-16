@@ -19,11 +19,10 @@ import { CircuitDetail } from "./CircuitDetail";
  */
 export const revalidate = 3600;
 
-type PageProps = { params: { slug: string } };
+type PageProps = { params: Promise<{ slug: string }> };
 
-export async function generateMetadata({
-  params,
-}: PageProps): Promise<Metadata> {
+export async function generateMetadata(props: PageProps): Promise<Metadata> {
+  const params = await props.params;
   const page = await getPublicCircuitPage(params.slug);
 
   if (!page) {
@@ -66,7 +65,8 @@ export async function generateMetadata({
   };
 }
 
-export default async function CircuitPage({ params }: PageProps) {
+export default async function CircuitPage(props: PageProps) {
+  const params = await props.params;
   const page = await getPublicCircuitPage(params.slug);
 
   if (!page) {

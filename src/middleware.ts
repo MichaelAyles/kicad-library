@@ -29,8 +29,13 @@ export async function middleware(request: NextRequest) {
 
   // Apply rate limiting to API routes
   if (request.nextUrl.pathname.startsWith("/api/")) {
+    // cf-connecting-ip is set by Cloudflare and can't be spoofed by the
+    // client; x-real-ip / x-forwarded-for cover other hosts and local dev.
     const ip =
-      request.ip ?? request.headers.get("x-forwarded-for") ?? "127.0.0.1";
+      request.headers.get("cf-connecting-ip") ??
+      request.headers.get("x-real-ip") ??
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "127.0.0.1";
 
     // Use different limits for different endpoints. Each bucket gets its own
     // counter so one preset's window and count never leak into another's.

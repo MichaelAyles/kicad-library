@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const origin = requestUrl.origin;
 
   if (code) {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const response = NextResponse.redirect(new URL("/", origin));
 
     const supabase = createServerClient(

@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
  *
  * @throws {Error} If required environment variables are missing
  */
-export function createClient() {
+export async function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -28,7 +28,7 @@ export function createClient() {
     );
   }
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
 
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {

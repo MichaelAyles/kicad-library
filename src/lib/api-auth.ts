@@ -24,7 +24,7 @@ export function userIsAdmin(user: User | null | undefined): boolean {
 
 /** Returns the authenticated user from the request cookies, or null. */
 export async function getRequestUser(): Promise<User | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

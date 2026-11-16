@@ -22,8 +22,9 @@ function ensureKiCanvasScript() {
   document.head.appendChild(script);
 }
 
-// Declare the kicanvas-embed custom element for TypeScript
-declare global {
+// Declare the kicanvas-embed custom element for TypeScript (React 19 scopes
+// JSX under the "react" module rather than the global namespace)
+declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
       "kicanvas-embed": React.DetailedHTMLProps<

@@ -19,10 +19,8 @@ function getSupabase() {
  * in R2, redirect there (zero compute). Otherwise, process once, upload to R2,
  * update the DB, and serve the result inline.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { filename: string } },
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ filename: string }> }) {
+  const params = await props.params;
   try {
     // Extract slug from filename (e.g., "8k2-r.kicad_sch" -> "8k2-r")
     const slug = params.filename.replace(".kicad_sch", "");
