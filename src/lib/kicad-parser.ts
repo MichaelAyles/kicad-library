@@ -203,7 +203,10 @@ export function wrapSnippetToFullFile(
 ): string {
   const uuid =
     options?.uuid ||
-    globalThis.crypto?.randomUUID?.() ||
+    // Cast: the Workers types declare `crypto` as a global const, not a
+    // globalThis property
+    (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+      ?.randomUUID?.() ||
     `circuit-${Date.now()}`;
   const title = escapeSExprString(options?.title || "Circuit Snippet");
   const paperSize = options?.paperSize || "A4";

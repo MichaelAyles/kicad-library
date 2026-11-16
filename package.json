@@ -12,6 +12,7 @@
     "import:test": "tsx scripts/export-and-import.ts --limit 10 --dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",

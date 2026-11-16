@@ -8,9 +8,15 @@
  * Verify admin API key from request headers
  *
  * @param authHeader - Authorization header value (Bearer token)
+ * @param configuredKey - The expected key. Defaults to
+ *   `process.env.ADMIN_API_KEY`; the API worker passes `env.ADMIN_API_KEY`.
+ *   An empty or missing key never matches.
  * @returns true if valid admin key, false otherwise
  */
-export function verifyAdminKey(authHeader: string | null): boolean {
+export function verifyAdminKey(
+  authHeader: string | null,
+  configuredKey: string | undefined = process.env.ADMIN_API_KEY,
+): boolean {
   if (!authHeader) {
     return false;
   }
@@ -22,7 +28,7 @@ export function verifyAdminKey(authHeader: string | null): boolean {
   }
 
   const providedKey = match[1];
-  const adminKey = process.env.ADMIN_API_KEY;
+  const adminKey = configuredKey;
 
   // Check if admin key is configured
   if (!adminKey) {
