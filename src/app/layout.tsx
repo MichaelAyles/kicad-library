@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import { b612, b612Mono } from "./fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -53,7 +52,6 @@ export default function RootLayout({
           <div className="min-h-screen flex flex-col">{children}</div>
           <CookieNotice />
         </ThemeProvider>
-        <Analytics />
       </body>
     </html>
   );

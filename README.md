@@ -72,9 +72,9 @@ As an electronics engineer, I found myself repeatedly designing the same common 
 ## Architecture
 
 ```
-Next.js 14 (App Router)
-├── Frontend: React 18, TypeScript, Tailwind CSS, shadcn/ui patterns
-├── Backend: Next.js API routes (serverless on Vercel)
+Next.js 15 (App Router)
+├── Frontend: React 19, TypeScript, Tailwind CSS, shadcn/ui patterns
+├── Backend: Next.js API routes on Cloudflare Workers (via OpenNext)
 ├── Database: Supabase (PostgreSQL with RLS, full-text search, RPC functions)
 ├── Storage: Cloudflare R2 (schematics + thumbnails, CDN-cached)
 ├── Viewer: KiCanvas (WebGL, loaded as custom element)
@@ -131,7 +131,20 @@ Before committing:
 - `npm run build`, `npm run lint` and `npm test` must pass
 - Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, etc.)
 
-GitHub Actions (`.github/workflows/ci.yml`) runs lint, `tsc --noEmit`, tests and the build on every pull request and push to `main`.
+GitHub Actions (`.github/workflows/ci.yml`) runs lint, `tsc --noEmit`, tests and the Workers build on every pull request and push to `main`.
+
+## Deploying (Cloudflare Workers)
+
+The site runs on Cloudflare Workers using [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare). Wrangler needs Node 22.12+ (see `.nvmrc`).
+
+```bash
+npm run cf:preview   # Build and run the worker locally in workerd (localhost:8787)
+npm run cf:deploy    # Build and deploy to Cloudflare
+```
+
+- `wrangler.jsonc` defines the worker and its bindings. ISR pages are cached in the private R2 bucket `circuitsnips-opennext-cache`. Revalidation uses two Durable Objects (`open-next.config.ts`).
+- `NEXT_PUBLIC_*` values are inlined at build time from `.env.local`. Server secrets (`SUPABASE_SERVICE_ROLE_KEY`, `R2_*`) are worker secrets: `npx wrangler secret put <NAME>`.
+- The public R2 bucket's CORS policy must allow the site's origin, or KiCanvas can't load schematics.
 
 ## Roadmap
 

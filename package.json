@@ -11,15 +11,20 @@
     "import:dry": "tsx scripts/export-and-import.ts --dry-run",
     "import:test": "tsx scripts/export-and-import.ts --limit 10 --dry-run",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",
+    "@opennextjs/cloudflare": "^1.20.17",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.75.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.107.1",
-    "@vercel/analytics": "^2.0.1",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -50,6 +55,7 @@
     "tailwindcss": "^3.4.1",
     "tsx": "^4.20.6",
     "typescript": "^5",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "wrangler": "^4.162.0"
   }
 }

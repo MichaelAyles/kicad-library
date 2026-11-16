@@ -21,7 +21,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -38,8 +38,10 @@ jobs:
       # The Supabase client modules throw at import time without these, and
       # Next imports every route while collecting page data. Placeholders are
       # enough: nothing talks to Supabase during the build.
+      # Builds the Next app, then bundles it for Cloudflare Workers with
+      # OpenNext, so adapter or Workers-runtime breakage shows up on the PR.
       - name: Build
-        run: npm run build
+        run: npm run cf:build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key

@@ -197,3 +197,9 @@ temp/
 # Claude Code
 CLAUDE.md
 .claude/
+
+# Cloudflare Workers (OpenNext)
+.open-next
+.wrangler
+.dev.vars*
+cloudflare-env.d.ts

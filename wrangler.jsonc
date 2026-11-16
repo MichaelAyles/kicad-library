@@ -1,0 +1,33 @@
+{
+  // Cloudflare Workers deployment via @opennextjs/cloudflare.
+  // Build + deploy: npm run cf:deploy. Local Workers preview: npm run cf:preview.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "circuitsnips",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // Self-reference used by the ISR cache; must match "name"
+    { "binding": "WORKER_SELF_REFERENCE", "service": "circuitsnips" }
+  ],
+  "r2_buckets": [
+    // ISR page cache. Private bucket, separate from the public circuit files.
+    { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "circuitsnips-opennext-cache" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      // Time-based ISR revalidation queue
+      { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" },
+      // Tag cache, needed for revalidatePath() on edit/delete
+      { "name": "NEXT_TAG_CACHE_DO_SHARDED", "class_name": "DOShardedTagCache" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"] }
+  ],
+  "observability": { "enabled": true }
+}
