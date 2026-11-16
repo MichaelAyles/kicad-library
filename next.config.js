@@ -2,7 +2,7 @@
 const nextConfig = {
   // Static site: every page is built to plain files in out/ and served as
   // Cloudflare Workers static assets. The API lives in worker/ (see
-  // wrangler.jsonc), and the bare domain is redirected to www there.
+  // wrangler.jsonc); workers/apex-redirect sends the bare domain to www.
   output: 'export',
   images: {
     // Serve images as-is: thumbnails come pre-sized from R2 and avatars from

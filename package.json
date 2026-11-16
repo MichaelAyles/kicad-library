@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
     "lint": "next lint",
     "import": "tsx scripts/export-and-import.ts",
     "import:dry": "tsx scripts/export-and-import.ts --dry-run",
@@ -13,15 +12,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
-    "cf:build": "opennextjs-cloudflare build",
-    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf:preview": "next build && wrangler dev",
+    "cf:deploy": "next build && wrangler deploy",
+    "cf:deploy:apex": "wrangler deploy -c workers/apex-redirect/wrangler.jsonc"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",
-    "@opennextjs/cloudflare": "^1.20.17",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.75.0",
     "@tailwindcss/typography": "^0.5.19",

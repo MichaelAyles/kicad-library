@@ -203,3 +203,4 @@ CLAUDE.md
 .wrangler
 .dev.vars*
 cloudflare-env.d.ts
+dist-worker
