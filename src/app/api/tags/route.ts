@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { createPublicClient, publicCacheHeaders } from "@/lib/supabase/public";
+import { withEdgeCache } from "@/lib/edge-cache";
 
 export const dynamic = "force-dynamic";
 
 // Matches PostgREST's max-rows cap on a single response
 const PAGE_SIZE = 1000;
 
-export async function GET() {
+async function handleGet() {
   try {
     const supabase = createPublicClient();
 
@@ -66,3 +67,6 @@ export async function GET() {
     );
   }
 }
+
+// Served from Cloudflare's edge cache for as long as Cache-Control allows.
+export const GET = withEdgeCache(handleGet);

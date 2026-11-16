@@ -15,6 +15,17 @@ const nextConfig = {
       },
     ],
   },
+  // The bare domain redirects to www (the canonical host, see src/lib/site.ts)
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'circuitsnips.com' }],
+        destination: 'https://www.circuitsnips.com/:path*',
+        permanent: true,
+      },
+    ]
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb', // For S-expression uploads

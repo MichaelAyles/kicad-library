@@ -47,7 +47,7 @@ function decodePngDataUrl(dataUrl: unknown): Buffer | string {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) ?? {};
+    const body = (await request.json().catch(() => null)) ?? {};
     const { lightDataUrl, darkDataUrl, historyNote } = body;
     const circuitId: unknown =
       typeof body.circuitId === "string"

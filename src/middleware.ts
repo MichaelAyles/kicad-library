@@ -3,7 +3,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   checkRateLimit,
   RateLimitPresets,
-  type RateLimitConfig,
 } from "@/lib/rate-limit";
 
 /**
@@ -29,21 +28,20 @@ export async function middleware(request: NextRequest) {
 
   // Apply rate limiting to API routes
   if (request.nextUrl.pathname.startsWith("/api/")) {
+    // cf-connecting-ip is set by Cloudflare and can't be spoofed by the
+    // client; x-real-ip / x-forwarded-for cover other hosts and local dev.
     const ip =
-      request.ip ?? request.headers.get("x-forwarded-for") ?? "127.0.0.1";
+      request.headers.get("cf-connecting-ip") ??
+      request.headers.get("x-real-ip") ??
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "127.0.0.1";
 
-    // Use different limits for different endpoints. Each bucket gets its own
-    // counter so one preset's window and count never leak into another's.
-    let bucket = "default";
-    let config: RateLimitConfig = RateLimitPresets.MODERATE; // Default: 30 req/min
-
-    // Stricter limits for resource-intensive endpoints
-    if (request.nextUrl.pathname.startsWith("/api/preview")) {
-      bucket = "preview";
-      config = RateLimitPresets.STRICT; // 10 req/10s for preview generation
-    }
-
-    rateLimitResult = checkRateLimit(`api:${bucket}:${ip}`, config);
+    // One counter per IP across the API (30 req/min). Give a route its own
+    // preset and key prefix here if it ever needs a different limit.
+    rateLimitResult = checkRateLimit(
+      `api:default:${ip}`,
+      RateLimitPresets.MODERATE,
+    );
 
     if (!rateLimitResult.success) {
       return new NextResponse(

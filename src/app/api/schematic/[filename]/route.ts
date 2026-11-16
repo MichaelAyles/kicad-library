@@ -3,6 +3,7 @@ import { getCircuitBySlug } from "@/lib/circuits";
 import { processAndUploadSchematic } from "@/lib/r2-schematic";
 import type { SheetSize } from "@/lib/kicad-parser";
 import { createClient } from "@supabase/supabase-js";
+import { withEdgeCache } from "@/lib/edge-cache";
 
 function getSupabase() {
   return createClient(
@@ -19,10 +20,8 @@ function getSupabase() {
  * in R2, redirect there (zero compute). Otherwise, process once, upload to R2,
  * update the DB, and serve the result inline.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { filename: string } },
-) {
+async function handleGet(request: NextRequest, props: { params: Promise<{ filename: string }> }) {
+  const params = await props.params;
   try {
     // Extract slug from filename (e.g., "8k2-r.kicad_sch" -> "8k2-r")
     const slug = params.filename.replace(".kicad_sch", "");
@@ -53,7 +52,7 @@ export async function GET(
 
     // Fast path: if R2 URL exists, redirect to CDN-cached schematic
     if (circuit.schematic_r2_url) {
-      return withEdgeCache(NextResponse.redirect(circuit.schematic_r2_url, 302));
+      return markEdgeCacheable(NextResponse.redirect(circuit.schematic_r2_url, 302));
     }
 
     // Slow path: no R2 URL — process, upload, and serve
@@ -136,7 +135,7 @@ export async function GET(
     }
 
     // Redirect to the newly uploaded R2 URL
-    return withEdgeCache(NextResponse.redirect(r2Url, 302));
+    return markEdgeCacheable(NextResponse.redirect(r2Url, 302));
   } catch (error) {
     console.error("Failed to serve schematic:", error);
     return NextResponse.json(
@@ -146,11 +145,14 @@ export async function GET(
   }
 }
 
-/** Let Vercel's edge cache serve repeat redirects without invoking the function. */
-function withEdgeCache(res: NextResponse): NextResponse {
+/** Mark redirects cacheable so withEdgeCache serves repeats without a DB lookup. */
+function markEdgeCacheable(res: NextResponse): NextResponse {
   res.headers.set(
     "Cache-Control",
     "public, s-maxage=86400, stale-while-revalidate=604800",
   );
   return res;
 }
+
+// Served from Cloudflare's edge cache for as long as Cache-Control allows.
+export const GET = withEdgeCache(handleGet);

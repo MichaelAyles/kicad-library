@@ -102,8 +102,9 @@ export default function UploadPage() {
   const [isCapturing, setIsCapturing] = useState(false);
 
   // Preview
-  const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  // Bumped whenever the preview text changes so the viewers remount: the
+  // KiCanvas element only reads its content once.
+  const [previewKey, setPreviewKey] = useState(0);
 
   // Loading states
   const [isParsing, setIsParsing] = useState(false);
@@ -123,40 +124,8 @@ export default function UploadPage() {
     }
   }, [title]);
 
-  // Create preview URL when fullFileSexpr changes
   useEffect(() => {
-    async function createPreview() {
-      if (!fullFileSexpr) {
-        setPreviewUrl("");
-        return;
-      }
-
-      setIsLoadingPreview(true);
-      try {
-        // Send schematic to preview API
-        const response = await fetch("/api/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sexpr: fullFileSexpr }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to create preview");
-        }
-
-        const { previewId } = await response.json();
-        // CRITICAL: KiCanvas needs .kicad_sch extension in the URL path to detect file type
-        // We use the filename in the path, and pass the ID as a query parameter
-        setPreviewUrl(`/api/preview/preview.kicad_sch?id=${previewId}`);
-      } catch (error) {
-        console.error("Preview creation failed:", error);
-        setPreviewUrl("");
-      } finally {
-        setIsLoadingPreview(false);
-      }
-    }
-
-    createPreview();
+    setPreviewKey((key) => key + 1);
   }, [fullFileSexpr]);
 
   // Handle sheet size override - regenerate fullFileSexpr with new paper size
@@ -602,19 +571,10 @@ export default function UploadPage() {
                   style={{ height: "450px" }}
                   ref={viewerRef}
                 >
-                  {isLoadingPreview ? (
-                    <div className="w-full h-full flex items-center justify-center bg-muted/20">
-                      <div className="text-center">
-                        <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">
-                          Loading preview...
-                        </p>
-                      </div>
-                    </div>
-                  ) : previewUrl ? (
+                  {fullFileSexpr ? (
                     <KiCanvas
-                      key={`preview-viewer-${previewUrl}`}
-                      src={previewUrl}
+                      key={`preview-viewer-${previewKey}`}
+                      content={fullFileSexpr}
                       controls="basic"
                       height="100%"
                       width="100%"
@@ -993,19 +953,10 @@ export default function UploadPage() {
                         className="rounded-md overflow-hidden border-2 border-gray-300"
                         style={{ height: KICANVAS_HEIGHT }}
                       >
-                        {isLoadingPreview ? (
-                          <div className="w-full h-full flex items-center justify-center bg-white">
-                            <div className="text-center">
-                              <Loader className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-400" />
-                              <p className="text-xs text-gray-500">
-                                Loading...
-                              </p>
-                            </div>
-                          </div>
-                        ) : previewUrl ? (
+                        {fullFileSexpr ? (
                           <KiCanvas
-                            key={`light-${previewUrl}`}
-                            src={previewUrl}
+                            key={`light-${previewKey}`}
+                            content={fullFileSexpr}
                             theme="kicad"
                             controls="none"
                             height="100%"
@@ -1031,19 +982,10 @@ export default function UploadPage() {
                         className="rounded-md overflow-hidden border-2 border-gray-600 bg-gray-900"
                         style={{ height: KICANVAS_HEIGHT }}
                       >
-                        {isLoadingPreview ? (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                            <div className="text-center">
-                              <Loader className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-500" />
-                              <p className="text-xs text-gray-500">
-                                Loading...
-                              </p>
-                            </div>
-                          </div>
-                        ) : previewUrl ? (
+                        {fullFileSexpr ? (
                           <KiCanvas
-                            key={`dark-${previewUrl}`}
-                            src={previewUrl}
+                            key={`dark-${previewKey}`}
+                            content={fullFileSexpr}
                             theme="witchhazel"
                             controls="none"
                             height="100%"
