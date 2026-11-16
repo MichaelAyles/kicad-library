@@ -12,6 +12,7 @@
     "import:test": "tsx scripts/export-and-import.ts --limit 10 --dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
@@ -44,6 +45,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261116.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19.3.0",
