@@ -84,8 +84,22 @@ anonymous request.
    `app_metadata.role = admin` today. Only the server (WorkOS dashboard or API
    key) may write this key, so no client-facing route may write arbitrary
    WorkOS metadata. The admin needs a fresh session before the claim appears.
-   The app's own admin checks (`src/lib/api-auth.ts`) must read the same
-   claim.
+   The API worker (`worker/auth.ts`) and the browser (`src/lib/auth`) read
+   the same claim.
+
+   The template can also be set with the CLI, but `workos api` uses the
+   active profile's API key, so check that the profile belongs to the
+   CircuitSnips environment first (`npx workos environment list`):
+
+   ```bash
+   npx workos api /user_management/jwt_template -X PUT --file jwt.json --yes
+   ```
+4. **Auth domain.** Without a custom domain, the app keeps the AuthKit
+   refresh token in localStorage (devMode), because a cookie on
+   `api.workos.com` is a third-party cookie that Safari and Firefox block.
+   With a custom domain such as `auth.circuitsnips.com` (DNS on Cloudflare),
+   set `NEXT_PUBLIC_WORKOS_API_HOSTNAME` and the token moves to an HttpOnly
+   cookie. Use that host in the Supabase issuer below too.
 
 ## 3. Enable WorkOS in Supabase
 
@@ -156,16 +170,21 @@ they contain password hashes.
 
 ## 5. Switch the app
 
-Deploy the AuthKit version of the app. The database needs nothing more.
+Build with `NEXT_PUBLIC_AUTH_PROVIDER=workos` and
+`NEXT_PUBLIC_WORKOS_CLIENT_ID` (plus `NEXT_PUBLIC_WORKOS_API_HOSTNAME` with a
+custom domain), and give the worker the secrets `WORKOS_CLIENT_ID`,
+`WORKOS_API_KEY` and, with a custom domain, `WORKOS_ISSUER`. The database
+needs nothing more.
 
-- **First sign-in.** Call `ensure_profile` with the service role (for example
-  from `/api/me`), using `external_id` as the id. A brand-new WorkOS user has
-  no `external_id`: generate a uuid, call `ensure_profile`, write the uuid to
-  the WorkOS user's `external_id`, then refresh the session. Until then their
-  token has no `uid`, so RLS treats them as signed out.
-- **Account deletion.** Delete the `profiles` row with the service role (this
-  cascades), delete the WorkOS user, and clean up R2 as today. If a matching
-  `auth.users` row exists, deleting it also works, through the trigger.
+- **First sign-in.** Imported users already have `external_id`, so their
+  token carries `uid`. A brand-new WorkOS user has none: the browser calls
+  `POST /api/me`, which creates the profile with `ensure_profile` (the id is
+  derived from the WorkOS user id, so retries land on the same profile),
+  writes it to the user's `external_id`, and the browser refreshes its token.
+  Until then RLS treats them as signed out.
+- **Account deletion.** The worker deletes the Supabase Auth user if there
+  is one, then the `profiles` row (this cascades), the WorkOS user and the
+  R2 files.
 
 ## 6. After the cutover
 

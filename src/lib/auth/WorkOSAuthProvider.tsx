@@ -51,9 +51,14 @@ function isLocalhost() {
 
 /**
  * WorkOS AuthKit in the browser. The hosted AuthKit pages handle passwords,
- * GitHub, Google and password resets; the refresh token lives in an HttpOnly
- * cookie on the AuthKit domain (a custom domain in production, devMode on
- * localhost only).
+ * GitHub, Google and password resets.
+ *
+ * Where the refresh token lives: with a custom AuthKit domain on our own site
+ * (NEXT_PUBLIC_WORKOS_API_HOSTNAME, e.g. auth.circuitsnips.com), an HttpOnly
+ * cookie on that domain. Without one, a cookie on api.workos.com would be a
+ * third-party cookie, which Safari and Firefox block, so sessions wouldn't
+ * survive a reload: AuthKit's devMode keeps it in localStorage instead
+ * (readable by scripts on the page, so the custom domain is preferred).
  */
 export function WorkOSAuthProvider({
   children,
@@ -71,7 +76,7 @@ export function WorkOSAuthProvider({
       clientId={WORKOS_CLIENT_ID}
       apiHostname={WORKOS_API_HOSTNAME}
       redirectUri={redirectUri}
-      devMode={isLocalhost()}
+      devMode={isLocalhost() || !WORKOS_API_HOSTNAME}
       onRedirectCallback={({ state }) => {
         // `state` is untrusted (plain text in the URL): only same-origin
         router.replace(safeReturnUrl(state?.returnTo) ?? "/");
