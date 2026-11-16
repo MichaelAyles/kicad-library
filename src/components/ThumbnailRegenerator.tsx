@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { captureThumbnails } from "@/lib/thumbnail";
 import { KiCanvas, KiCanvasCard } from "@/components/KiCanvas";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Circuit {
   id: string;
@@ -307,7 +308,7 @@ export function ThumbnailRegenerator() {
       }
 
       // Upload thumbnails via admin API
-      const response = await fetch("/api/admin/regenerate-thumbnail", {
+      const response = await apiFetch("/api/admin/regenerate-thumbnail", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -613,7 +614,7 @@ export function ThumbnailRegenerator() {
             throw new Error("Not authenticated");
           }
 
-          const response = await fetch("/api/admin/regenerate-thumbnail", {
+          const response = await apiFetch("/api/admin/regenerate-thumbnail", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -734,7 +735,7 @@ export function ThumbnailRegenerator() {
         return;
       }
 
-      const response = await fetch("/api/admin/delete-all-thumbnails", {
+      const response = await apiFetch("/api/admin/delete-all-thumbnails", {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${session.access_token}`,

@@ -1,29 +1,37 @@
 import type { Metadata } from "next";
-import { getPublicCircuitPage } from "@/lib/public-circuits";
+import {
+  getPublicCircuitPage,
+  listCircuitSlugsForBuild,
+} from "@/lib/public-circuits";
+import { SHELL_SLUG } from "@/lib/shell-slug";
 import { getCircuitSeo } from "@/lib/circuit-seo";
 import { CircuitDetail } from "./CircuitDetail";
 
 /**
  * Circuit detail page.
  *
- * Public circuits are fetched and rendered on the server (cookie-less client,
- * so the HTML is the same for everyone) and cached with ISR: each slug renders
- * on first request (generateStaticParams in layout.tsx returns []) and is
- * regenerated at most hourly, or immediately when it is edited or deleted
- * (revalidatePath in /api/circuits/[id], /api/admin/delete-circuit and
- * deleteUserAccount).
+ * The site is a static export. Every public circuit gets its own page at build
+ * time, with full metadata, Open Graph tags and JSON-LD, and the browser
+ * refreshes the circuit's fields and counters on load.
  *
- * If no public circuit matches, the page renders the client component with no
- * initial data and it loads the circuit in the browser, so owners can still
- * open their private circuits. That fallback is marked noindex.
+ * One extra page is built for SHELL_SLUG. The worker serves it for any other
+ * /circuit/<slug>: circuits created or made public since the last build, and
+ * private circuits. It loads the circuit in the browser and is marked noindex.
+ * A scheduled rebuild picks new public circuits up (see worker/assets.ts).
  */
-export const revalidate = 3600;
+export async function generateStaticParams() {
+  const circuits = await listCircuitSlugsForBuild();
+  return [...circuits.map(({ slug }) => ({ slug })), { slug: SHELL_SLUG }];
+}
+
+export const dynamicParams = false;
 
 type PageProps = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata(props: PageProps): Promise<Metadata> {
   const params = await props.params;
-  const page = await getPublicCircuitPage(params.slug);
+  const page =
+    params.slug === SHELL_SLUG ? null : await getPublicCircuitPage(params.slug);
 
   if (!page) {
     // Unknown slug or a private circuit (rendered client-side for its owner)
@@ -67,7 +75,8 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
 
 export default async function CircuitPage(props: PageProps) {
   const params = await props.params;
-  const page = await getPublicCircuitPage(params.slug);
+  const page =
+    params.slug === SHELL_SLUG ? null : await getPublicCircuitPage(params.slug);
 
   if (!page) {
     return (

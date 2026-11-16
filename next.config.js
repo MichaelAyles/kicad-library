@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Static site: every page is built to plain files in out/ and served as
+  // Cloudflare Workers static assets. The API lives in worker/ (see
+  // wrangler.jsonc), and the bare domain is redirected to www there.
+  output: 'export',
   images: {
     // Serve images as-is: thumbnails come pre-sized from R2 and avatars from
     // GitHub, so Vercel Image Optimization would only add cost.
@@ -14,22 +18,6 @@ const nextConfig = {
         hostname: 'pub-5cfb1ad5b22e451db2e5711b584b49c9.r2.dev',
       },
     ],
-  },
-  // The bare domain redirects to www (the canonical host, see src/lib/site.ts)
-  async redirects() {
-    return [
-      {
-        source: '/:path*',
-        has: [{ type: 'host', value: 'circuitsnips.com' }],
-        destination: 'https://www.circuitsnips.com/:path*',
-        permanent: true,
-      },
-    ]
-  },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '2mb', // For S-expression uploads
-    },
   },
 }
 

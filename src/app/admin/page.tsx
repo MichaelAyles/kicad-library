@@ -25,6 +25,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { ThumbnailRegenerator } from "@/components/ThumbnailRegenerator";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface FlaggedCircuit {
   id: string;
@@ -181,7 +182,7 @@ export default function AdminDashboard() {
         throw new Error("Not authenticated");
       }
 
-      const response = await fetch("/api/admin/delete-circuit", {
+      const response = await apiFetch("/api/admin/delete-circuit", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -225,7 +226,7 @@ export default function AdminDashboard() {
         throw new Error("Not authenticated");
       }
 
-      const response = await fetch("/api/admin/update-flag", {
+      const response = await apiFetch("/api/admin/update-flag", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -283,7 +284,7 @@ export default function AdminDashboard() {
 
       for (const flagId of Array.from(selectedFlags)) {
         try {
-          const response = await fetch("/api/admin/update-flag", {
+          const response = await apiFetch("/api/admin/update-flag", {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
@@ -353,7 +354,7 @@ export default function AdminDashboard() {
         if (!flag?.circuit) continue;
 
         try {
-          const response = await fetch("/api/admin/delete-circuit", {
+          const response = await apiFetch("/api/admin/delete-circuit", {
             method: "DELETE",
             headers: {
               "Content-Type": "application/json",
@@ -457,7 +458,7 @@ export default function AdminDashboard() {
         throw new Error("Not authenticated");
       }
 
-      const response = await fetch("/api/admin/sync-stats", {
+      const response = await apiFetch("/api/admin/sync-stats", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -497,7 +498,7 @@ export default function AdminDashboard() {
           throw new Error("Not authenticated");
         }
 
-        const response = await fetch("/api/admin/delete-user", {
+        const response = await apiFetch("/api/admin/delete-user", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -547,7 +548,7 @@ export default function AdminDashboard() {
         throw new Error("Not authenticated");
       }
 
-      const response = await fetch("/api/admin/delete-user", {
+      const response = await apiFetch("/api/admin/delete-user", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

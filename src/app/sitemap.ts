@@ -1,10 +1,9 @@
 import type { MetadataRoute } from "next";
-import { PHASE_PRODUCTION_BUILD } from "next/constants";
-import { listPublicCircuitSlugs } from "@/lib/public-circuits";
+import { listCircuitSlugsForBuild } from "@/lib/public-circuits";
 import { SITE_URL, circuitUrl } from "@/lib/site";
 
-// Regenerate at most once a day
-export const revalidate = 86400;
+// Built with the site (static export); the scheduled rebuild keeps it fresh
+export const dynamic = "force-static";
 
 const STATIC_PAGES: Array<{
   path: string;
@@ -21,23 +20,11 @@ const STATIC_PAGES: Array<{
 ];
 
 /**
- * At runtime, query errors propagate on purpose: during ISR revalidation
- * Next.js then keeps serving the last good sitemap rather than caching a
- * partial one.
- *
- * At build time there is no previous version to fall back on, and throwing
- * would fail the whole build (CI builds with placeholder Supabase settings),
- * so the build ships the static pages only. The next revalidation fills in
- * the circuits.
+ * Lists the same public circuits as the pre-built circuit pages. A database
+ * error fails the build rather than shipping a partial sitemap.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  let circuits: Awaited<ReturnType<typeof listPublicCircuitSlugs>> = [];
-  try {
-    circuits = await listPublicCircuitSlugs();
-  } catch (error) {
-    if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD) throw error;
-    console.warn("sitemap: circuit list unavailable at build time:", error);
-  }
+  const circuits = await listCircuitSlugsForBuild();
 
   return [
     ...STATIC_PAGES.map((page) => ({

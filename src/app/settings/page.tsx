@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface ProfileData {
   username: string;
@@ -129,7 +130,7 @@ export default function SettingsPage() {
 
     try {
       // Call API endpoint to delete account and all data
-      const response = await fetch("/api/user/delete", {
+      const response = await apiFetch("/api/user/delete", {
         method: "DELETE",
       });
 
