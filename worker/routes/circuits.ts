@@ -22,6 +22,7 @@ import type { AppEnv } from "../env";
 import { getRequestUser, requireCircuitOwnerOrAdmin } from "../auth";
 import { createCircuitStorage } from "../r2";
 import { createAdminClient, createUserClient } from "../supabase";
+import { requestRebuild } from "../rebuild";
 
 const circuitRoutes = new Hono<AppEnv>();
 
@@ -391,6 +392,9 @@ circuitRoutes.put("/api/circuits/:id", async (c) => {
       }
     }
 
+    // Rebuild the static page: the title, description or visibility changed
+    if (!isThumbnailOnlyUpdate) requestRebuild(c, "circuit edited");
+
     return c.json({ success: true, circuit: circuitOut });
   } catch (error) {
     console.error("Error in PUT /api/circuits/[id]:", error);
@@ -445,6 +449,9 @@ circuitRoutes.delete("/api/circuits/:id", async (c) => {
     } catch (r2Error) {
       console.error("Circuit deleted but R2 cleanup failed:", r2Error);
     }
+
+    // Remove its static page
+    requestRebuild(c, "circuit deleted");
 
     return c.json({ success: true, message: "Circuit deleted successfully" });
   } catch (error) {

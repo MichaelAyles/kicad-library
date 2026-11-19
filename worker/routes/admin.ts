@@ -25,6 +25,7 @@ import type { AppEnv } from "../env";
 import { isUuid, requireAdmin } from "../auth";
 import { createCircuitStorage } from "../r2";
 import { createAdminClient } from "../supabase";
+import { requestRebuild } from "../rebuild";
 
 type Ctx = Context<AppEnv>;
 
@@ -510,6 +511,9 @@ adminRoutes.delete("/api/admin/delete-circuit", async (c) => {
       console.error("Circuit deleted but R2 cleanup failed:", r2Error);
     }
 
+    // Remove its static page
+    requestRebuild(c, "circuit deleted by admin");
+
     return c.json({ success: true, message: "Circuit deleted successfully" });
   } catch (error: any) {
     console.error("Error in delete circuit endpoint:", error);
@@ -569,6 +573,9 @@ adminRoutes.delete("/api/admin/delete-user", async (c) => {
       accountDeletionDeps(c.env),
       userId,
     );
+
+    // Remove the static pages of the user's circuits
+    if (circuitCount > 0) requestRebuild(c, "user deleted by admin");
 
     return c.json({
       success: true,

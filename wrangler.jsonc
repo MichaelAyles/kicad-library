@@ -8,7 +8,8 @@
   //                SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, ADMIN_API_KEY
   //                (optional: BOT_USER_ID, WORKOS_CLIENT_ID, WORKOS_ISSUER,
   //                WORKOS_API_KEY)
-  //   Deploy:      npm run cf:deploy  (apex redirect: npm run cf:deploy:apex)
+  //                GITHUB_DEPLOY_TOKEN (optional: rebuild on circuit edits)
+  //   Deploy:      npm run cf:deploy
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "circuitsnips",
   "main": "worker/index.ts",
@@ -27,7 +28,8 @@
     "R2_PUBLIC_URL": "https://pub-5cfb1ad5b22e451db2e5711b584b49c9.r2.dev",
     "SUPABASE_URL": "https://trjytrpqmfurirdaxlnr.supabase.co"
   },
-  // The bare domain is redirected to www by workers/apex-redirect
+  // The bare domain is redirected to www by a zone Redirect Rule (Rules >
+  // Redirect Rules), which runs before Workers, so it costs no invocations
   "workers_dev": false,
   "routes": [
     { "pattern": "www.circuitsnips.com/*", "zone_name": "circuitsnips.com" }

@@ -140,10 +140,12 @@ The site is a static export (`out/`) served as Cloudflare Workers static assets.
 ```bash
 npm run cf:preview      # Build and run the worker locally (localhost:8787; secrets in .dev.vars)
 npm run cf:deploy       # Build and deploy to Cloudflare
-npm run cf:deploy:apex  # Deploy the worker that redirects circuitsnips.com to www
 ```
 
 - `.github/workflows/deploy.yml` rebuilds and deploys `main` daily (and on demand) once the `CLOUDFLARE_API_TOKEN` secret is set, so merged changes reach production within a day.
+- If the worker has a `GITHUB_DEPLOY_TOKEN` secret (a fine-grained token for this repository with *Actions: Read and write*), deleting a circuit, making it private, editing it or deleting an account starts that workflow at once, so stale static pages are replaced within minutes rather than at the next daily build.
+- The bare domain `circuitsnips.com` redirects to www through a zone Redirect Rule (Cloudflare dashboard: Rules > Redirect Rules), which runs before the worker.
+- Static asset requests don't invoke the worker and are free; only `/api/*` and page misses count against the Workers request and CPU limits.
 - `wrangler.jsonc` defines the worker, its R2 binding and its vars. Secrets are set with `npx wrangler secret put <NAME>` (the list is in the file).
 - Every public circuit gets its own page at build time. Circuits added since the last build are served by a shell page (`/circuit/_`) that loads them in the browser, with `noindex`, until the next build. `CIRCUITSNIPS_MAX_CIRCUIT_PAGES` and `CIRCUITSNIPS_SKIP_CIRCUIT_PAGES=1` limit the build for testing.
 - `NEXT_PUBLIC_*` values are inlined at build time from `.env.local`. `NEXT_PUBLIC_AUTH_PROVIDER` chooses Supabase Auth (default) or WorkOS AuthKit; see `docs/workos-migration.md`.

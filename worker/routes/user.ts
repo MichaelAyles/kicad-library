@@ -6,6 +6,7 @@ import type { AppEnv } from "../env";
 import { bearerToken, getRequestUser, verifyWorkosClaims } from "../auth";
 import { accountDeletionDeps } from "../account";
 import { createAdminClient } from "../supabase";
+import { requestRebuild } from "../rebuild";
 import {
   createWorkosClient,
   profileIdForWorkosUser,
@@ -29,6 +30,9 @@ userRoutes.delete("/api/user/delete", async (c) => {
     }
 
     await deleteUserAccountWith(accountDeletionDeps(c.env), user.id);
+
+    // Remove the static pages of the user's circuits
+    requestRebuild(c, "account deleted");
 
     return c.json({ success: true, message: "Account deleted successfully" });
   } catch (error) {

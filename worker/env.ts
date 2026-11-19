@@ -39,6 +39,16 @@ export interface Env {
    * (/api/me) and deletes WorkOS users with their account.
    */
   WORKOS_API_KEY?: string;
+
+  /**
+   * Secret. GitHub token (fine-grained, this repository, "Actions: Read and
+   * write") used to start the deploy workflow when a circuit is deleted, made
+   * private or edited, so its static page is rebuilt (see rebuild.ts).
+   * Unset: pages only refresh on the daily build.
+   */
+  GITHUB_DEPLOY_TOKEN?: string;
+  /** owner/name of the repository with deploy.yml (default MichaelAyles/kicad-library). */
+  GITHUB_REPOSITORY?: string;
 }
 
 /** The authenticated caller, whichever identity provider issued the token. */

@@ -13,8 +13,7 @@
     "test:watch": "vitest",
     "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
     "cf:preview": "next build && wrangler dev",
-    "cf:deploy": "next build && wrangler deploy",
-    "cf:deploy:apex": "wrangler deploy -c workers/apex-redirect/wrangler.jsonc"
+    "cf:deploy": "next build && wrangler deploy"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",
