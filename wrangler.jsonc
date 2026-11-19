@@ -1,40 +1,44 @@
 {
-  // Cloudflare Workers deployment via @opennextjs/cloudflare.
-  // Build + deploy: npm run cf:deploy. Local Workers preview: npm run cf:preview.
+  // CircuitSnips on Workers: the static export (out/) as assets, plus the
+  // Hono API worker (worker/index.ts) for /api/* and asset misses.
+  //
+  //   Type-check:  npm run typecheck:worker
+  //   Local dev:   npm run cf:preview  (builds out/; secrets in .dev.vars)
+  //   Secrets:     npx wrangler secret put <NAME>
+  //                SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, ADMIN_API_KEY
+  //                (optional: BOT_USER_ID, WORKOS_CLIENT_ID, WORKOS_ISSUER,
+  //                WORKOS_API_KEY)
+  //                GITHUB_DEPLOY_TOKEN (optional: rebuild on circuit edits)
+  //   Deploy:      npm run cf:deploy
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "circuitsnips",
-  "main": ".open-next/worker.js",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_flags": ["nodejs_compat"],
+  // Assets are served first; the worker only runs for paths with no asset
   "assets": {
-    "directory": ".open-next/assets",
+    "directory": "out",
     "binding": "ASSETS"
   },
-  "services": [
-    // Self-reference used by the ISR cache; must match "name"
-    { "binding": "WORKER_SELF_REFERENCE", "service": "circuitsnips" }
-  ],
   "r2_buckets": [
-    // ISR page cache. Private bucket, separate from the public circuit files.
-    { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "circuitsnips-opennext-cache" }
+    // Public circuit files: schematics/ and thumbnails/
+    { "binding": "SCHEMATICS_BUCKET", "bucket_name": "circuitsnips" }
   ],
-  "durable_objects": {
-    "bindings": [
-      // Time-based ISR revalidation queue
-      { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" },
-      // Tag cache, needed for revalidatePath() on edit/delete
-      { "name": "NEXT_TAG_CACHE_DO_SHARDED", "class_name": "DOShardedTagCache" }
-    ]
+  "vars": {
+    "R2_PUBLIC_URL": "https://pub-5cfb1ad5b22e451db2e5711b584b49c9.r2.dev",
+    "SUPABASE_URL": "https://trjytrpqmfurirdaxlnr.supabase.co"
   },
-  "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"] }
-  ],
-  // Serve the site's domains. DNS for circuitsnips.com is on Cloudflare
-  // (proxied records); the bare domain redirects to www in next.config.js.
+  // The bare domain is redirected to www by a zone Redirect Rule (Rules >
+  // Redirect Rules), which runs before Workers, so it costs no invocations
   "workers_dev": false,
   "routes": [
-    { "pattern": "www.circuitsnips.com/*", "zone_name": "circuitsnips.com" },
-    { "pattern": "circuitsnips.com/*", "zone_name": "circuitsnips.com" }
+    { "pattern": "www.circuitsnips.com/*", "zone_name": "circuitsnips.com" }
+  ],
+  // The OpenNext deployment this replaced had two Durable Object classes
+  // (its ISR queue and tag cache). Deleting them is required to deploy over it.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"] },
+    { "tag": "v2", "deleted_classes": ["DOQueueHandler", "DOShardedTagCache"] }
   ],
   "observability": { "enabled": true }
 }

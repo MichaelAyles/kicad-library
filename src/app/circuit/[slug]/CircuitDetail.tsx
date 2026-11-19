@@ -38,13 +38,13 @@ import { formatDate } from "@/lib/utils";
 import { circuitUrl } from "@/lib/site";
 import {
   getCircuitBySlug,
-  getCircuitSource,
   incrementViewCount,
   incrementCopyCount,
   checkIfFavorited,
   toggleFavorite,
 } from "@/lib/circuits";
 import type { CircuitView } from "@/lib/public-circuits";
+import { useRouteSlug } from "@/lib/route-slug";
 import {
   summarizeMetadata,
   type CircuitPartsSummary,
@@ -66,10 +66,12 @@ interface CircuitDetailProps {
 }
 
 export function CircuitDetail({
-  slug,
+  slug: staticSlug,
   initialCircuit,
   initialParts,
 }: CircuitDetailProps) {
+  // On the shell page (circuits not pre-built) the slug comes from the URL
+  const slug = useRouteSlug(staticSlug);
   const { user } = useAuth();
 
   const [circuit, setCircuit] = useState<CircuitView | null>(initialCircuit);
@@ -98,24 +100,24 @@ export function CircuitDetail({
     );
   };
 
-  // Server-rendered circuit: fetch only the raw S-expression and live
-  // counters (the cached page's counters may be up to an hour old).
+  // Pre-built circuit page: fetch the raw S-expression and the current
+  // fields. The page was built at deploy time, so its counters (and any
+  // edits since) are refreshed from the database here.
   const loadSource = async (circuitId: string, title: string) => {
     setSourceStatus("loading");
     try {
-      const source = await getCircuitSource(circuitId);
-      if (!source) {
-        // Deleted or made private since the page was cached
+      const source = await getCircuitBySlug(slug ?? "");
+      if (!source || source.id !== circuitId) {
+        // Deleted, renamed or made private since the page was built
         setCircuit(null);
         setError("Circuit not found");
         return;
       }
-      setCircuit((prev) =>
-        prev ? { ...prev, view_count: source.view_count } : prev,
-      );
+      const { raw_sexpr, ...fields } = source;
+      setCircuit(fields);
       setFavoriteCount(source.favorite_count);
       setCopyCount(source.copy_count);
-      prepareCircuitData(source.raw_sexpr, title);
+      prepareCircuitData(raw_sexpr, source.title || title);
       setSourceStatus("ready");
     } catch (err) {
       console.error("Failed to load circuit data:", err);
@@ -123,10 +125,10 @@ export function CircuitDetail({
     }
   };
 
-  // No server data (an owner's private circuit, which the cookie-less server
-  // fetch can't see, or an unknown slug): load everything in the browser,
+  // No pre-built data (the shell page: a circuit created since the last
+  // build, or an owner's private circuit): load everything in the browser,
   // where the user's session applies.
-  const loadFullCircuit = async () => {
+  const loadFullCircuit = async (slug: string) => {
     try {
       const circuitData = await getCircuitBySlug(slug);
       if (!circuitData) {
@@ -155,7 +157,7 @@ export function CircuitDetail({
         countView(initialCircuit.id),
       );
     } else {
-      loadFullCircuit();
+      loadFullCircuit(slug);
     }
     // initialCircuit/initialParts are fixed for a given slug
     // eslint-disable-next-line react-hooks/exhaustive-deps

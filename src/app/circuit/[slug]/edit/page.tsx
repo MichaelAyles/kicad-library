@@ -29,6 +29,8 @@ import {
   selectSheetSize,
   type SheetSize,
 } from "@/lib/kicad-parser";
+import { apiFetch } from "@/lib/api-fetch";
+import { useRouteSlug } from "@/lib/route-slug";
 
 const LICENSES = [
   "CERN-OHL-S-2.0",
@@ -56,7 +58,8 @@ const CATEGORIES = [
 export default function EditCircuitPage() {
   const params = useParams();
   const router = useRouter();
-  const slug = params?.slug as string;
+  // The edit page is only built for the shell slug; the real one is in the URL
+  const slug = useRouteSlug(params?.slug as string | undefined) ?? "";
   const { user, isLoading: authLoading } = useAuth();
 
   const [circuit, setCircuit] = useState<Circuit | null>(null);
@@ -211,7 +214,7 @@ export default function EditCircuitPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/circuits/${circuit.id}`, {
+      const response = await apiFetch(`/api/circuits/${circuit.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -248,7 +251,7 @@ export default function EditCircuitPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/circuits/${circuit.id}`, {
+      const response = await apiFetch(`/api/circuits/${circuit.id}`, {
         method: "DELETE",
       });
 
@@ -339,7 +342,7 @@ export default function EditCircuitPage() {
       // revalidated; if that fails the regeneration still succeeded.
       let revalidated = false;
       try {
-        const response = await fetch(`/api/circuits/${circuit.id}`, {
+        const response = await apiFetch(`/api/circuits/${circuit.id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",

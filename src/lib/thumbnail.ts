@@ -6,6 +6,7 @@
  */
 
 import html2canvas from "html2canvas";
+import { apiFetch } from "@/lib/api-fetch";
 
 // Configuration constants
 export const THUMBNAIL_CONFIG = {
@@ -384,7 +385,7 @@ export async function uploadThumbnailsToR2(
   darkDataUrl: string,
   options: { historyNote?: string } = {},
 ): Promise<{ light: string; dark: string; version: number }> {
-  const response = await fetch("/api/upload-thumbnail", {
+  const response = await apiFetch("/api/upload-thumbnail", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

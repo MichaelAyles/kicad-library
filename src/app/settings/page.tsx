@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface ProfileData {
   username: string;
@@ -29,7 +30,7 @@ interface ProfileData {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, signOut } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -129,7 +130,7 @@ export default function SettingsPage() {
 
     try {
       // Call API endpoint to delete account and all data
-      const response = await fetch("/api/user/delete", {
+      const response = await apiFetch("/api/user/delete", {
         method: "DELETE",
       });
 
@@ -138,8 +139,12 @@ export default function SettingsPage() {
         throw new Error(errorData.error || "Failed to delete account");
       }
 
-      // Sign out
-      await supabase.auth.signOut();
+      // Sign out (the account is gone, so ignore errors ending the session)
+      try {
+        await signOut();
+      } catch (err) {
+        console.warn("Sign out after account deletion failed:", err);
+      }
 
       // Redirect to home page
       router.push("/");
@@ -161,11 +166,10 @@ export default function SettingsPage() {
     );
   }
 
-  // Extract GitHub metadata
-  const githubUsername =
-    user.user_metadata?.user_name || user.user_metadata?.preferred_username;
-  const githubAvatar = user.user_metadata?.avatar_url;
-  const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
+  // Display details from the identity provider (GitHub login, avatar, name)
+  const githubUsername = user.username;
+  const githubAvatar = user.avatarUrl;
+  const fullName = user.name;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -361,21 +365,23 @@ export default function SettingsPage() {
           </form>
 
           {/* GitHub Connection Info */}
-          <div className="mt-6 p-4 border border-blue-500/20 bg-blue-500/5 rounded-lg">
-            <div className="flex items-start gap-3">
-              <Github className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <h3 className="font-medium mb-1">Connected to GitHub</h3>
-                <p className="text-sm text-muted-foreground">
-                  You&apos;re signed in with GitHub as{" "}
-                  <span className="text-foreground font-medium">
-                    @{githubUsername}
-                  </span>
-                  . Your profile picture and email are synced automatically.
-                </p>
+          {githubUsername && (
+            <div className="mt-6 p-4 border border-blue-500/20 bg-blue-500/5 rounded-lg">
+              <div className="flex items-start gap-3">
+                <Github className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-medium mb-1">Connected to GitHub</h3>
+                  <p className="text-sm text-muted-foreground">
+                    You&apos;re signed in with GitHub as{" "}
+                    <span className="text-foreground font-medium">
+                      @{githubUsername}
+                    </span>
+                    . Your profile picture and email are synced automatically.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Delete Account Section */}
           <div className="mt-8 p-6 border border-destructive/30 bg-destructive/5 rounded-lg">

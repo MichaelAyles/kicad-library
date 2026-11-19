@@ -1,6 +1,7 @@
 // API functions for comments system using Supabase
 
 import { createClient } from "@/lib/supabase/client";
+import { getCurrentUser } from "@/lib/auth";
 import type {
   Comment,
   CreateCommentInput,
@@ -98,9 +99,7 @@ export async function createComment(
   input: CreateCommentInput,
 ): Promise<Comment> {
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (!user) throw new Error("User must be authenticated to comment");
 
     // Validate content length
@@ -207,9 +206,7 @@ export async function deleteComment(commentId: string): Promise<void> {
  */
 export async function toggleCommentLike(commentId: string): Promise<boolean> {
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (!user) throw new Error("User must be authenticated to like comments");
 
     // Check if already liked

@@ -82,17 +82,18 @@ export function CommentForm({
       <div className="flex items-start gap-3">
         {/* User avatar */}
         <div className="flex-shrink-0">
-          {user.user_metadata?.avatar_url ? (
+          {user.avatarUrl ? (
             <Image
-              src={user.user_metadata.avatar_url}
-              alt={user.user_metadata?.username || "You"}
+              src={user.avatarUrl}
+              alt={user.username || user.name || "You"}
               width={32}
               height={32}
               className="w-8 h-8 rounded-full"
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
-              {user.user_metadata?.username?.[0]?.toUpperCase() || "?"}
+              {(user.username || user.name || user.email)?.[0]?.toUpperCase() ||
+                "?"}
             </div>
           )}
         </div>

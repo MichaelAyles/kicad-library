@@ -86,10 +86,10 @@ export function Header() {
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                   title="View profile"
                 >
-                  {user.user_metadata?.avatar_url ? (
+                  {user.avatarUrl ? (
                     <Image
-                      src={user.user_metadata.avatar_url}
-                      alt={user.user_metadata?.full_name || "Profile"}
+                      src={user.avatarUrl}
+                      alt={user.name || "Profile"}
                       width={32}
                       height={32}
                       className="w-8 h-8 rounded-full border-2 border-primary/50 hover:border-primary transition-colors"

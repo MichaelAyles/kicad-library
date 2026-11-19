@@ -29,6 +29,7 @@ import {
 } from "@/lib/kicad-parser";
 import { captureThumbnails, uploadThumbnailsToR2 } from "@/lib/thumbnail";
 import { MAX_RAW_SEXPR_BYTES } from "@/lib/circuit-limits";
+import { apiFetch } from "@/lib/api-fetch";
 
 const KICANVAS_HEIGHT = "350px";
 
@@ -264,7 +265,7 @@ export default function UploadPage() {
     let circuit: { id: string; slug: string };
     try {
       setUploadProgress("Creating circuit...");
-      const response = await fetch("/api/circuits", {
+      const response = await apiFetch("/api/circuits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

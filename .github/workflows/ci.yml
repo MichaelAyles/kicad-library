@@ -32,17 +32,24 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Type check (API worker)
+        run: npm run typecheck:worker
+
       - name: Test
         run: npm test
 
-      # The Supabase client modules throw at import time without these, and
-      # Next imports every route while collecting page data. Placeholders are
-      # enough: nothing talks to Supabase during the build.
-      # Builds the Next app, then bundles it for Cloudflare Workers with
-      # OpenNext, so adapter or Workers-runtime breakage shows up on the PR.
+      # A static export of every page. Circuit pages are skipped (they need
+      # the live database); the shell page they fall back to is still built.
+      # The Supabase client throws at import without these; placeholders are
+      # enough, since nothing talks to Supabase during this build.
       - name: Build
-        run: npm run cf:build
+        run: npm run build
         env:
+          CIRCUITSNIPS_SKIP_CIRCUIT_PAGES: 1
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
           NEXT_TELEMETRY_DISABLED: 1
+
+      # Bundles the API worker with the static assets, without deploying
+      - name: Bundle worker
+        run: npx wrangler deploy --dry-run --outdir dist-worker

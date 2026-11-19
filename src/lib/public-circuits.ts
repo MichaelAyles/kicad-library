@@ -58,8 +58,8 @@ export const getPublicCircuitPage = cache(
       .maybeSingle();
 
     if (error) {
-      // Throw rather than return null: during ISR revalidation this keeps
-      // serving the previous page instead of caching a "not found" fallback.
+      // Throw rather than return null, so a failed query fails the build
+      // instead of shipping a "not found" page for a public circuit.
       throw new Error(`Failed to load circuit "${slug}": ${error.message}`);
     }
     if (!data) return null;
@@ -85,8 +85,7 @@ const SITEMAP_PAGE_SIZE = 1000;
 
 /**
  * List every public circuit's slug and last update, paging past PostgREST's
- * row cap. Throws on any query error so an ISR revalidation keeps the last
- * good result instead of caching a partial list.
+ * row cap. Throws on any query error so a build never ships a partial list.
  */
 export async function listPublicCircuitSlugs(): Promise<
   Array<{ slug: string; updated_at: string | null }>
@@ -111,4 +110,20 @@ export async function listPublicCircuitSlugs(): Promise<
   }
 
   return rows;
+}
+
+/**
+ * The circuit slugs to pre-build. CI builds with placeholder Supabase
+ * settings and no database, so there it builds only the shell page; any
+ * other build with a database error fails rather than shipping a site with
+ * circuit pages missing.
+ */
+export async function listCircuitSlugsForBuild(): Promise<
+  Array<{ slug: string; updated_at: string | null }>
+> {
+  if (process.env.CIRCUITSNIPS_SKIP_CIRCUIT_PAGES === "1") return [];
+  const all = await listPublicCircuitSlugs();
+  // Local test builds can cap the page count (each page is ~110 KB on disk)
+  const max = Number(process.env.CIRCUITSNIPS_MAX_CIRCUIT_PAGES);
+  return max > 0 ? all.slice(0, max) : all;
 }
